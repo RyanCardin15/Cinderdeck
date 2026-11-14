@@ -1,12 +1,12 @@
 import {
   parseGitRemoteHost,
   unknownRemoteProvider,
-} from "@t3tools/source-control-core/shared/definition";
+} from "@cinderdeck/source-control-core/shared/definition";
 import {
   probeSourceControlProvider,
   refineUnknownRemoteProvider,
-} from "@t3tools/source-control-core/server/discovery";
-import { processOutput } from "@t3tools/source-control-testing/TestSourceControlHost";
+} from "@cinderdeck/source-control-core/server/discovery";
+import { processOutput } from "@cinderdeck/source-control-testing/TestSourceControlHost";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";

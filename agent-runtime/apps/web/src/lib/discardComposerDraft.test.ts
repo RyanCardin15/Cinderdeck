@@ -1,5 +1,5 @@
-import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
-import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { EnvironmentId, ProjectId, ThreadId } from "@cinderdeck/contracts";
+import { scopeProjectRef, scopeThreadRef } from "@cinderdeck/client-runtime/environment";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {

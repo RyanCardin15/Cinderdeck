@@ -1,18 +1,18 @@
-import { makeThreadPullRequests } from "@t3tools/source-control-core/shared/threadPullRequests";
+import { makeThreadPullRequests } from "@cinderdeck/source-control-core/shared/threadPullRequests";
 
 import { sourceControlClients } from "./sourceControlClients.ts";
 
 export {
   threadPullRequestSearchTerms,
   visibleThreadPullRequests,
-} from "@t3tools/shared/threadPullRequests";
+} from "@cinderdeck/shared/threadPullRequests";
 export {
   pullRequestListLines,
   type PullRequestListLine,
   type ThreadCurrentPullRequest,
   type ThreadPullRequestBadge,
   type ThreadPullRequestChain,
-} from "@t3tools/source-control-core/shared/threadPullRequests";
+} from "@cinderdeck/source-control-core/shared/threadPullRequests";
 
 export const {
   normalizeThreadPullRequestKey,

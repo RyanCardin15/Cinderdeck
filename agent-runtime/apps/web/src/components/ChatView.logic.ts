@@ -1,24 +1,24 @@
-import { type OrchestrationV2ProviderTurn, type RunAttemptId } from "@t3tools/contracts";
+import { type OrchestrationV2ProviderTurn, type RunAttemptId } from "@cinderdeck/contracts";
 import {
   deriveLatestThreadRun,
   deriveThreadRuntime,
-} from "@t3tools/client-runtime/state/thread-execution";
-import { checkpointFileTotals } from "@t3tools/client-runtime/state/thread-checkpoints";
-import { derivePendingBackgroundWork } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
+} from "@cinderdeck/client-runtime/state/thread-execution";
+import { checkpointFileTotals } from "@cinderdeck/client-runtime/state/thread-checkpoints";
+import { derivePendingBackgroundWork } from "@cinderdeck/shared/orchestrationV2PendingBackgroundWork";
 import {
   latestUnheldRun,
   usageLimitRunPresentedAsLatest,
-} from "@t3tools/shared/orchestrationV2ThreadError";
+} from "@cinderdeck/shared/orchestrationV2ThreadError";
 import * as Option from "effect/Option";
 import type { SetStateAction } from "react";
-import { applyClaudePromptEffortPrefix, resolvePromptInjectedEffort } from "@t3tools/shared/model";
+import { applyClaudePromptEffortPrefix, resolvePromptInjectedEffort } from "@cinderdeck/shared/model";
 import { getProviderModelCapabilities } from "../providerModels";
-import { sanitizeThreadErrorMessage } from "@t3tools/client-runtime/errors";
+import { sanitizeThreadErrorMessage } from "@cinderdeck/client-runtime/errors";
 import type {
   EnvironmentThread,
   ThreadStructure,
   EnvironmentThreadShell,
-} from "@t3tools/client-runtime/state/shell";
+} from "@cinderdeck/client-runtime/state/shell";
 import {
   ANTIGRAVITY_DEFAULT_MODEL,
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
@@ -45,21 +45,21 @@ import {
   type ThreadLinkedPullRequest,
   type RunId,
   type WorktreeSetupSnapshot,
-} from "@t3tools/contracts";
-import { worktreeSetupAgentStarted } from "@t3tools/client-runtime/worktree-setup";
+} from "@cinderdeck/contracts";
+import { worktreeSetupAgentStarted } from "@cinderdeck/client-runtime/worktree-setup";
 import * as DateTime from "effect/DateTime";
-import { resolveAssetUrl } from "@t3tools/client-runtime/state/assets";
+import { resolveAssetUrl } from "@cinderdeck/client-runtime/state/assets";
 import {
   squashAtomCommandFailure,
   type AtomCommandResult,
-} from "@t3tools/client-runtime/state/runtime";
-import { videoMimeType } from "@t3tools/shared/video";
+} from "@cinderdeck/client-runtime/state/runtime";
+import { videoMimeType } from "@cinderdeck/shared/video";
 import {
   appendCodexArtifactTemplateUsePrompt,
   codexArtifactTemplateUsePrompt,
   type CodexArtifactTemplate,
-} from "@t3tools/shared/codexArtifactTemplates";
-import { presentThreadShell } from "@t3tools/client-runtime/state/shell";
+} from "@cinderdeck/shared/codexArtifactTemplates";
+import { presentThreadShell } from "@cinderdeck/client-runtime/state/shell";
 import {
   type ChatMessage,
   isImageAttachment,
@@ -91,7 +91,7 @@ import {
   reviewCommentContextLabel,
   terminalContextReference,
 } from "../lib/composerContextRecords";
-import type { ComposerDispatchMode } from "@t3tools/client-runtime/state/composer-dispatch";
+import type { ComposerDispatchMode } from "@cinderdeck/client-runtime/state/composer-dispatch";
 import type { DraftThreadEnvMode } from "../composerDraftStore";
 import { collapseExpandedComposerCursor, type ComposerSubmissionIntent } from "../composer-logic";
 import type { ReviewCommentContext } from "../reviewCommentContext";
@@ -293,7 +293,7 @@ export function shouldReleaseTimelineAnchorForToolActivity(input: {
   });
 }
 
-export { resolveVisibleWorktreeSetup } from "@t3tools/client-runtime/worktree-setup";
+export { resolveVisibleWorktreeSetup } from "@cinderdeck/client-runtime/worktree-setup";
 
 export function resolveWorktreeSetupProgress(input: {
   threadId: ThreadId;
@@ -710,7 +710,7 @@ export function collectUserMessageBlobPreviewUrls(message: ChatMessage): string[
 
 export { readFileAsDataUrl } from "../lib/imageCompression";
 
-export { resolveSendEnvMode } from "@t3tools/shared/projectSettings";
+export { resolveSendEnvMode } from "@cinderdeck/shared/projectSettings";
 
 export function resolveBackgroundDraftWorkspaceOptions(input: {
   envMode: DraftThreadEnvMode;
@@ -1256,7 +1256,7 @@ export function mergeDirectPreviewAnnotation(input: {
   return { images, previewAnnotations };
 }
 
-export { isThreadWokeUnseen } from "@t3tools/client-runtime/state/thread-settled";
+export { isThreadWokeUnseen } from "@cinderdeck/client-runtime/state/thread-settled";
 
 export function formatOutgoingPrompt(params: {
   provider: ProviderDriverKind;

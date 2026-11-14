@@ -13,7 +13,7 @@ import { ThreadCommandOutput, useCommandOutputStreaming } from "./thread-command
 import {
   getQuestionAnswerPreview,
   hasQuestionAnswer,
-} from "@t3tools/client-runtime/work-log/user-input";
+} from "@cinderdeck/client-runtime/work-log/user-input";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { type AppSymbolName, SymbolView } from "../../components/ui/AppSymbol";
@@ -48,17 +48,17 @@ import {
   type RunId,
   type ThreadId,
   type ToolActivityIcon,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import { useAtomValue } from "@effect/atom-react";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { scopeThreadRef } from "@cinderdeck/client-runtime/environment";
 import { environmentThreadDetails, threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { toolActivityFaviconUrl } from "@t3tools/shared/favicon";
-import { isJavaScriptReplTool } from "@t3tools/shared/toolActivity";
+import { toolActivityFaviconUrl } from "@cinderdeck/shared/favicon";
+import { isJavaScriptReplTool } from "@cinderdeck/shared/toolActivity";
 import { useMarkdownCodeHighlight } from "./markdownCodeHighlightState";
 
 import { AppText as Text } from "../../components/ui/AppText";
-import { T3Wordmark } from "../../components/T3Wordmark";
+import { CinderdeckMark } from "../../components/CinderdeckMark";
 import { BrowserAppIcon } from "./BrowserAppIcon";
 import { useAppActive, useReduceMotionEnabled } from "../../lib/appState";
 import { cn } from "../../lib/cn";
@@ -73,7 +73,7 @@ import {
   toolCallLines,
   turnItemOutputImages,
   turnItemOutputText,
-} from "@t3tools/client-runtime/work-log/item-detail";
+} from "@cinderdeck/client-runtime/work-log/item-detail";
 import { useTurnItemDetail } from "../../state/queries";
 import {
   resolveThreadWorkGroupInitialScroll,
@@ -85,9 +85,9 @@ import {
   toolGroupAction,
   type ToolGroupSummaryKind,
   workEntryViewedImagePath,
-} from "@t3tools/client-runtime/work-log/presentation";
-import { resolveWorkGroupScrollAnchor } from "@t3tools/client-runtime/work-log/scroll-anchor";
-import { notificationChildThreadId } from "@t3tools/client-runtime/state/thread-execution";
+} from "@cinderdeck/client-runtime/work-log/presentation";
+import { resolveWorkGroupScrollAnchor } from "@cinderdeck/client-runtime/work-log/scroll-anchor";
+import { notificationChildThreadId } from "@cinderdeck/client-runtime/state/thread-execution";
 import type { MarkdownImageRenderer } from "../../native/SelectableMarkdownText";
 import type { FilePreviewSource } from "../../components/FilePreviewModal";
 import { FilePreviewGallery } from "../../components/FilePreviewGallery";
@@ -130,9 +130,7 @@ function WorkLogIcon(props: {
 }) {
   const colorClassName = props.highlighted ? "accent-foreground" : props.colorClassName;
   if (props.icon === "t3-code") {
-    return (
-      <T3Wordmark height={10} {...(colorClassName ? { colorClassName } : { color: props.color })} />
-    );
+    return <CinderdeckMark height={14} />;
   }
   if (props.icon === "computer") {
     return (
@@ -170,7 +168,7 @@ export function ThreadDisclosureChevron(props: {
   const expandedAngle = props.collapsedDirection === "right" ? 90 : 180;
   const rotation = useSharedValue(props.expanded ? expandedAngle : 0);
 
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- drives the chevron's Reanimated rotation value when the expanded state changes
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- drives the chevron's Reanimated rotation value when the expanded state changes
   useLayoutEffect(() => {
     rotation.set(
       withTiming(props.expanded ? expandedAngle : 0, {
@@ -279,7 +277,7 @@ export function ShimmeringWorkContent(props: {
   // Runs on React Native's native driver instead of Reanimated, whose
   // per-frame commits starve React's while commit pausing is disabled
   // (package.json). See docs/internals/performance-regressions.md.
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- starts the native-driver shimmer loop while visible and active, and stops it on cleanup
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- starts the native-driver shimmer loop while visible and active, and stops it on cleanup
   useEffect(() => {
     progress.setValue(0);
     if (contentWidth <= 0 || reducedMotion || !appIsActive || !screenIsFocused) return;
@@ -725,7 +723,7 @@ function ThreadWorkGroupList(props: {
   });
   // Native ScrollView reports size after LegendList lays out rows. Use LegendList's JS size
   // so group height and row measurements settle in the same commit.
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to LegendList's totalSize state to report content height in the same commit
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- subscribes to LegendList's totalSize state to report content height in the same commit
   useLayoutEffect(() => {
     const list = listRef.current;
     if (!list) return;
@@ -747,7 +745,7 @@ function ThreadWorkGroupList(props: {
 
   return (
     <View style={{ height, overflow: "hidden" }}>
-      {/* oxlint-disable-next-line t3code/require-registered-list-scroll -- Nested in a fixed-height card inside the thread feed, which owns the header's scroll view. */}
+      {/* oxlint-disable-next-line cinderdeck/require-registered-list-scroll -- Nested in a fixed-height card inside the thread feed, which owns the header's scroll view. */}
       <AnimatedLegendList
         ref={listRef}
         data={props.activities}
@@ -1363,7 +1361,7 @@ export function ThreadWorkGroupToggle(props: {
   readonly summaryKind: ToolGroupSummaryKind;
   readonly summaryToolIcon?: "browser" | "device" | "t3-code" | "pull-request" | "brain";
   readonly themeAppearance: "light" | "dark";
-  readonly toolSurface?: import("@t3tools/contracts").ToolActivitySurface;
+  readonly toolSurface?: import("@cinderdeck/contracts").ToolActivitySurface;
   readonly toolIcon?: ToolActivityIcon;
   readonly hasFailure: boolean;
   readonly shimmer: boolean;

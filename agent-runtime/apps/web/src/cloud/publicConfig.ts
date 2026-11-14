@@ -1,8 +1,8 @@
 import {
   clerkFrontendApiHostnameFromPublishableKey,
   relayClerkTokenOptions,
-} from "@t3tools/shared/relayAuth";
-import { normalizeSecureRelayUrl } from "@t3tools/shared/relayUrl";
+} from "@cinderdeck/shared/relayAuth";
+import { normalizeSecureRelayUrl } from "@cinderdeck/shared/relayUrl";
 import * as Schema from "effect/Schema";
 
 export class CloudPublicConfigMissingError extends Schema.TaggedError<CloudPublicConfigMissingError>()(

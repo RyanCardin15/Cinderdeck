@@ -1,4 +1,4 @@
-import type { EnvironmentTheme } from "@t3tools/contracts";
+import type { EnvironmentTheme } from "@cinderdeck/contracts";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 const publishedThemes = vi.hoisted(() => ({

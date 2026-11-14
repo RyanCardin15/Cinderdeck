@@ -1,5 +1,5 @@
 import type { NativeStackHeaderItem } from "@react-navigation/native-stack";
-import { resolveEnvironmentMachineKind } from "@t3tools/contracts";
+import { resolveEnvironmentMachineKind } from "@cinderdeck/contracts";
 import { Platform } from "react-native";
 
 import type { AppBarMenu } from "../../../components/ui/AppBar.types";

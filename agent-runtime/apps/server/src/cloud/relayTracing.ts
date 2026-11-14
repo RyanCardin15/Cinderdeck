@@ -1,8 +1,8 @@
 import {
   nodeProcessRuntimeAttributes,
   processServiceInstanceId,
-} from "@t3tools/shared/observability";
-import * as RelayTracing from "@t3tools/shared/relayTracing";
+} from "@cinderdeck/shared/observability";
+import * as RelayTracing from "@cinderdeck/shared/relayTracing";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 

@@ -1,10 +1,10 @@
-import { DesktopShellEnvironmentSnapshot, ShellEnvironmentPatch } from "@t3tools/contracts";
+import { DesktopShellEnvironmentSnapshot, ShellEnvironmentPatch } from "@cinderdeck/contracts";
 import {
   applyShellEnvironment,
   buildEnvironmentCaptureCommand,
   listLoginShellCandidates,
   setWindowsPath,
-} from "@t3tools/shared/shell";
+} from "@cinderdeck/shared/shell";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -81,7 +81,7 @@ export class DesktopShellEnvironment extends Context.Service<
     readonly awaitDiscovery: Effect.Effect<boolean>;
     readonly updates: Stream.Stream<DesktopShellEnvironmentSnapshot>;
   }
->()("@t3tools/desktop/shell/DesktopShellEnvironment") {}
+>()("@cinderdeck/desktop/shell/DesktopShellEnvironment") {}
 
 const LOGIN_SHELL_ENV_NAMES = [
   "PATH",

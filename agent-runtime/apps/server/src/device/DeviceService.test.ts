@@ -9,16 +9,16 @@ import {
   type DeviceSummary,
   type ServerSettings as Settings,
   type SshDeviceHostConfig,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as NetService from "@t3tools/shared/Net";
+import * as NetService from "@cinderdeck/shared/Net";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Deferred from "effect/Deferred";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
-import * as SecretResolver from "@t3tools/secret-provider-core/server/SecretResolver";
+import * as SecretResolver from "@cinderdeck/secret-provider-core/server/SecretResolver";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
@@ -34,7 +34,7 @@ import * as ProcessRunner from "../processRunner.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as DeviceHost from "./DeviceHost.ts";
 import { makeDeviceHubOperations } from "./DeviceHubOperations.ts";
-import { NodeRuntimeUnavailableError } from "@t3tools/shared/nodeRuntime";
+import { NodeRuntimeUnavailableError } from "@cinderdeck/shared/nodeRuntime";
 
 import * as DeviceService from "./DeviceService.ts";
 import { agentDeviceSession, releaseAgentDeviceSession } from "./AgentDeviceTarget.ts";

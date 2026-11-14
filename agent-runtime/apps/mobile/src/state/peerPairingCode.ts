@@ -1,6 +1,6 @@
-import { createPeerPairingCodeCommand } from "@t3tools/client-runtime/state/peerPairingCode";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import type { AuthMcpClientAccess, EnvironmentId } from "@t3tools/contracts";
+import { createPeerPairingCodeCommand } from "@cinderdeck/client-runtime/state/peerPairingCode";
+import { squashAtomCommandFailure } from "@cinderdeck/client-runtime/state/runtime";
+import type { AuthMcpClientAccess, EnvironmentId } from "@cinderdeck/contracts";
 import * as Result from "effect/Result";
 
 import { connectionAtomRuntime } from "../connection/runtime";

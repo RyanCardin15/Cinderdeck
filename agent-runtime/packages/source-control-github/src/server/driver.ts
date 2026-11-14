@@ -1,9 +1,9 @@
-import { SourceControlSignInError, type SourceControlProviderKind } from "@t3tools/contracts";
+import { SourceControlSignInError, type SourceControlProviderKind } from "@cinderdeck/contracts";
 import {
   defineSourceControlDriver,
   withOwnServices,
   type SourceControlSignIn,
-} from "@t3tools/source-control-core/server/driver";
+} from "@cinderdeck/source-control-core/server/driver";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 

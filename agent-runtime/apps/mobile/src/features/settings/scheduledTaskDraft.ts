@@ -1,4 +1,4 @@
-import { isWebhookDedupeTemplate } from "@t3tools/contracts";
+import { isWebhookDedupeTemplate } from "@cinderdeck/contracts";
 import type {
   ModelSelection,
   ServerConfig,
@@ -7,20 +7,20 @@ import type {
   ScheduledTask,
   ScheduledTaskUpsertSchedule,
   ScheduledTaskWebhookSignature,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 
-import { DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
+import { DEFAULT_SERVER_SETTINGS } from "@cinderdeck/contracts";
 import {
   parseMaxDeliveryAge,
   parseWebhookFilterDrafts,
   webhookFilterDrafts,
   webhookFilterDraftsChanged,
   type WebhookFilterDraft,
-} from "@t3tools/client-runtime/scheduled-task-webhook";
+} from "@cinderdeck/client-runtime/scheduled-task-webhook";
 import {
   resolveProjectSettings,
   type LegacyProjectSettingsFields,
-} from "@t3tools/shared/projectSettings";
+} from "@cinderdeck/shared/projectSettings";
 import {
   buildModelOptions,
   resolveDefaultableModelSelection,

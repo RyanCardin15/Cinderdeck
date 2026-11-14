@@ -25,8 +25,8 @@ import { Atom } from "effect/reactivity";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { expandedImageKey } from "./ExpandedImagePreview";
 import { registerThreadOverlay } from "./threadOverlayRetention";
-import { mediaReferenceFileName } from "@t3tools/client-runtime/media-reference";
-import { mediaMimeType, mediaMimeTypeFromExtension } from "@t3tools/shared/mediaPreview";
+import { mediaReferenceFileName } from "@cinderdeck/client-runtime/media-reference";
+import { mediaMimeType, mediaMimeTypeFromExtension } from "@cinderdeck/shared/mediaPreview";
 
 interface ExpandedImageDialogProps {
   preview: ExpandedImagePreview;

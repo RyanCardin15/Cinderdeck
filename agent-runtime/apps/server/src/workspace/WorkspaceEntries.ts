@@ -20,12 +20,12 @@ import type {
   ProjectSearchContentsResult,
   ProjectSearchEntriesInput,
   ProjectSearchEntriesResult,
-} from "@t3tools/contracts";
-import * as HostProcess from "@t3tools/shared/HostProcess";
-import { isExplicitRelativePath, isWindowsAbsolutePath } from "@t3tools/shared/path";
-import { normalizeSearchQuery } from "@t3tools/shared/searchRanking";
+} from "@cinderdeck/contracts";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
+import { isExplicitRelativePath, isWindowsAbsolutePath } from "@cinderdeck/shared/path";
+import { normalizeSearchQuery } from "@cinderdeck/shared/searchRanking";
 
-import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
+import { expandHomePath } from "@cinderdeck/provider-core/server/pathExpansion";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
 import * as WorkspacePaths from "./WorkspacePaths.ts";
 import * as WorkspaceSearchIndex from "./WorkspaceSearchIndex.ts";
@@ -109,7 +109,7 @@ export class WorkspaceEntries extends Context.Service<
     ) => Effect.Effect<ProjectSearchContentsResult, WorkspaceEntriesError>;
     readonly refresh: (cwd: string) => Effect.Effect<void>;
   }
->()("t3/workspace/WorkspaceEntries") {}
+>()("@cinderdeck/server/workspace/WorkspaceEntries") {}
 
 /** Ignored files offered for copying; more than this is a build folder, not config. */
 const IGNORED_FILES_LIMIT = 200;

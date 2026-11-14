@@ -30,7 +30,7 @@ import {
   t3SystemAppend,
   withDevices,
 } from "./run.ts";
-import { DeviceOperationError, LOCAL_DEVICE_HOST_ID } from "@t3tools/contracts";
+import { DeviceOperationError, LOCAL_DEVICE_HOST_ID } from "@cinderdeck/contracts";
 
 const MAC = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const IPHONE = "BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB";
@@ -175,11 +175,11 @@ it.effect("gives a native subagent T3's SubagentStart context instead of T3's ap
     );
     assert.include(reminders, subagentContext);
     // Claude Code 2.1.310 records the hook's context after the task, and sends it that way.
-    const blocks = shown({ ...native, subagentContext: "## T3 Code devices" }) ?? [];
+    const blocks = shown({ ...native, subagentContext: "## Cinderdeck devices" }) ?? [];
     assert.equal(blocks.at(-2), testCase.prompt);
     assert.equal(
       blocks.at(-1),
-      "<system-reminder>\nSubagentStart hook additional context: ## T3 Code devices\n</system-reminder>",
+      "<system-reminder>\nSubagentStart hook additional context: ## Cinderdeck devices\n</system-reminder>",
     );
   }),
 );
@@ -661,7 +661,7 @@ it.effect("denies every device tool with T3's own error when agent device access
       );
     }
     // T3 drops its device text for a thread without the capability, on refs that have it.
-    assert.notInclude(t3SystemAppend(model, false), "## T3 Code devices");
+    assert.notInclude(t3SystemAppend(model, false), "## Cinderdeck devices");
   }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );
 

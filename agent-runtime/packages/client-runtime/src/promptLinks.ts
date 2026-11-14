@@ -8,10 +8,10 @@ import {
   type ThreadLinkedPullRequest,
   type ThreadId,
   type ThreadPullRequestLink,
-} from "@t3tools/contracts";
-import { resolveSelectableModel, type SelectableModelOption } from "@t3tools/shared/model";
+} from "@cinderdeck/contracts";
+import { resolveSelectableModel, type SelectableModelOption } from "@cinderdeck/shared/model";
 import type { AsyncResult } from "effect/reactivity";
-import type { PromptLinkPullRequest, PromptLinkRepository } from "@t3tools/shared/promptLinks";
+import type { PromptLinkPullRequest, PromptLinkRepository } from "@cinderdeck/shared/promptLinks";
 import {
   threadPullRequestKeyOf,
   threadPullRequestsOf,

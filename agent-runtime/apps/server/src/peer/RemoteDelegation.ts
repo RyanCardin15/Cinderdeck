@@ -13,7 +13,7 @@ import {
   ProviderDriverKind,
   type RunId,
   type ThreadId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Duration from "effect/Duration";
@@ -96,7 +96,7 @@ export class RemoteDelegation extends Context.Service<
      */
     readonly start: () => Effect.Effect<void, never, Scope.Scope>;
   }
->()("t3/peer/RemoteDelegation") {}
+>()("@cinderdeck/server/peer/RemoteDelegation") {}
 
 /** The other side refused because the thread there runs above this caller's modes. */
 const isModeRefusal = (error: OrchestratorMcpFailure) =>

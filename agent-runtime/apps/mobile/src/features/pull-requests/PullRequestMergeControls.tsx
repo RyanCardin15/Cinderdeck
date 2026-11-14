@@ -1,8 +1,8 @@
 import * as Dialog from "../../components/ui/Dialog";
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
-import type { PullRequestDetail, PullRequestMergeMethod } from "@t3tools/contracts";
+import { squashAtomCommandFailure } from "@cinderdeck/client-runtime/state/runtime";
+import { sourceControlClients } from "@cinderdeck/client-runtime/source-control-clients";
+import type { PullRequestDetail, PullRequestMergeMethod } from "@cinderdeck/contracts";
 import { AsyncResult } from "effect/reactivity";
 import { useRef, useState } from "react";
 import { View } from "react-native";

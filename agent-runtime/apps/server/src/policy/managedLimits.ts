@@ -8,7 +8,7 @@ import type {
   ManagedPolicyClient,
   ManagedPolicyDocument,
   ServerAuthPolicy,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   disableTailscaleServe,
   disableTailscaleServeTcp,
@@ -17,12 +17,12 @@ import {
   readTailscaleStatus,
   type TailscaleServeRoute,
   type TailscaleStderrDiagnostic,
-} from "@t3tools/tailscale";
+} from "@cinderdeck/tailscale";
 import * as Effect from "effect/Effect";
 import * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
 
-import * as NetService from "@t3tools/shared/Net";
+import * as NetService from "@cinderdeck/shared/Net";
 
 import { loopbackBindAddress } from "../auth/utils.ts";
 

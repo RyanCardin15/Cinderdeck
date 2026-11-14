@@ -5,9 +5,9 @@ import {
   normalizeDevinToolCall,
   extractDevinSubagentUpdate,
   makeAcpRegistryAdapterV2,
-} from "@t3tools/provider-acp-registry/testing";
-import { AcpRegistrySettings } from "@t3tools/provider-acp-registry/settings";
-import { AcpRegistryCatalog } from "@t3tools/provider-acp-registry/server/AcpRegistrySupport";
+} from "@cinderdeck/provider-acp-registry/testing";
+import { AcpRegistrySettings } from "@cinderdeck/provider-acp-registry/settings";
+import { AcpRegistryCatalog } from "@cinderdeck/provider-acp-registry/server/AcpRegistrySupport";
 import { decodeAcpReplayTranscript, makeAcpReplayRuntime } from "./AcpAdapterV2.testkit.ts";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
@@ -29,11 +29,11 @@ import {
   type OrchestrationV2TurnItem,
   type ProviderOptionDescriptor,
   type ProviderUserInputAnswers,
-} from "@t3tools/contracts";
-import { GrokSettings } from "@t3tools/provider-grok/settings";
-import * as HostProcess from "@t3tools/shared/HostProcess";
-import { deriveBlockedOnThreadWait } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
-import { resolveSelfInvocation } from "@t3tools/shared/nodeRuntime";
+} from "@cinderdeck/contracts";
+import { GrokSettings } from "@cinderdeck/provider-grok/settings";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
+import { deriveBlockedOnThreadWait } from "@cinderdeck/shared/orchestrationV2PendingBackgroundWork";
+import { resolveSelfInvocation } from "@cinderdeck/shared/nodeRuntime";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import type * as Duration from "effect/Duration";
@@ -56,26 +56,26 @@ import * as EffectAcpErrors from "effect-acp/errors";
 import type * as EffectAcpProtocol from "effect-acp/protocol";
 import type * as EffectAcpSchema from "effect-acp/compat";
 
-import { writeFakeCli } from "@t3tools/provider-testing/fakeCli";
-import * as TestProviderHost from "@t3tools/provider-testing/TestProviderHost";
-import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
-import * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRuntime";
+import { writeFakeCli } from "@cinderdeck/provider-testing/fakeCli";
+import * as TestProviderHost from "@cinderdeck/provider-testing/TestProviderHost";
+import * as McpProviderSessions from "@cinderdeck/provider-core/server/McpProviderSessions";
+import * as AcpSessionRuntime from "@cinderdeck/provider-acp/server/AcpSessionRuntime";
 import {
   ACP_EMPTY_OPTION_VALUE,
   ACP_SESSION_MODE_OPTION_ID,
   acpProviderOptionDescriptors,
-} from "@t3tools/provider-acp/server/sessionConfig";
+} from "@cinderdeck/provider-acp/server/sessionConfig";
 import {
   extractXAiAcpSubagentUpdate,
   makeGrokAdapterV2,
   makeXAiPromptCompletionRuntime,
   normalizeXAiAcpToolCallState,
   registerXAiBackgroundTaskTracking,
-} from "@t3tools/provider-grok/testing";
-import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
-import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
+} from "@cinderdeck/provider-grok/testing";
+import * as IdAllocator from "@cinderdeck/provider-core/server/IdAllocator";
+import * as ProviderAdapter from "@cinderdeck/provider-core/server/ProviderAdapter";
 import { makeTurnInput } from "./AcpAdapterV2.testkit.ts";
-import type * as ProviderContinuationRequests from "@t3tools/provider-core/server/ProviderContinuationRequests";
+import type * as ProviderContinuationRequests from "@cinderdeck/provider-core/server/ProviderContinuationRequests";
 import {
   AcpProviderCapabilitiesV2,
   acpPerTurnPromptUsage,
@@ -89,15 +89,15 @@ import {
   type AcpAdapterV2Flavor,
   type AcpAdapterV2RuntimeInput,
   type AcpAdapterV2SubagentUpdate,
-} from "@t3tools/provider-acp/server/adapter";
+} from "@cinderdeck/provider-acp/server/adapter";
 
 import { appendUserInputAttachmentPaths } from "../../provider/userInputAttachments.ts";
 
-import { makeGrokAcpAdapterFlavor } from "@t3tools/provider-grok/testing";
+import { makeGrokAcpAdapterFlavor } from "@cinderdeck/provider-grok/testing";
 import {
   acpRegistryPromptFailure,
   registerMistralVibeAcpExtensions,
-} from "@t3tools/provider-acp-registry/testing";
+} from "@cinderdeck/provider-acp-registry/testing";
 
 const DEFAULT_GROK_SETTINGS = Schema.decodeSync(GrokSettings)({});
 const DROID_SETTINGS = Schema.decodeSync(AcpRegistrySettings)({ agentId: "factory-droid" });
@@ -669,9 +669,9 @@ function assertReinjectedInstructions(
   request: string,
 ) {
   const text = blocks[0]?.text ?? "";
-  assert.include(text, "T3 Code interaction mode: Default");
-  assert.include(text, "## T3 Code browser");
-  assert.include(text, "T3 Code orchestration");
+  assert.include(text, "Cinderdeck interaction mode: Default");
+  assert.include(text, "## Cinderdeck browser");
+  assert.include(text, "Cinderdeck orchestration");
   assert.include(text, `<user_request>\n${request}\n</user_request>`);
 }
 
@@ -1682,7 +1682,9 @@ describe("AcpAdapterV2", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-droid-form-" });
+      const directory = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "cinderdeck-droid-form-",
+      });
       const statusPath = path.join(directory, "status.json");
       const expectedResult = typeof result === "function" ? result(directory) : result;
       let preparedAnswers: ProviderUserInputAnswers | undefined = answers;
@@ -1949,7 +1951,7 @@ describe("AcpAdapterV2", () => {
       buildModeId: "https://agentclientprotocol.com/protocol/session-modes#agent",
     },
     {
-      // Without a `mode` category, T3 derives no mode state and only the config option switches.
+      // Without a `mode` category, Cinderdeck derives no mode state and only the config option switches.
       modeIds: "Copilot URL collaboration_mode",
       environment: { T3_ACP_COPILOT_MODES: "1", T3_ACP_MODE_OPTION_CATEGORY: "collaboration_mode" },
       planModeId: "https://agentclientprotocol.com/protocol/session-modes#plan",
@@ -2067,9 +2069,9 @@ describe("AcpAdapterV2", () => {
         assert.notInclude(whitespaceCommand.prompt, "<t3_code_instructions>");
         const firstDefault = yield* runTurn(2, defaultPolicy, "First default request.");
         assert.equal(firstDefault.textBlockCount, 2);
-        assert.include(firstDefault.prompt, "T3 Code interaction mode: Default");
-        assert.include(firstDefault.prompt, "## T3 Code browser");
-        assert.include(firstDefault.prompt, "T3 Code orchestration");
+        assert.include(firstDefault.prompt, "Cinderdeck interaction mode: Default");
+        assert.include(firstDefault.prompt, "## Cinderdeck browser");
+        assert.include(firstDefault.prompt, "Cinderdeck orchestration");
         assert.notInclude(
           firstDefault.methods,
           "session/set_config_option",
@@ -2082,18 +2084,18 @@ describe("AcpAdapterV2", () => {
 
         const planPolicy = policy("plan");
         const firstPlan = yield* runTurn(4, planPolicy, "Plan this change.");
-        assert.include(firstPlan.prompt, "T3 Code interaction mode: Plan");
+        assert.include(firstPlan.prompt, "Cinderdeck interaction mode: Plan");
         assert.deepEqual(firstPlan.modeSets, [planModeId]);
         assert.include(
           (yield* runTurn(5, planPolicy, "Continue planning.")).prompt,
           "Continue planning.",
         );
         const restoredBuild = yield* runTurn(6, defaultPolicy, "Implement the change.");
-        assert.include(restoredBuild.prompt, "T3 Code interaction mode: Default");
+        assert.include(restoredBuild.prompt, "Cinderdeck interaction mode: Default");
         assert.deepEqual(
           restoredBuild.modeSets,
           [buildModeId],
-          "Build should restore the native mode that T3 temporarily replaced for Plan",
+          "Build should restore the native mode that Cinderdeck temporarily replaced for Plan",
         );
       }).pipe(Effect.provide(layerTest), Effect.scoped),
   );
@@ -2232,7 +2234,7 @@ describe("AcpAdapterV2", () => {
     }).pipe(Effect.provide(layerTest), Effect.scoped),
   );
 
-  // regression: #21499 turns blocked only on T3 thread waits must show as waiting
+  // regression: #21499 turns blocked only on Cinderdeck thread waits must show as waiting
   it.effect.each(["agent_message_chunk"] as const)(
     "keeps named ACP %s open while deriving thread wait execution state",
     (sessionUpdate) =>
@@ -4230,7 +4232,7 @@ describe("AcpAdapterV2", () => {
           new URL("../../../scripts/acp-mock-agent.ts", import.meta.url),
         );
         const workspace = yield* fileSystem.makeTempDirectoryScoped({
-          prefix: "t3-acp-no-client-fs-",
+          prefix: "cinderdeck-acp-no-client-fs-",
         });
         const probePath = path.join(workspace, "planted.txt");
         const probeLogPath = path.join(workspace, "fs-probe.jsonl");

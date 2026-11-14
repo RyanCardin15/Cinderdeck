@@ -11,7 +11,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 
-import type { ShellEnvironmentPatch } from "@t3tools/contracts";
+import type { ShellEnvironmentPatch } from "@cinderdeck/contracts";
 import * as HostProcess from "./HostProcess.ts";
 import * as Context from "effect/Context";
 const SHELL_ENV_NAME_PATTERN = /^[A-Z0-9_]+$/;
@@ -117,7 +117,7 @@ function resolveSpawnExecutableWithNode(
 }
 
 export const SpawnExecutableResolution = Context.Reference<SpawnExecutableResolver>(
-  "@t3tools/shared/shell/SpawnExecutableResolution",
+  "@cinderdeck/shared/shell/SpawnExecutableResolution",
   {
     defaultValue: () => resolveSpawnExecutableWithNode,
   },
@@ -208,14 +208,32 @@ function envCaptureEnd(name: string): string {
   return `__T3CODE_ENV_${name}_END__`;
 }
 
+const DEBUG_TRAP_SHELLS = new Set(["bash", "zsh", "sh", "ksh", "ksh93"]);
+const POSIX_CAPTURE_SYNTAX = { assignment: "__CINDERDECK_PRINTENV=$(", orElse: " || " };
+const PRINTENV_CAPTURE_SYNTAX = new Map(
+  [...DEBUG_TRAP_SHELLS, "dash", "ash"].map((shell) => [shell, POSIX_CAPTURE_SYNTAX] as const),
+).set("fish", { assignment: "set -l __CINDERDECK_PRINTENV (", orElse: "; or " });
+// Network PATH entries must be probed inside the shell's deadline, away from the desktop thread.
+const PRINTENV_LOOKUP_COMMAND = `/bin/sh -c 'command -v printenv || { [ -n "$1" ] && PATH="$1" command -v printenv; } || printf %s /usr/bin/printenv' cinderdeck`;
+
 export function buildEnvironmentCaptureCommand(
   shell: string,
   names: ReadonlyArray<string>,
 ): string {
   const executableName = NodePath.basename(shell).toLowerCase();
   const isNushell = executableName.startsWith("nu");
+  const syntax = PRINTENV_CAPTURE_SYNTAX.get(executableName);
+  const supportsFallback = syntax !== undefined;
+  const inheritedPath = resolvePathEnvironmentVariable(process.env)
+    .split(POSIX_PATH_DELIMITER)
+    .filter(Boolean)
+    .map((entry) => NodePath.posix.resolve(entry))
+    .join(POSIX_PATH_DELIMITER);
+  const lookupPrintenv = `${PRINTENV_LOOKUP_COMMAND} '${inheritedPath.replaceAll("'", "'\\''")}'`;
+  const { assignment, orElse } = syntax ?? POSIX_CAPTURE_SYNTAX;
+  const resolvePrintenv = `${assignment}${lookupPrintenv}); `;
 
-  return names
+  const capture = names
     .map((name) => {
       if (!SHELL_ENV_NAME_PATTERN.test(name)) {
         throw new Error(`Unsupported environment variable name: ${name}`);
@@ -244,11 +262,20 @@ export function buildEnvironmentCaptureCommand(
 
       return [
         `printf '%s\\n' '${envCaptureStart(name)}'`,
-        `printenv ${name} || true`,
+        supportsFallback
+          ? `printenv ${name}${orElse}"$__CINDERDECK_PRINTENV" ${name}${orElse}true`
+          : `printenv ${name} || true`,
         `printf '%s\\n' '${envCaptureEnd(name)}'`,
       ].join("; ");
     })
     .join("; ");
+
+  // A DEBUG trap that echoes each command (e.g. into the terminal title) would print the markers.
+  // OpenBSD ksh (also its /bin/sh) exits on `trap - DEBUG`, so try it in a subshell first.
+  const command = supportsFallback ? resolvePrintenv + capture : capture;
+  return DEBUG_TRAP_SHELLS.has(executableName)
+    ? `(trap - DEBUG) 2>/dev/null && trap - DEBUG; ${command}`
+    : command;
 }
 
 function buildWindowsEnvironmentCaptureCommand(names: ReadonlyArray<string>): string {
@@ -329,14 +356,14 @@ export type WindowsShellEnvironmentReader = (
 ) => Effect.Effect<Partial<Record<string, string>>>;
 
 export const WindowsShellEnvironment = Context.Reference<WindowsShellEnvironmentReader>(
-  "@t3tools/shared/shell/WindowsShellEnvironment",
+  "@cinderdeck/shared/shell/WindowsShellEnvironment",
   {
     defaultValue: () => readEnvironmentFromWindowsShell,
   },
 );
 
 export const CommandAvailability = Context.Reference<CommandAvailabilityChecker>(
-  "@t3tools/shared/shell/CommandAvailability",
+  "@cinderdeck/shared/shell/CommandAvailability",
   {
     defaultValue: () => isCommandAvailable,
   },
@@ -511,7 +538,7 @@ interface CommandResolutionCacheEntry {
 }
 
 export const CommandResolutionCache = Context.Reference<Map<string, CommandResolutionCacheEntry>>(
-  "@t3tools/shared/shell/CommandResolutionCache",
+  "@cinderdeck/shared/shell/CommandResolutionCache",
   {
     defaultValue: () => new Map(),
   },
@@ -544,7 +571,7 @@ const listPathDirectory = Effect.fnUntraced(function* (
 
 const PathDirectoryListings = Context.Reference<
   Cache.Cache<string, PathDirectoryListing, never, FileSystem.FileSystem> | undefined
->("@t3tools/shared/shell/PathDirectoryListings", { defaultValue: () => undefined });
+>("@cinderdeck/shared/shell/PathDirectoryListings", { defaultValue: () => undefined });
 
 export const withPathDirectoryListings =
   /* Directory reads are cached inside one shell operation; a span for each lookup adds noise. */
@@ -778,7 +805,7 @@ function locateXcodeGitWithXcrun(env: NodeJS.ProcessEnv): string | undefined {
 }
 
 export const XcodeGitLocation = Context.Reference<XcodeGitLocator>(
-  "@t3tools/shared/shell/XcodeGitLocation",
+  "@cinderdeck/shared/shell/XcodeGitLocation",
   { defaultValue: () => locateXcodeGitWithXcrun },
 );
 

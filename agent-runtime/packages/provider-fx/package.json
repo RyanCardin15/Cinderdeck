@@ -1,5 +1,5 @@
 {
-  "name": "@t3tools/provider-fx",
+  "name": "@cinderdeck/provider-fx",
   "private": true,
   "type": "module",
   "exports": {
@@ -25,10 +25,10 @@
     "test": "vp test run --config ../../vite.config.ts --dir ."
   },
   "dependencies": {
-    "@t3tools/contracts": "workspace:*",
-    "@t3tools/provider-acp": "workspace:*",
-    "@t3tools/provider-core": "workspace:*",
-    "@t3tools/shared": "workspace:*",
+    "@cinderdeck/contracts": "workspace:*",
+    "@cinderdeck/provider-acp": "workspace:*",
+    "@cinderdeck/provider-core": "workspace:*",
+    "@cinderdeck/shared": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {

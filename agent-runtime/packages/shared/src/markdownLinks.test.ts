@@ -29,6 +29,13 @@ describe("inlineCodeFilePathCandidate", () => {
     ["share/man/ls.1", "share/man/ls.1"],
     ["src/main.ts/", null],
     ["./patches/", "./patches/"],
+    // regression: #22181 a `:line` suffix does not make an extensionless basename a file
+    ["I/W217:220", null],
+    ["bin/run:12", null],
+    ["docs/README:12", "docs/README:12"],
+    ["./bin/run:12", "./bin/run:12"],
+    ["src/資料.備份:12", "src/資料.備份:12"],
+    ["src/foo.c++:12", "src/foo.c++:12"],
   ])("distinguishes file paths from code and hostnames in %s", (source, candidate) => {
     expect(inlineCodeFilePathCandidate(source)).toBe(candidate);
   });
@@ -37,7 +44,7 @@ describe("inlineCodeFilePathCandidate", () => {
 describe("parseMarkdownFileLink", () => {
   it.each([
     ["C:%5Crepo%5Cimage.png", "C:\\repo\\image.png"],
-    ["</D:/Programme/t3code/ChatMarkdown.tsx:1>", "D:/Programme/t3code/ChatMarkdown.tsx"],
+    ["</D:/Programme/cinderdeck/ChatMarkdown.tsx:1>", "D:/Programme/cinderdeck/ChatMarkdown.tsx"],
     ["file://localhost/home/me/notes.md", "/home/me/notes.md"],
     ["app/routes/posts.$postId.tsx", "app/routes/posts.$postId.tsx"],
     ["src/routes/+page.svelte", "src/routes/+page.svelte"],
@@ -178,9 +185,9 @@ describe("resolveMarkdownFileLinkTarget", () => {
   it("normalizes slash-prefixed windows drive paths before resolving", () => {
     expect(
       resolveMarkdownFileLinkTarget(
-        "/D:/Programme/t3code/apps/web/src/components/chat/OpenInPicker.tsx#L69",
+        "/D:/Programme/cinderdeck/apps/web/src/components/chat/OpenInPicker.tsx#L69",
       ),
-    ).toBe("D:/Programme/t3code/apps/web/src/components/chat/OpenInPicker.tsx:69");
+    ).toBe("D:/Programme/cinderdeck/apps/web/src/components/chat/OpenInPicker.tsx:69");
   });
 
   it("decodes an encoded drive colon in a file uri before dropping its slash", () => {

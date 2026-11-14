@@ -3,8 +3,8 @@ import type {
   SetThreadInteractionModeInput,
   SetThreadRuntimeModeInput,
   StartThreadTurnInput,
-} from "@t3tools/client-runtime/operations";
-import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
+} from "@cinderdeck/client-runtime/operations";
+import type { AtomCommandResult } from "@cinderdeck/client-runtime/state/runtime";
 import type {
   EnvironmentId,
   MessageId,
@@ -13,7 +13,7 @@ import type {
   RunId,
   RuntimeMode,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 
 type Command<Input, E> = (request: {
   readonly environmentId: EnvironmentId;

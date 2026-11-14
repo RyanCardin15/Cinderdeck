@@ -1,4 +1,4 @@
-import type { ThreadTitleMessage } from "@t3tools/provider-core/server/threadTitleContext";
+import type { ThreadTitleMessage } from "@cinderdeck/provider-core/server/threadTitleContext";
 
 export const threadTitleEvaluationCases = [
   {

@@ -2,12 +2,12 @@ import {
   type EnvironmentThreadShell,
   type PendingSubagentRequest,
   presentThreadShell,
-} from "@t3tools/client-runtime/state/models";
-import { isShownUnderParent } from "@t3tools/client-runtime/state/threads";
+} from "@cinderdeck/client-runtime/state/models";
+import { isShownUnderParent } from "@cinderdeck/client-runtime/state/threads";
 import type { AnyRouter } from "@tanstack/react-router";
-import { threadKey } from "@t3tools/client-runtime/state/entities";
-import type { EnvironmentId, OrchestrationV2ThreadShell, ThreadId } from "@t3tools/contracts";
-import type { ClientSettings } from "@t3tools/contracts/settings";
+import { threadKey } from "@cinderdeck/client-runtime/state/entities";
+import type { EnvironmentId, OrchestrationV2ThreadShell, ThreadId } from "@cinderdeck/contracts";
+import type { ClientSettings } from "@cinderdeck/contracts/settings";
 import * as Option from "effect/Option";
 import type { AtomRegistry } from "effect/reactivity";
 import {

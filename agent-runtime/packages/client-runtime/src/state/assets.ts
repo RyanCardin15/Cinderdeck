@@ -6,13 +6,13 @@ import {
   EnvironmentId,
   type ProjectCloneSnapshot,
   WS_METHODS,
-} from "@t3tools/contracts";
-import { mediaMimeTypeFromExtension } from "@t3tools/shared/mediaPreview";
-import { isWindowsAbsolutePath } from "@t3tools/shared/path";
+} from "@cinderdeck/contracts";
+import { mediaMimeTypeFromExtension } from "@cinderdeck/shared/mediaPreview";
+import { isWindowsAbsolutePath } from "@cinderdeck/shared/path";
 import {
   getProjectFaviconResourceKey,
   isProjectFaviconFallbackUrl,
-} from "@t3tools/shared/projectFavicon";
+} from "@cinderdeck/shared/projectFavicon";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";

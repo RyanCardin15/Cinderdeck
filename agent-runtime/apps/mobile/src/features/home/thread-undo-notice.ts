@@ -1,4 +1,4 @@
-import * as ThreadUndo from "@t3tools/client-runtime/state/thread-undo";
+import * as ThreadUndo from "@cinderdeck/client-runtime/state/thread-undo";
 import { useSyncExternalStore } from "react";
 
 type UndoNotice = {

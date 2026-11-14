@@ -1,10 +1,10 @@
 import { useAtomValue } from "@effect/atom-react";
-import { AuthOrchestrationOperateScope, type ScopedThreadRef } from "@t3tools/contracts";
-import type { ChildThreadApproval } from "@t3tools/client-runtime/state/thread-requests";
+import { AuthOrchestrationOperateScope, type ScopedThreadRef } from "@cinderdeck/contracts";
+import type { ChildThreadApproval } from "@cinderdeck/client-runtime/state/thread-requests";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@cinderdeck/client-runtime/state/runtime";
 import { useState } from "react";
 import { useEnvironmentScope } from "../../state/session";
 import { ScrollView, View } from "react-native";

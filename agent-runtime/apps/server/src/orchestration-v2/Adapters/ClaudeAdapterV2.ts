@@ -1,12 +1,12 @@
 import * as DocumentText from "../../provider/DocumentText.ts";
-import { mcpToolResultOutput, toolOutputImages } from "@t3tools/shared/toolOutput";
+import { mcpToolResultOutput, toolOutputImages } from "@cinderdeck/shared/toolOutput";
 import { makeProviderTextDeltaCoalescer } from "./ProviderTextDeltaCoalescer.ts";
 import { claudeTaskOutputRoot, tailClaudeTaskOutput } from "./ClaudeTaskOutputTail.ts";
 import {
   dynamicToolTitle,
   formatReadToolLabel,
   formatSearchToolLabel,
-} from "@t3tools/shared/toolActivity";
+} from "@cinderdeck/shared/toolActivity";
 import { field, text } from "../unknownField.ts";
 import { mergeWorkflowAgentMetadata, type WorkflowAgentMetadata } from "../workflowAgentAnswers.ts";
 import {
@@ -21,7 +21,7 @@ import {
   parseClaudeWorkflowRunHandles,
 } from "./claudeWorkflowProgress.ts";
 
-import { isWorkspaceImagePreviewPath } from "@t3tools/shared/filePreview";
+import { isWorkspaceImagePreviewPath } from "@cinderdeck/shared/filePreview";
 import {
   addClaudeLedgerUsage,
   claudeLedgerDelta,
@@ -67,16 +67,16 @@ import type {
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- the SDK takes a Node ChildProcess for the CLI.
 import * as NodeChildProcess from "node:child_process";
 import * as NodeUtil from "node:util";
-import { parseCliArgs } from "@t3tools/shared/cliArgs";
-import { fromLenientJson } from "@t3tools/shared/schemaJson";
-import { AgentScope } from "@t3tools/shared/AgentScope";
-import * as HostProcess from "@t3tools/shared/HostProcess";
-import { applyClaudePromptEffortPrefix } from "@t3tools/shared/model";
+import { parseCliArgs } from "@cinderdeck/shared/cliArgs";
+import { fromLenientJson } from "@cinderdeck/shared/schemaJson";
+import { AgentScope } from "@cinderdeck/shared/AgentScope";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
+import { applyClaudePromptEffortPrefix } from "@cinderdeck/shared/model";
 import {
   CLAUDE_RESUME_COMPACTION_COMPACT_ANSWER,
   CLAUDE_RESUME_COMPACTION_NEVER_ANSWER,
   formatClaudeResumeCompactionQuestion,
-} from "@t3tools/shared/claudeCompaction";
+} from "@cinderdeck/shared/claudeCompaction";
 import {
   type ChatAttachment,
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
@@ -116,7 +116,7 @@ import {
   type RunId,
   type ThreadId,
   resolveIdleCompaction,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 
 import { FILE_HEADERS_ONLY, formatPatch, structuredPatch } from "diff";
 import * as Cause from "effect/Cause";
@@ -159,9 +159,9 @@ import {
 import * as ServerConfig from "../../config.ts";
 import * as PortScanner from "../../preview/PortScanner.ts";
 import * as ServerSettings from "../../serverSettings.ts";
-import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
-import { spawnAndCollect } from "@t3tools/provider-core/server/snapshotProbe";
-import { signalProcessGroup } from "@t3tools/provider-core/server/processGroup";
+import { expandHomePath } from "@cinderdeck/provider-core/server/pathExpansion";
+import { spawnAndCollect } from "@cinderdeck/provider-core/server/snapshotProbe";
+import { signalProcessGroup } from "@cinderdeck/provider-core/server/processGroup";
 import {
   claudeSignedOutMessage,
   makeClaudeEnvironment,
@@ -180,45 +180,45 @@ import {
   boundProviderEventForLogging,
   shouldPersistProviderEvent,
 } from "../../provider/EventNdjsonLogger.ts";
-import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
+import * as ProviderEventLoggers from "@cinderdeck/provider-core/server/ProviderEventLoggers";
 import {
   claudeRateLimitEventToUpdate,
   type ClaudeScopedLimitNames,
 } from "../../provider/claudeUsageLimits.ts";
-import type { ManagedServerProvider } from "@t3tools/provider-core/server/snapshot";
+import type { ManagedServerProvider } from "@cinderdeck/provider-core/server/snapshot";
 import {
-  T3_CODE_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH,
-  T3_CODE_ORCHESTRATION_INSTRUCTIONS,
-} from "@t3tools/provider-core/server/orchestrationInstructions";
-import { buildRuntimeInstructions } from "@t3tools/provider-core/server/runtimeInstructions";
+  CINDERDECK_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH,
+  CINDERDECK_ORCHESTRATION_INSTRUCTIONS,
+} from "@cinderdeck/provider-core/server/orchestrationInstructions";
+import { buildRuntimeInstructions } from "@cinderdeck/provider-core/server/runtimeInstructions";
 import {
   mcpToolPresentation,
   normalizeMcpText,
-} from "@t3tools/provider-core/server/mcpToolPresentation";
-import * as McpProviderSession from "@t3tools/provider-core/server/mcpSession";
-import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
-import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
+} from "@cinderdeck/provider-core/server/mcpToolPresentation";
+import * as McpProviderSession from "@cinderdeck/provider-core/server/mcpSession";
+import * as McpProviderSessions from "@cinderdeck/provider-core/server/McpProviderSessions";
+import * as IdAllocator from "@cinderdeck/provider-core/server/IdAllocator";
 import {
   makeProviderFailure,
   makeProviderRetryTurnItem,
-} from "@t3tools/provider-core/server/failure";
-import { turnScopedSelectionTransition } from "@t3tools/provider-core/server/selectionTransition";
-import { providerMessageTextWithAttachmentPaths } from "@t3tools/provider-core/server/attachmentPrompt";
-import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
+} from "@cinderdeck/provider-core/server/failure";
+import { turnScopedSelectionTransition } from "@cinderdeck/provider-core/server/selectionTransition";
+import { providerMessageTextWithAttachmentPaths } from "@cinderdeck/provider-core/server/attachmentPrompt";
+import * as ProviderAdapter from "@cinderdeck/provider-core/server/ProviderAdapter";
 import {
   ProviderAdapterDriverCreateError,
   type ProviderAdapterDriverCreateInput,
-} from "@t3tools/provider-core/server/adapterDriver";
+} from "@cinderdeck/provider-core/server/adapterDriver";
 import {
   type BackgroundWorkReport,
   backgroundWorkNotification,
-} from "@t3tools/provider-core/server/notification";
-import * as ProviderContinuationRequests from "@t3tools/provider-core/server/ProviderContinuationRequests";
+} from "@cinderdeck/provider-core/server/notification";
+import * as ProviderContinuationRequests from "@cinderdeck/provider-core/server/ProviderContinuationRequests";
 import {
   makeSubagentChildThread,
   makeSubagentConversationArtifacts,
   subagentThreadTitle,
-} from "@t3tools/provider-core/server/subagentProjection";
+} from "@cinderdeck/provider-core/server/subagentProjection";
 
 export const CLAUDE_PROVIDER = ProviderDriverKind.make("claudeAgent");
 const CLAUDE_AGENT_SDK_QUERY_PROTOCOL = "claude-agent-sdk.query" as const;
@@ -647,7 +647,7 @@ export interface ClaudeAgentSdkQueryRunnerShape {
 export class ClaudeAgentSdkQueryRunner extends Context.Service<
   ClaudeAgentSdkQueryRunner,
   ClaudeAgentSdkQueryRunnerShape
->()("t3/orchestration-v2/Adapters/ClaudeAdapterV2/ClaudeAgentSdkQueryRunner") {}
+>()("@cinderdeck/server/orchestration-v2/Adapters/ClaudeAdapterV2/ClaudeAgentSdkQueryRunner") {}
 
 export interface ClaudeAgentSdkSessionForkInput {
   readonly sessionId: string;
@@ -1514,7 +1514,7 @@ const subagentDeviceInstructions: HookCallback = () =>
   Promise.resolve({
     hookSpecificOutput: {
       hookEventName: "SubagentStart",
-      additionalContext: T3_CODE_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH,
+      additionalContext: CINDERDECK_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH,
     },
   });
 
@@ -1655,10 +1655,10 @@ export function makeClaudeQueryOptions(input: {
         buildRuntimeInstructions({ harness: "Claude Code" }) +
           (input.mcpServers === undefined
             ? ""
-            : T3_CODE_ORCHESTRATION_INSTRUCTIONS +
+            : CINDERDECK_ORCHESTRATION_INSTRUCTIONS +
               CLAUDE_BACKGROUND_WAIT_INSTRUCTIONS +
               (deviceInstructions
-                ? `\n${T3_CODE_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH}\n`
+                ? `\n${CINDERDECK_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH}\n`
                 : "")),
         ...launchAppendSystemPrompt,
       ].join("\n\n"),

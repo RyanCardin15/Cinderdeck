@@ -2,11 +2,11 @@ import type {
   DesktopDiscoveredSshHost,
   DesktopSshEnvironmentBootstrap,
   DesktopSshEnvironmentTarget,
-} from "@t3tools/contracts";
-import * as NetService from "@t3tools/shared/Net";
-import * as SshAuth from "@t3tools/ssh/auth";
-import { resolveSshTarget } from "@t3tools/ssh/command";
-import { discoverSshHosts } from "@t3tools/ssh/config";
+} from "@cinderdeck/contracts";
+import * as NetService from "@cinderdeck/shared/Net";
+import * as SshAuth from "@cinderdeck/ssh/auth";
+import { resolveSshTarget } from "@cinderdeck/ssh/command";
+import { discoverSshHosts } from "@cinderdeck/ssh/config";
 import {
   SshCommandError,
   SshHostDiscoveryError,
@@ -15,8 +15,8 @@ import {
   SshPairingError,
   SshPasswordPromptError,
   SshReadinessError,
-} from "@t3tools/ssh/errors";
-import * as SshTunnel from "@t3tools/ssh/tunnel";
+} from "@cinderdeck/ssh/errors";
+import * as SshTunnel from "@cinderdeck/ssh/tunnel";
 import * as Context from "effect/Context";
 import type * as Digest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
@@ -64,7 +64,7 @@ export class DesktopSshEnvironment extends Context.Service<
       target: DesktopSshEnvironmentTarget,
     ) => Effect.Effect<void, DesktopSshEnvironmentOperationError>;
   }
->()("@t3tools/desktop/ssh/DesktopSshEnvironment") {}
+>()("@cinderdeck/desktop/ssh/DesktopSshEnvironment") {}
 
 export interface DesktopSshEnvironmentLayerOptions {
   readonly resolveCliRunner?: Effect.Effect<SshTunnel.RemoteT3RunnerOptions>;

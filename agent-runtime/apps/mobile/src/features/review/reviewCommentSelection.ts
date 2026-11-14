@@ -1,9 +1,9 @@
 import { useSyncExternalStore } from "react";
-import type { OrchestrationMessageContext } from "@t3tools/contracts";
+import type { OrchestrationMessageContext } from "@cinderdeck/contracts";
 import {
   collectComposerContextReferences,
   replaceComposerContextReferences,
-} from "@t3tools/shared/composerContextReferences";
+} from "@cinderdeck/shared/composerContextReferences";
 
 import type { ReviewRenderableLineRow } from "./reviewModel";
 

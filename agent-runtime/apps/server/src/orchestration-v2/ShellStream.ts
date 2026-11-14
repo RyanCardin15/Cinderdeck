@@ -10,15 +10,15 @@ import type {
   OrchestrationV2StoredEvent,
   ProjectId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   isListedThreadLineage,
   isLiveSubagentShell,
   isOlderSettledThreadShell,
   OrchestrationProjectShell as ProjectShellSchema,
   OrchestrationV2ThreadShell as ThreadShellSchema,
-} from "@t3tools/contracts";
-import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
+} from "@cinderdeck/contracts";
+import * as NodeSqliteClient from "@cinderdeck/shared/nodeSqliteClient";
 import type * as Arr from "effect/Array";
 import type * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";

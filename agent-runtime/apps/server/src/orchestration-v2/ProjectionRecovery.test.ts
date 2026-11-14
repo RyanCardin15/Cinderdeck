@@ -17,7 +17,7 @@ import {
   RuntimeRequestId,
   ThreadId,
   TurnItemId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -32,7 +32,7 @@ import * as EffectOutbox from "./EffectOutbox.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as EventSink from "./EventSink.ts";
 import * as EventStore from "./EventStore.ts";
-import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
+import * as IdAllocator from "@cinderdeck/provider-core/server/IdAllocator";
 import * as ProviderRuntimeRecovery from "./ProviderRuntimeRecoveryService.ts";
 import { restartContinuationRun } from "./RestartContinuation.ts";
 

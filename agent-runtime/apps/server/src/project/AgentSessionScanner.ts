@@ -12,7 +12,7 @@ import {
   type AgentSessionProjectGit,
   type AgentSessionScanResult,
   type ProviderInstanceConfig,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -25,18 +25,18 @@ import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
-import { isBareGitConfig, parseOriginUrlFromGitConfig } from "@t3tools/shared/git";
-import * as HostProcess from "@t3tools/shared/HostProcess";
-import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
-import { repositoryPathFromRemoteUrl } from "@t3tools/source-control-core/server/SourceControlProvider";
+import { isBareGitConfig, parseOriginUrlFromGitConfig } from "@cinderdeck/shared/git";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
+import { normalizeProjectPathForComparison } from "@cinderdeck/shared/path";
+import { repositoryPathFromRemoteUrl } from "@cinderdeck/source-control-core/server/SourceControlProvider";
 
 import * as ServerConfig from "../config.ts";
 import * as ProcessRunner from "../processRunner.ts";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import { resolveCodexHomeLayout } from "../provider/Drivers/CodexHomeLayout.ts";
-import { mergeProviderInstanceEnvironment } from "@t3tools/provider-core/server/instanceEnvironment";
-import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
-import { resolvePiSessionsDir } from "@t3tools/provider-pi/server/usage";
+import { mergeProviderInstanceEnvironment } from "@cinderdeck/provider-core/server/instanceEnvironment";
+import { expandHomePath } from "@cinderdeck/provider-core/server/pathExpansion";
+import { resolvePiSessionsDir } from "@cinderdeck/provider-pi/server/usage";
 import * as ServerSettings from "../serverSettings.ts";
 import { sourceControlDefinitions } from "../sourceControl/sourceControlDefinitions.ts";
 import {
@@ -194,7 +194,7 @@ export class AgentSessionScanner extends Context.Service<
       completedSources?: ReadonlyArray<AgentSessionImportSource>,
     ) => Stream.Stream<AgentSessionRecentThread, AgentSessionScanError>;
   }
->()("t3/project/AgentSessionScanner") {}
+>()("@cinderdeck/server/project/AgentSessionScanner") {}
 
 type AgentSessionSource = AgentSessionProjectCandidate["sources"][number];
 

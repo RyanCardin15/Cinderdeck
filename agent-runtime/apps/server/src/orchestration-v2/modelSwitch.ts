@@ -3,9 +3,9 @@ import {
   type ModelSelection,
   type OrchestrationV2ThreadProjection,
   type OrchestrationV2TurnItem,
-} from "@t3tools/contracts";
-import { modelSelectionsEqual } from "@t3tools/shared/model";
-import { runRanAfter } from "@t3tools/shared/orchestrationV2ThreadError";
+} from "@cinderdeck/contracts";
+import { modelSelectionsEqual } from "@cinderdeck/shared/model";
+import { runRanAfter } from "@cinderdeck/shared/orchestrationV2ThreadError";
 
 /**
  * The model or effort change a new run brings, measured from the latest run the timeline shows

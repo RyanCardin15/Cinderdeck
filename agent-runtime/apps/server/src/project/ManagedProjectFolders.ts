@@ -4,8 +4,8 @@ import {
   ProjectId,
   type ThreadId,
   VcsProcessSpawnError,
-} from "@t3tools/contracts";
-import { newProjectFolderName } from "@t3tools/shared/path";
+} from "@cinderdeck/contracts";
+import { newProjectFolderName } from "@cinderdeck/shared/path";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";
@@ -108,7 +108,7 @@ export class ManagedProjectFolders extends Context.Service<
       NamedProjectError
     >;
   }
->()("t3/project/ManagedProjectFolders") {}
+>()("@cinderdeck/server/project/ManagedProjectFolders") {}
 
 const folderWords = (text: string) =>
   text

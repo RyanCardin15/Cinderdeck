@@ -1,12 +1,12 @@
-import { fileBasename, isAbsolutePath, workspaceRelativeFilePath } from "@t3tools/shared/path";
+import { fileBasename, isAbsolutePath, workspaceRelativeFilePath } from "@cinderdeck/shared/path";
 import {
   inlineCodeFilePathCandidate,
   isRelativeFilePath,
   normalizeMarkdownLinkDestination,
   parseMarkdownFileLink,
   resolveMarkdownFileLinkTarget,
-} from "@t3tools/shared/markdownLinks";
-import { parseFileUrlHref, splitFilePathPosition } from "@t3tools/shared/fileLinks";
+} from "@cinderdeck/shared/markdownLinks";
+import { parseFileUrlHref, splitFilePathPosition } from "@cinderdeck/shared/fileLinks";
 
 import { formatWorkspaceRelativePath } from "./filePathDisplay";
 import { isTerminalLinkActivation } from "./terminal-links";

@@ -1,5 +1,5 @@
-import type { UsageProviderKind } from "@t3tools/contracts";
-import type { DailyTotals } from "@t3tools/shared/usageMerge";
+import type { UsageProviderKind } from "@cinderdeck/contracts";
+import type { DailyTotals } from "@cinderdeck/shared/usageMerge";
 
 import { PROVIDER_ORDER } from "./usageProviders";
 

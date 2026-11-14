@@ -50,7 +50,7 @@ interface ManagedChild {
 
 const runtimePaths = (baseDir: string, version: string) => {
   const versionDir = NodePath.join(baseDir, "runtime", "versions", version);
-  // oxlint-disable-next-line t3code/no-global-process-runtime -- Standalone launcher has no Effect runtime.
+  // oxlint-disable-next-line cinderdeck/no-global-process-runtime -- Standalone launcher has no Effect runtime.
   const executableName = process.platform === "win32" ? "t3.exe" : "t3";
   return {
     versionDir,
@@ -143,7 +143,7 @@ function runCp(args: ReadonlyArray<string>): Promise<boolean> {
 
 // macOS fs.copyFile clone flags fall back to full copies.
 async function copyDatabaseFile(source: string, destination: string): Promise<void> {
-  // oxlint-disable-next-line t3code/no-global-process-runtime -- Standalone launcher has no Effect runtime.
+  // oxlint-disable-next-line cinderdeck/no-global-process-runtime -- Standalone launcher has no Effect runtime.
   const platform = process.platform;
   // cp -c replaces files and breaks hard links; copy into hard-linked destinations instead.
   const hardLinked =
@@ -177,7 +177,7 @@ async function statDatabaseFiles(dbPath: string): Promise<ReadonlyArray<NodeFS.S
 
 // cp -c silently copies across volumes; require one device matching the APFS system volume's filesystem type.
 async function backupCanClone(dbPath: string, backupRoot: string): Promise<boolean> {
-  // oxlint-disable-next-line t3code/no-global-process-runtime -- Standalone launcher has no Effect runtime.
+  // oxlint-disable-next-line cinderdeck/no-global-process-runtime -- Standalone launcher has no Effect runtime.
   const platform = process.platform;
   if (platform === "darwin") {
     const [backupDirectory, backupFs, systemFs] = await Promise.all([

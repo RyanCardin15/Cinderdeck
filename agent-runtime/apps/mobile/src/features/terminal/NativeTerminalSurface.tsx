@@ -1,4 +1,4 @@
-import type { TerminalGrid, TerminalOutputState } from "@t3tools/client-runtime/state/terminal";
+import type { TerminalGrid, TerminalOutputState } from "@cinderdeck/client-runtime/state/terminal";
 import { memo, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
 import {
   Pressable,
@@ -216,7 +216,7 @@ const ReadyTerminalSurface = memo(function ReadyTerminalSurface(props: ReadyTerm
   const writerRef = useRef<ReturnType<typeof createTerminalOutputWriter> | null>(null);
   const [nativeReady, setNativeReady] = useState(false);
 
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- creates the output writer for the native terminal view once it is ready and disposes it on cleanup
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- creates the output writer for the native terminal view once it is ready and disposes it on cleanup
   useEffect(() => {
     const view = nativeRef.current;
     if (!streaming || !nativeReady || view === null) return;
@@ -228,7 +228,7 @@ const ReadyTerminalSurface = memo(function ReadyTerminalSurface(props: ReadyTerm
     };
   }, [nativeReady, streaming]);
 
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- streams new terminal output into the native terminal view through its writer
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- streams new terminal output into the native terminal view through its writer
   useEffect(() => {
     if (!streaming || !nativeReady || props.output === null) return;
     void writerRef.current?.write(props.output).catch((error: unknown) => {

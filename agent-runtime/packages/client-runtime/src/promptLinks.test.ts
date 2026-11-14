@@ -7,7 +7,7 @@ import {
   type PullRequestLinkedThreadsResult,
   type RepositoryIdentity,
   type ThreadPullRequestLink,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import { AsyncResult } from "effect/reactivity";
 import { describe, expect, it } from "vite-plus/test";
 

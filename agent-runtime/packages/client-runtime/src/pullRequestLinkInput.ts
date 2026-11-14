@@ -1,5 +1,5 @@
-import type { RepositoryIdentity } from "@t3tools/contracts";
-import { canonicalizeGitCafePullRequestUrl } from "@t3tools/source-control-definitions/registry";
+import type { RepositoryIdentity } from "@cinderdeck/contracts";
+import { canonicalizeGitCafePullRequestUrl } from "@cinderdeck/source-control-definitions/registry";
 
 import { sourceControlClients, type ChangeRequestTerminology } from "./sourceControlClients.ts";
 

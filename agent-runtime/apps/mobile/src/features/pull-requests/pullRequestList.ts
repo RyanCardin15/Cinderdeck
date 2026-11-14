@@ -1,5 +1,5 @@
-import { pullRequestFilterProjects } from "@t3tools/client-runtime/pull-request-project-filter";
-import { parsePullRequestQuery } from "@t3tools/client-runtime/pull-request-query";
+import { pullRequestFilterProjects } from "@cinderdeck/client-runtime/pull-request-project-filter";
+import { parsePullRequestQuery } from "@cinderdeck/client-runtime/pull-request-query";
 import {
   ProjectId,
   resolvePullRequestAuthorFilter,
@@ -9,7 +9,7 @@ import {
   type PullRequestListInput,
   type PullRequestListResult,
   type PullRequestListStatsInput,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import type { PullRequestListControls } from "../../persistence/mobile-preferences";
 
 export const PR_LIST_PAGE_SIZE = 30;

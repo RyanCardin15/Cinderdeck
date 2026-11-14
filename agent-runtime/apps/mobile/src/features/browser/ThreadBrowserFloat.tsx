@@ -1,6 +1,6 @@
 import { useIsFocused } from "@react-navigation/native";
-import type { EnvironmentId, PreviewSessionSnapshot, ThreadId } from "@t3tools/contracts";
-import { previewPdfAssetUrl } from "@t3tools/shared/preview";
+import type { EnvironmentId, PreviewSessionSnapshot, ThreadId } from "@cinderdeck/contracts";
+import { previewPdfAssetUrl } from "@cinderdeck/shared/preview";
 import * as Option from "effect/Option";
 import { useState } from "react";
 import { Pressable, View } from "react-native";

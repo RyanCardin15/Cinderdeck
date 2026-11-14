@@ -1,11 +1,11 @@
 import { useComposerMenuState } from "../chat/useComposerMenuState";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
-import { AuthOrchestrationOperateScope } from "@t3tools/contracts";
+import { AuthOrchestrationOperateScope } from "@cinderdeck/contracts";
 import { useEnvironmentsWithScope } from "../../state/session";
-import { mapAtomCommandResult, settlePromise } from "@t3tools/client-runtime/state/runtime";
-import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { planProjectRemoval } from "@t3tools/client-runtime/state/projects";
-import { type EnvironmentId, type SidebarProjectGroupingMode } from "@t3tools/contracts";
+import { mapAtomCommandResult, settlePromise } from "@cinderdeck/client-runtime/state/runtime";
+import { scopeProjectRef, scopeThreadRef } from "@cinderdeck/client-runtime/environment";
+import { planProjectRemoval } from "@cinderdeck/client-runtime/state/projects";
+import { type EnvironmentId, type SidebarProjectGroupingMode } from "@cinderdeck/contracts";
 import {
   checkProjectAccess,
   reportProjectFailure,
@@ -20,7 +20,7 @@ import { useComposerDraftStore } from "../../composerDraftStore";
 import { releaseProjectDraftUploads } from "../../lib/composerDraftUploads";
 import { persistClientSettingsUpdate, useClientSettings } from "../../hooks/useSettings";
 import { readLocalApi } from "../../localApi";
-import { derivePhysicalProjectKey } from "@t3tools/client-runtime/state/project-grouping";
+import { derivePhysicalProjectKey } from "@cinderdeck/client-runtime/state/project-grouping";
 import {
   PROJECT_GROUPING_MODE_LABELS,
   withProjectGroupingOverride,

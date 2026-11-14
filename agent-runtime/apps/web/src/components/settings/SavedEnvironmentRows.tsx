@@ -14,13 +14,13 @@ import {
   formatConnectReachable,
   managedCapabilityDenial,
   resolveEnvironmentMachineKind,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   connectionRoutes,
   hasSavedBearerRoute,
   connectionStatusText,
   environmentMcpUrl,
-} from "@t3tools/client-runtime/connection";
+} from "@cinderdeck/client-runtime/connection";
 import * as Option from "effect/Option";
 
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
@@ -560,7 +560,7 @@ function ConfiguredCloudLinkRow({ canManageRelay }: { readonly canManageRelay: b
   const refreshLinkState = useEffectEvent(primaryCloudLinkState.refresh);
   // The server rechecks reachability when the tunnel's 30 s readiness poll changes.
   // Poll while mounted, so a failed read does not stop later ones.
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- 30 s interval that refreshes the cloud link reachability while mounted
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- 30 s interval that refreshes the cloud link reachability while mounted
   useEffect(() => {
     const interval = window.setInterval(() => refreshLinkState(), 30_000);
     return () => window.clearInterval(interval);

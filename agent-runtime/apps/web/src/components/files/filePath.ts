@@ -1,5 +1,5 @@
-import type { ProjectEntry } from "@t3tools/contracts";
-import { isWindowsAbsolutePath, isHostPath } from "@t3tools/shared/path";
+import type { ProjectEntry } from "@cinderdeck/contracts";
+import { isWindowsAbsolutePath, isHostPath } from "@cinderdeck/shared/path";
 
 export interface FileBreadcrumb {
   label: string;

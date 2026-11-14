@@ -1,10 +1,10 @@
-import { EMPTY_TERMINAL_SESSION_STATE } from "@t3tools/client-runtime/state/terminal";
+import { EMPTY_TERMINAL_SESSION_STATE } from "@cinderdeck/client-runtime/state/terminal";
 import {
   EnvironmentId,
   ThreadId,
   type ScopedThreadRef,
   type FilesystemEntryMetadata,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import { Atom, AsyncResult } from "effect/reactivity";
 import type { GhosttyTerminalSurfaceOptions } from "~/terminal/ghostty/surface";
 import { AppAtomRegistryProvider, appAtomRegistry } from "../rpc/atomRegistry";
@@ -99,7 +99,7 @@ vi.mock("../editorPreferences", () => ({ useOpenInPreferredEditor: () => () => {
 vi.mock("./preview/openTerminalLinkInPreview", () => ({ openTerminalLinkInPreview: () => {} }));
 vi.mock("~/localApi", () => ({ readLocalApi: () => null }));
 vi.mock("../hooks/useSettings", async () => {
-  const { DEFAULT_CLIENT_SETTINGS } = await import("@t3tools/contracts/settings");
+  const { DEFAULT_CLIENT_SETTINGS } = await import("@cinderdeck/contracts/settings");
   return {
     useClientSettings: <T,>(select: (settings: typeof DEFAULT_CLIENT_SETTINGS) => T) =>
       select(DEFAULT_CLIENT_SETTINGS),

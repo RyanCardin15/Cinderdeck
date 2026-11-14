@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { OrchestrationV2ProviderTurnTokenUsage } from "@t3tools/contracts";
+import { OrchestrationV2ProviderTurnTokenUsage } from "@cinderdeck/contracts";
 import * as Schema from "effect/Schema";
 import { formatContextWindowCompactionMessage } from "../components/chat/ContextWindowMeter.logic";
 import * as DateTime from "effect/DateTime";
@@ -9,7 +9,7 @@ import {
   ProviderInstanceId,
   RunId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import { makeThreadProjectionFixture } from "../test-fixtures";
 import { shouldOfferResumeCompaction } from "../components/chat/ContextWindowMeter.logic";
 import { deriveLatestContextWindowSnapshot, latestProviderTurnTokenUsage } from "./contextWindow";

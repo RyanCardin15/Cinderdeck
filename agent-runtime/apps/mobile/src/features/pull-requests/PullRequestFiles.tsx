@@ -1,8 +1,8 @@
 import { NativeScrollView } from "../../native/NativeScrollViewMarker";
-import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
+import { sourceControlClients } from "@cinderdeck/client-runtime/source-control-clients";
 import { AnimatedLegendList } from "@legendapp/list/reanimated";
 import { StackActions, useNavigation, type StaticScreenProps } from "@react-navigation/native";
-import type { PullRequestChangeBreakdown } from "@t3tools/contracts";
+import type { PullRequestChangeBreakdown } from "@cinderdeck/contracts";
 import { useState } from "react";
 import { Platform, View } from "react-native";
 import Animated from "react-native-reanimated";

@@ -1,6 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off - cleanup uses Node's retrying rm, which the FileSystem service does not expose.
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { ClaudeSettings, type ServerProvider } from "@t3tools/contracts";
+import { ClaudeSettings, type ServerProvider } from "@cinderdeck/contracts";
 import { vi } from "vite-plus/test";
 import * as ClaudeSdk from "@anthropic-ai/claude-agent-sdk";
 import { assert, it } from "@effect/vitest";

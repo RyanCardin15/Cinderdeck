@@ -1,4 +1,4 @@
-import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import type { EnvironmentId, ThreadId } from "@cinderdeck/contracts";
 import { Pressable, ScrollView, View } from "react-native";
 
 import { AppText as Text } from "../../components/ui/AppText";

@@ -6,22 +6,22 @@ import type {
   ServerProvider,
   ThreadId,
   ThreadPullRequestLink,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   type ComposerEnvironmentCandidate,
   matchComposerEnvironmentItems,
   matchComposerThreadItems,
-} from "@t3tools/client-runtime/composerThreadItems";
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
+} from "@cinderdeck/client-runtime/composerThreadItems";
+import type { EnvironmentThreadShell } from "@cinderdeck/client-runtime/state/models";
 
 const EMPTY_THREAD_SHELLS: ReadonlyArray<EnvironmentThreadShell> = [];
 const EMPTY_ENVIRONMENTS: ReadonlyArray<ComposerEnvironmentCandidate> = [];
 const NO_LINKED_ENVIRONMENTS: ReadonlyMap<EnvironmentId, string> = new Map();
-import { COMPOSER_CONTEXT_MAX_RECORDS } from "@t3tools/contracts";
+import { COMPOSER_CONTEXT_MAX_RECORDS } from "@cinderdeck/contracts";
 import {
   formatComposerContextReference,
   threadContextRecord,
-} from "@t3tools/shared/composerContextReferences";
+} from "@cinderdeck/shared/composerContextReferences";
 import { environmentComposerContext, pullRequestComposerContext } from "../../lib/composerContext";
 import { uuidv4 } from "../../lib/uuid";
 import {
@@ -29,18 +29,18 @@ import {
   setComposerDraftContext,
   useComposerDraftSelection,
 } from "../../state/use-composer-drafts";
-import { USAGE_LIMITS_COMMAND } from "@t3tools/shared/usageLimits";
+import { USAGE_LIMITS_COMMAND } from "@cinderdeck/shared/usageLimits";
 import {
   detectComposerTrigger,
   replaceTextRange,
   serializeComposerFileLink,
   type ComposerTrigger,
-} from "@t3tools/shared/composerTrigger";
+} from "@cinderdeck/shared/composerTrigger";
 import {
   insertRankedSearchResult,
   normalizeSearchQuery,
   scoreQueryMatch,
-} from "@t3tools/shared/searchRanking";
+} from "@cinderdeck/shared/searchRanking";
 import {
   createProviderWorkspaceSnapshotRefreshAtomFamily,
   dedupeProviderSkillsByName,
@@ -49,7 +49,7 @@ import {
   isProviderSkillUserInvocable,
   resolveProviderSkillsForCwd,
   resolveProviderSlashCommandsForCwd,
-} from "@t3tools/client-runtime/providerSkills";
+} from "@cinderdeck/client-runtime/providerSkills";
 import { useAtomRefresh } from "@effect/atom-react";
 import { Atom } from "effect/reactivity";
 import { useEffect, useState } from "react";
@@ -278,7 +278,7 @@ export function useComposerCommandMenu({
   );
   // Every draft change rechecks a stale snapshot, including drafts written by
   // another surface (a prompt link) that never move the editor selection.
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- refreshes the provider workspace snapshot atom whenever the draft text changes from any surface
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- refreshes the provider workspace snapshot atom whenever the draft text changes from any surface
   useEffect(() => {
     refreshWorkspaceSnapshot();
   }, [

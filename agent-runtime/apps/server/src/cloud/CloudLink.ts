@@ -6,7 +6,7 @@ import {
   type EnvironmentCloudLinkStateResult,
   type EnvironmentCloudPreferencesRequest,
   type EnvironmentCloudRelayConfigResult,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   RelayCloudEnvironmentHealthProofPayload,
   type RelayCloudEnvironmentHealthRequest,
@@ -28,8 +28,8 @@ import {
   RelayManagedEndpointRecoveryResponse,
   type RelayManagedEndpointRuntimeConfig,
   RelayOkResponse,
-} from "@t3tools/contracts/relay";
-import { withRelayClientTracing } from "@t3tools/shared/relayTracing";
+} from "@cinderdeck/contracts/relay";
+import { withRelayClientTracing } from "@cinderdeck/shared/relayTracing";
 import {
   normalizeRelayIssuer,
   RELAY_HEALTH_REQUEST_TYP,
@@ -40,8 +40,8 @@ import {
   RELAY_MINT_RESPONSE_TYP,
   signRelayJwt,
   verifyRelayJwt,
-} from "@t3tools/shared/relayJwt";
-import { isSecureRelayUrl } from "@t3tools/shared/relayUrl";
+} from "@cinderdeck/shared/relayJwt";
+import { isSecureRelayUrl } from "@cinderdeck/shared/relayUrl";
 import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
@@ -519,7 +519,7 @@ export class CloudLink extends Context.Service<
       | HttpClientError.HttpClientError
     >;
   }
->()("t3/cloud/CloudLink") {}
+>()("@cinderdeck/server/cloud/CloudLink") {}
 
 const make = Effect.gen(function* () {
   const secrets = yield* ServerSecretStore.ServerSecretStore;

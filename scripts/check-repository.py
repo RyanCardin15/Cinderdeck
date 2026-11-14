@@ -34,6 +34,9 @@ for path in manifests:
     if name in packages:
         errors.append(f"Duplicate workspace package: {name}")
     packages[name] = (path, data)
+    # These two unscoped libraries retain their existing consumer import names.
+    if not name.startswith("@cinderdeck/") and name not in {"effect-acp", "effect-codex-app-server"}:
+        errors.append(f"Owned workspace package must use @cinderdeck/: {name} in {path.relative_to(ROOT)}")
 
 for path, data in packages.values():
     for section in ("dependencies", "devDependencies", "optionalDependencies"):
@@ -41,12 +44,12 @@ for path, data in packages.values():
             if version.startswith("workspace:") and name not in packages:
                 errors.append(f"Missing workspace dependency {name} in {path.relative_to(ROOT)}")
 
-for required in ("t3", "@t3tools/web", "@t3tools/desktop", "@t3tools/mobile"):
+for required in ("@cinderdeck/server", "@cinderdeck/web", "@cinderdeck/desktop", "@cinderdeck/mobile"):
     if required not in packages:
         errors.append(f"Required Cinderdeck component missing: {required}")
 
-server = packages["t3"][1]
-if not server.get("private") or "build:exe" in server.get("scripts", {}):
+server = packages.get("@cinderdeck/server", (None, {}))[1]
+if not server.get("private") or "build:exe" in server.get("scripts", {}) or server.get("bin"):
     errors.append("The embedded server must remain private and have no standalone executable release.")
 
 mobile = (RUNTIME / "apps/mobile/app.config.ts").read_text()
@@ -55,6 +58,17 @@ for inherited in ("owner:", "d763fcb8", "ARK85ZXQ4Z", "app.t3.codes", "u.expo.de
         errors.append(f"Inherited mobile deployment identity: {inherited}")
 if "enabled: false" not in mobile:
     errors.append("Companion OTA updates must be disabled until an owned service is configured.")
+
+# Exact fixture import bindings preserve recorded source without restoring vendor packages.
+fixture_imports = {
+    "@t3tools/contracts": ["../../packages/contracts/src/index.ts"],
+    "@t3tools/shared/terminalOutput": ["../../packages/shared/src/terminalOutput.ts"],
+    "@t3tools/shared/orchestrationV2PendingBackgroundWork": ["../../packages/shared/src/orchestrationV2PendingBackgroundWork.ts"],
+    "@t3tools/provider-core/server/IdAllocator": ["../../packages/provider-core/src/server/IdAllocator.ts"],
+}
+server_compiler_paths = json.loads((RUNTIME / "apps/server/tsconfig.json").read_text())["compilerOptions"].get("paths", {})
+if server_compiler_paths != fixture_imports:
+    errors.append("Provider fixture imports must retain their exact owned source bindings.")
 
 for license_path in (ROOT / "LICENSE", RUNTIME / "LICENSE", ROOT / "NOTICE"):
     if not license_path.is_file():

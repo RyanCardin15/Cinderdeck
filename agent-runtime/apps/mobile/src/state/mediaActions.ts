@@ -1,17 +1,17 @@
-import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import { settlePromise, squashAtomCommandFailure } from "@cinderdeck/client-runtime/state/runtime";
 import * as Dialog from "../components/ui/Dialog";
 import type { MediaActionsSource } from "../lib/mediaActionsSource";
 import { useNavigation } from "@react-navigation/native";
 import {
   formatFilePathForClipboard,
   type MediaActionId,
-} from "@t3tools/client-runtime/media-actions";
+} from "@cinderdeck/client-runtime/media-actions";
 import {
   AuthFilesystemReadScope,
   type EnvironmentId,
   sessionGrantsScope,
   type SessionGrantInput,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import { normalizeNativeMarkdownUrl } from "../lib/markdownLinks";
 import { AsyncResult } from "effect/reactivity";
 import { useEffect, useRef, useState } from "react";
@@ -54,7 +54,7 @@ export function useMediaActions(source: MediaActionsSource | undefined, onOpenFi
   );
   const controller = useRef<AbortController | null>(null);
   const [sharing, setSharing] = useState(false);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- aborts the in-flight media share when the component unmounts
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- aborts the in-flight media share when the component unmounts
   useEffect(() => () => controller.current?.abort(), []);
 
   const share = () => {

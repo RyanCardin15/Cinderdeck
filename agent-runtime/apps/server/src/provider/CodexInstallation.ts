@@ -3,11 +3,11 @@ import {
   ProviderDriverKind,
   type ProviderInstallState,
   type ServerProviderCompatibilityAdvisory,
-} from "@t3tools/contracts";
-import { cliArchiveTarCommand } from "@t3tools/shared/cliRelease";
-import { compareSemverVersions } from "@t3tools/shared/semver";
-import * as HostProcess from "@t3tools/shared/HostProcess";
-import { resolveCommandPath, resolveSpawnCommand } from "@t3tools/shared/shell";
+} from "@cinderdeck/contracts";
+import { cliArchiveTarCommand } from "@cinderdeck/shared/cliRelease";
+import { compareSemverVersions } from "@cinderdeck/shared/semver";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
+import { resolveCommandPath, resolveSpawnCommand } from "@cinderdeck/shared/shell";
 import * as Clock from "effect/Clock";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -146,7 +146,7 @@ interface CodexInstallationService {
 export class CodexInstallation extends Context.Service<
   CodexInstallation,
   CodexInstallationService
->()("t3/provider/CodexInstallation") {
+>()("@cinderdeck/server/provider/CodexInstallation") {
   static readonly layer = Layer.effect(
     CodexInstallation,
     Effect.gen(function* () {

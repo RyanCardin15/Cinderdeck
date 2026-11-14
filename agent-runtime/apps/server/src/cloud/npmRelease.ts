@@ -2,9 +2,9 @@ import {
   ServerNpmReleaseError,
   ServerNpmReleaseInput,
   type ServerNpmRelease,
-} from "@t3tools/contracts";
-import { npmReleaseDatabaseMigration } from "@t3tools/shared/cliRelease";
-import { resolveCommandPath } from "@t3tools/shared/shell";
+} from "@cinderdeck/contracts";
+import { npmReleaseDatabaseMigration } from "@cinderdeck/shared/cliRelease";
+import { resolveCommandPath } from "@cinderdeck/shared/shell";
 import * as Cache from "effect/Cache";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
@@ -35,7 +35,7 @@ export class NpmRelease extends Context.Service<
       input: ServerNpmReleaseInput,
     ) => Effect.Effect<ServerNpmRelease | null, ServerNpmReleaseError>;
   }
->()("t3/cloud/npmRelease") {}
+>()("@cinderdeck/server/cloud/npmRelease") {}
 
 function toRelease(spec: string, json: string) {
   const decoded = Option.getOrUndefined(decodeManifest(json));

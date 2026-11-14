@@ -4,12 +4,12 @@ import type {
   VcsRef,
   ProjectId,
   WorktreeSubmodules,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Schema from "effect/Schema";
-import { sanitizeNewRefName } from "@t3tools/shared/git";
-import { workspaceRelativeFilePath } from "@t3tools/shared/path";
-import { toSortableTimestamp } from "@t3tools/client-runtime/state/thread-sort";
-export { deriveLocalBranchNameFromRemoteRef, sanitizeNewRefName } from "@t3tools/shared/git";
+import { sanitizeNewRefName } from "@cinderdeck/shared/git";
+import { workspaceRelativeFilePath } from "@cinderdeck/shared/path";
+import { toSortableTimestamp } from "@cinderdeck/client-runtime/state/thread-sort";
+export { deriveLocalBranchNameFromRemoteRef, sanitizeNewRefName } from "@cinderdeck/shared/git";
 
 export interface EnvironmentOption {
   environmentId: EnvironmentId;

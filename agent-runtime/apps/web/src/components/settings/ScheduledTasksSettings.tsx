@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import { connectionStatusTitle } from "@t3tools/client-runtime/connection";
+import { connectionStatusTitle } from "@cinderdeck/client-runtime/connection";
 import { AsyncResult } from "effect/reactivity";
 import {
   Clock3Icon,
@@ -23,7 +23,7 @@ import type {
   ScheduledTaskUpsertInput,
   ScheduledTaskWebhookDeliverySummary,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   DEFAULT_WEBHOOK_PROMPT,
   emptyWebhookFilterDraft,
@@ -31,18 +31,18 @@ import {
   removeWebhookFilterDraft,
   WEBHOOK_FILTER_OPS,
   type WebhookFilterDraft,
-} from "@t3tools/client-runtime/scheduled-task-webhook";
+} from "@cinderdeck/client-runtime/scheduled-task-webhook";
 import {
   MAX_WEBHOOK_DELIVERY_AGE_MINUTES,
   MAX_WEBHOOK_FILTERS,
   MIN_SCHEDULED_TASK_INTERVAL_MS,
   ProviderInstanceId,
   resolveEnvironmentMachineKind,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@cinderdeck/client-runtime/state/runtime";
 
 import { formatRelativeTime } from "../../timestampFormat";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
@@ -50,7 +50,7 @@ import { getCustomModelOptionsByInstance } from "../../modelSelection";
 import { providerInstanceEntriesFor } from "../../providerInstances";
 import { usePrimaryCloudLinkState } from "../../cloud/primaryCloudLinkState";
 import { requestConfirmDialog } from "../../confirmDialog";
-import { webhookAddress } from "@t3tools/client-runtime/webhook-address";
+import { webhookAddress } from "@cinderdeck/client-runtime/webhook-address";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { useNowMinute } from "../../hooks/useNowMinute";
@@ -60,7 +60,7 @@ import {
   type EnvironmentPresentation,
 } from "../../state/environments";
 import { useProjects, useThreadShell } from "../../state/entities";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { scopeThreadRef } from "@cinderdeck/client-runtime/environment";
 import { environmentAtomList, environmentIdsKey } from "../../state/environmentAtomList";
 import { formatEnvironmentQueryError, useEnvironmentQuery } from "../../state/query";
 import { EMPTY_SERVER_PROVIDERS, serverEnvironment } from "../../state/server";
@@ -73,8 +73,8 @@ import {
   AuthOrchestrationOperateScope,
   clampManagedRuntimeMode,
   managedCapabilityDenial,
-} from "@t3tools/contracts";
-import { resolvePastedPath } from "@t3tools/shared/path";
+} from "@cinderdeck/contracts";
+import { resolvePastedPath } from "@cinderdeck/shared/path";
 import { useManagedPolicy } from "~/state/managedPolicy";
 import { ManagedNotice } from "../ManagedPolicy";
 import { readEnvironmentScope } from "~/state/session";

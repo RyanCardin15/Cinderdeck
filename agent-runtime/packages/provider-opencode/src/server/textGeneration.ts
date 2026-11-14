@@ -1,12 +1,12 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
-import { NonNegativeInt, TextGenerationError } from "@t3tools/contracts";
+import { NonNegativeInt, TextGenerationError } from "@cinderdeck/contracts";
 import type { OpenCodeSettings } from "../settings.ts";
-import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
+import { getModelSelectionStringOptionValue } from "@cinderdeck/shared/model";
 
-import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
-import * as TextGenerationOperations from "@t3tools/provider-core/server/textGenerationOperations";
+import * as ProviderHost from "@cinderdeck/provider-core/server/ProviderHost";
+import * as TextGenerationOperations from "@cinderdeck/provider-core/server/textGenerationOperations";
 import * as OpenCodeRuntime from "./OpenCodeRuntime.ts";
 import * as OpenCodeServerOwner from "./OpenCodeServerOwner.ts";
 

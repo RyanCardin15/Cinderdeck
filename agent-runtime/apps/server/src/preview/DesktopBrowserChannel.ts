@@ -6,7 +6,7 @@ import {
   DesktopBrowserCommand,
   DesktopBrowserEvent,
   type DesktopBrowserCommand as DesktopBrowserCommandType,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -52,7 +52,7 @@ export class DesktopBrowserChannel extends Context.Service<
     /** Never fails. A failed write means a broken channel; the next backend starts with no turns. */
     readonly turn: (threadId: string, active: boolean) => Effect.Effect<void>;
   }
->()("t3/preview/DesktopBrowserChannel") {}
+>()("@cinderdeck/server/preview/DesktopBrowserChannel") {}
 
 const make = Effect.gen(function* () {
   const config = yield* ServerConfig.ServerConfig;

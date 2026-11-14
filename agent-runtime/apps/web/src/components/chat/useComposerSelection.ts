@@ -1,5 +1,5 @@
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import type { UnifiedSettings } from "@t3tools/contracts";
+import type { EnvironmentThreadShell } from "@cinderdeck/client-runtime/state/shell";
+import type { UnifiedSettings } from "@cinderdeck/contracts";
 import type { Dispatch } from "react";
 import type { ComposerThreadTarget, DraftSessionState } from "../../composerDraftStore";
 import { useStableCallback } from "../../hooks/useStableCallback";
@@ -11,9 +11,9 @@ import {
   type ThreadId,
   ProviderInteractionMode,
   RuntimeMode,
-} from "@t3tools/contracts";
-import type { deriveThreadStructureRuntime } from "@t3tools/client-runtime/state/thread-execution";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+} from "@cinderdeck/contracts";
+import type { deriveThreadStructureRuntime } from "@cinderdeck/client-runtime/state/thread-execution";
+import { scopeThreadRef } from "@cinderdeck/client-runtime/environment";
 import { type SetStateAction } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toastManager } from "../ui/toast";

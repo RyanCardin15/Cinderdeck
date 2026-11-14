@@ -2,14 +2,14 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   deriveWorkflowGroups,
   projectedSubagentsToRuntime,
-} from "@t3tools/client-runtime/state/subagentRuntime";
+} from "@cinderdeck/client-runtime/state/subagentRuntime";
 import {
   NodeId,
   ProviderDriverKind,
   RunId,
   ThreadId,
   type OrchestrationV2SubagentWorkflow,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as DateTime from "effect/DateTime";
 
 import {

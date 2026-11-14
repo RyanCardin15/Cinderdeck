@@ -1,4 +1,4 @@
-import type { PullRequestDetail } from "@t3tools/contracts";
+import type { PullRequestDetail } from "@cinderdeck/contracts";
 import {
   pullRequestAgentActions,
   pullRequestAgentThread,

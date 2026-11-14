@@ -1,5 +1,5 @@
-import { EnvironmentId } from "@t3tools/contracts";
-import { refreshUsageLimits } from "@t3tools/client-runtime/state/usage";
+import { EnvironmentId } from "@cinderdeck/contracts";
+import { refreshUsageLimits } from "@cinderdeck/client-runtime/state/usage";
 import * as Cause from "effect/Cause";
 import { AsyncResult, AtomRegistry } from "effect/reactivity";
 import { expect, it, vi } from "vite-plus/test";

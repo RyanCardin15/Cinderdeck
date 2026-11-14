@@ -7,8 +7,8 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { FetchHttpClient } from "effect/http";
 import { assert, expect, it } from "@effect/vitest";
-import { ComposerContextId, EnvironmentId, ThreadId } from "@t3tools/contracts";
-import { projectComposerContextForProvider } from "@t3tools/shared/composerContextReferences";
+import { ComposerContextId, EnvironmentId, ThreadId } from "@cinderdeck/contracts";
+import { projectComposerContextForProvider } from "@cinderdeck/shared/composerContextReferences";
 
 import {
   answerToolCall,
@@ -284,7 +284,7 @@ const template = {
     {
       role: "system",
       content:
-        "Main prompt.\n - Primary working directory: /home/alice/app\n\n<runtime_info>old</runtime_info>\n\n## T3 Code orchestration\nold text",
+        "Main prompt.\n - Primary working directory: /home/alice/app\n\n<runtime_info>old</runtime_info>\n\n## Cinderdeck orchestration\nold text",
     },
     {
       role: "system",
@@ -330,7 +330,7 @@ it("rebuilds the template from this checkout and sends a child T3's task prompt"
     `Main prompt.\n - Primary working directory: /home/user/app\n\n${t3SystemAppend("claude-sonnet-5-5")}`,
   ]);
   // The eval offers the device tools, so Claude's append carries the device block.
-  assert.include(t3SystemAppend("claude-sonnet-5-5"), "## T3 Code devices");
+  assert.include(t3SystemAppend("claude-sonnet-5-5"), "## Cinderdeck devices");
   assert.equal(base.environment.cwd, "/home/user/app");
   assert.include(system[2], "model named Sonnet 5.5. The exact model ID is claude-sonnet-5-5.");
   const deferred = system[2]?.split("Load them first:\n")[1]?.split("\n\n")[0]?.split("\n") ?? [];

@@ -2,7 +2,7 @@ import {
   type PullRequestCheck,
   PullRequestComment,
   ThreadPullRequestWatch,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import { assert, describe, it } from "@effect/vitest";
 
 import {

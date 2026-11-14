@@ -1,10 +1,10 @@
-import type { ManagedPolicyDocument } from "@t3tools/contracts";
+import type { ManagedPolicyDocument } from "@cinderdeck/contracts";
 import {
   WINDOWS_POLICY_KEY,
   WINDOWS_POLICY_GROUPS,
   WINDOWS_POLICY_LISTS,
   WINDOWS_POLICY_VALUES,
-} from "@t3tools/shared/managedPolicyFile";
+} from "@cinderdeck/shared/managedPolicyFile";
 
 import { knownDriverLabels } from "./managedProviders.ts";
 

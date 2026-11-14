@@ -3,9 +3,9 @@ import {
   worktreeSetupStageLabel,
   type WorktreeSetupSnapshot,
   type WorktreeSetupStage,
-} from "@t3tools/contracts";
-import { worktreeSetupAgentStarted } from "@t3tools/client-runtime/worktree-setup";
-import { formatDuration } from "@t3tools/shared/orchestrationTiming";
+} from "@cinderdeck/contracts";
+import { worktreeSetupAgentStarted } from "@cinderdeck/client-runtime/worktree-setup";
+import { formatDuration } from "@cinderdeck/shared/orchestrationTiming";
 import { useState } from "react";
 import { Platform, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";

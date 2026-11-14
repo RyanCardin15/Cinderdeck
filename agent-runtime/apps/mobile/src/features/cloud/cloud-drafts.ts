@@ -1,5 +1,5 @@
-import { EnvironmentRegistry, removedWithRelay } from "@t3tools/client-runtime/connection";
-import { createRuntimeCommand } from "@t3tools/client-runtime/state/runtime";
+import { EnvironmentRegistry, removedWithRelay } from "@cinderdeck/client-runtime/connection";
+import { createRuntimeCommand } from "@cinderdeck/client-runtime/state/runtime";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SubscriptionRef from "effect/SubscriptionRef";

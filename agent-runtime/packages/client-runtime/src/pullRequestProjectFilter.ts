@@ -1,4 +1,4 @@
-import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
+import type { EnvironmentId, ProjectId } from "@cinderdeck/contracts";
 
 interface FilterProject {
   readonly id: ProjectId;

@@ -17,9 +17,9 @@ import { ChildProcessSpawner } from "effect/process";
 import * as Metric from "effect/Metric";
 import { assert, it } from "@effect/vitest";
 
-import { CheckpointRef, GitCommandError, VcsProcessExitError } from "@t3tools/contracts";
-import * as HostProcess from "@t3tools/shared/HostProcess";
-import { symlinksSupported } from "@t3tools/shared/testing/symlinks";
+import { CheckpointRef, GitCommandError, VcsProcessExitError } from "@cinderdeck/contracts";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
+import { symlinksSupported } from "@cinderdeck/shared/testing/symlinks";
 import * as ServerConfig from "../config.ts";
 import { gitCommandDuration, gitCommandsTotal } from "../observability/Metrics.ts";
 import * as CheckpointStore from "../checkpointing/CheckpointStore.ts";

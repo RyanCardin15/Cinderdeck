@@ -1,10 +1,10 @@
-import { scopeProjectRef } from "@t3tools/client-runtime/environment";
+import { scopeProjectRef } from "@cinderdeck/client-runtime/environment";
 import {
   type AtomCommandResult,
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
-import { type EnvironmentId, TRIAGE_PROMPT_FILE_NAME } from "@t3tools/contracts";
+} from "@cinderdeck/client-runtime/state/runtime";
+import { type EnvironmentId, TRIAGE_PROMPT_FILE_NAME } from "@cinderdeck/contracts";
 import { useRouter } from "@tanstack/react-router";
 
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";

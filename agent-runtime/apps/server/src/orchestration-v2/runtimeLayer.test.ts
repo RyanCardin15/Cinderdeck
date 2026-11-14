@@ -1,7 +1,7 @@
-import { PullRequestProviderError } from "@t3tools/source-control-core/server/PullRequestProvider";
-import { SourceControlProviderKind } from "@t3tools/contracts";
+import { PullRequestProviderError } from "@cinderdeck/source-control-core/server/PullRequestProvider";
+import { SourceControlProviderKind } from "@cinderdeck/contracts";
 import { limitRecoveryCommand } from "./UsageLimitRecoveryWorker.ts";
-import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
+import * as McpProviderSessions from "@cinderdeck/provider-core/server/McpProviderSessions";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -34,7 +34,7 @@ import {
   RunId,
   ScheduledTaskId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Effect from "effect/Effect";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
@@ -57,7 +57,7 @@ import * as ProjectService from "../project/ProjectService.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as McpSessionRegistryTestkit from "../mcp/McpSessionRegistry.testkit.ts";
 import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
-import type { ProviderInstance } from "@t3tools/provider-core/server/driver";
+import type { ProviderInstance } from "@cinderdeck/provider-core/server/driver";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
@@ -91,7 +91,7 @@ import * as TerminalManager from "../terminal/Manager.ts";
 import * as ResourceCleanupService from "./ResourceCleanupService.ts";
 import * as ThreadLaunchService from "./ThreadLaunchService.ts";
 import * as ThreadCommandExecutor from "./ThreadCommandExecutor.ts";
-import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
+import type * as ProviderAdapter from "@cinderdeck/provider-core/server/ProviderAdapter";
 
 const layerPlatformTest = Layer.merge(
   Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),

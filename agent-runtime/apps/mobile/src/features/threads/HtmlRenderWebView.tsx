@@ -1,6 +1,6 @@
 import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
 import { useNavigation } from "@react-navigation/native";
-import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import type { EnvironmentId, ThreadId } from "@cinderdeck/contracts";
 import {
   htmlRenderFileName,
   htmlRenderFrameHeight,
@@ -8,7 +8,7 @@ import {
   htmlRenderThemeMessage,
   type HtmlRenderReference,
   type HtmlRenderTheme,
-} from "@t3tools/shared/htmlRender";
+} from "@cinderdeck/shared/htmlRender";
 import { useEffect, useRef, useState } from "react";
 import { Platform, Pressable, View, type ColorValue } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
@@ -88,7 +88,7 @@ export function HtmlRenderWebView(props: {
   const crashes = useRef(0);
   const shownTheme = useRef<HtmlRenderTheme | null>(null);
   const source = { uri: props.uri + htmlRenderThemeFragment(initialTheme) };
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- posts theme changes into the already loaded WebView
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- posts theme changes into the already loaded WebView
   useEffect(() => {
     if (shownTheme.current === null || shownTheme.current === theme) return;
     shownTheme.current = theme;

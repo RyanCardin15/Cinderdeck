@@ -1,4 +1,4 @@
-import { SourceControlProviderKind } from "@t3tools/contracts";
+import { SourceControlProviderKind } from "@cinderdeck/contracts";
 import {
   buildCommitUrl,
   changeRequestUrlBelow,
@@ -9,7 +9,7 @@ import {
   parseCommitPath,
   projectChangeRequestHost,
   remoteWebOrigin,
-} from "@t3tools/source-control-core/shared/definition";
+} from "@cinderdeck/source-control-core/shared/definition";
 import { icon } from "./icon.ts";
 
 const CHECKOUT_COMMAND = /^glab\s+mr\s+checkout\s+(.+)$/i;
@@ -58,7 +58,8 @@ export const definition = defineSourceControl({
     "disable-auto-merge",
   ] as const),
   checkoutCommand: ({ number }) => `glab mr checkout ${number}`,
-  changeRequestCloseCommand: /\bglab\s+mr\s+(?:merge|close)\b/u,
+  // `accept` is glab's alias for `merge`.
+  changeRequestCloseCommand: /\bglab\s+mr\s+(?:merge|accept|close)\b/u,
   changeRequestCreateCommand: /\bglab\s+mr\s+create\b/u,
   authorProfileUrl: () => null,
   reviewSummaryRequired: () => false,

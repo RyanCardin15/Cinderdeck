@@ -1,8 +1,8 @@
 import type { DraftId } from "~/composerDraftStore";
 import { composerDraftHasUserContent, useComposerDraftStore } from "~/composerDraftStore";
-import { resolveEnvironmentMachineKind, type ScopedProjectRef } from "@t3tools/contracts";
-import { scopedProjectKey, scopeProjectRef } from "@t3tools/client-runtime/environment";
-import { isScratchProject } from "@t3tools/client-runtime/state/projects";
+import { resolveEnvironmentMachineKind, type ScopedProjectRef } from "@cinderdeck/contracts";
+import { scopedProjectKey, scopeProjectRef } from "@cinderdeck/client-runtime/environment";
+import { isScratchProject } from "@cinderdeck/client-runtime/state/projects";
 import { FolderPlusIcon } from "lucide-react";
 import { useAtomValue } from "@effect/atom-react";
 import { useRef, useState } from "react";
@@ -21,7 +21,7 @@ import {
   deriveLogicalProjectKeyFromSettings,
   pickableProjectGroups,
   selectProjectGroupingSettings,
-} from "@t3tools/client-runtime/state/project-grouping";
+} from "@cinderdeck/client-runtime/state/project-grouping";
 import {
   buildSidebarProjectPickerEntries,
   buildSidebarProjectSnapshots,
@@ -52,9 +52,9 @@ import { InlineButton } from "../ui/button";
 import { DraftProjectName } from "./DraftProjectName";
 import { DraftHeroProjectHeading } from "./DraftHeroProjectHeading";
 import { TriageDraftHero } from "./TriageDraftHero";
-import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
+import { resolveProjectSettings } from "@cinderdeck/shared/projectSettings";
 import { resolveProjectDefaultProviderModelSelection } from "../../providerInstances";
-import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
+import { resolveNewThreadModelSelection } from "@cinderdeck/shared/usageLimits";
 
 const ADD_PROJECT_VALUE = "add-project";
 

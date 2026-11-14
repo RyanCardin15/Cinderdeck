@@ -2,15 +2,15 @@ import type {
   ProviderApprovalOption,
   ProviderUserInputAnswers,
   UserInputQuestion,
-} from "@t3tools/contracts";
-import { isWorkspaceImagePreviewPath } from "@t3tools/shared/filePreview";
+} from "@cinderdeck/contracts";
+import { isWorkspaceImagePreviewPath } from "@cinderdeck/shared/filePreview";
 import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import type * as EffectAcpSchema from "effect-acp/compat";
 import * as AcpWireSchema from "effect-acp/schema-v1";
 
-import type { AcpToolCallState } from "@t3tools/provider-acp/server/runtimeModel";
+import type { AcpToolCallState } from "@cinderdeck/provider-acp/server/runtimeModel";
 
 import {
   ANTIGRAVITY_EDIT_DIFF_OMITTED,

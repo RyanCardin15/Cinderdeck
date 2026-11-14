@@ -1,4 +1,4 @@
-import { settlePromise } from "@t3tools/client-runtime/state/runtime";
+import { settlePromise } from "@cinderdeck/client-runtime/state/runtime";
 import { useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
 import type { ComponentType } from "react";
@@ -33,7 +33,7 @@ import {
   NATIVE_SOURCE_CONTENT_WIDTH,
   nativeSourceRowId,
 } from "./nativeSourceFileAdapter";
-import { SourceText } from "@t3tools/mobile-source-text";
+import { SourceText } from "@cinderdeck/mobile-source-text";
 
 import { boundedSelectableSourceTokens, prepareSourceFileDocument } from "./source-file-document";
 import { sourceHighlightAtom } from "./sourceHighlightingState";
@@ -249,7 +249,7 @@ function JavaScriptSourceFileSurface(props: SourceFileSurfaceProps) {
   ) : undefined;
 
   // Layout effect so a pending jump is cancelled in the commit that swaps the file.
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- scrolls the FlatList to the target line and cancels a pending jump when the file changes
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- scrolls the FlatList to the target line and cancels a pending jump when the file changes
   useLayoutEffect(() => {
     if (targetIndex === null) {
       return;

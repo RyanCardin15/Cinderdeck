@@ -1,4 +1,4 @@
-import { sessionHasLegacyPermissions, type EnvironmentId } from "@t3tools/contracts";
+import { sessionHasLegacyPermissions, type EnvironmentId } from "@cinderdeck/contracts";
 import type { AnyRouter } from "@tanstack/react-router";
 import * as Schema from "effect/Schema";
 import { Atom } from "effect/reactivity";

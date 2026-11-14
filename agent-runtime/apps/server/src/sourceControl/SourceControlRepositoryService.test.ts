@@ -1,4 +1,4 @@
-import { SourceControlProviderKind } from "@t3tools/contracts";
+import { SourceControlProviderKind } from "@cinderdeck/contracts";
 import * as NodePath from "@effect/platform-node/NodePath";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -14,11 +14,11 @@ import {
   GitCommandError,
   SourceControlProviderError,
   type SourceControlCloneRepositoryInput,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 
 import * as ServerConfig from "../config.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
-import type * as SourceControlProvider from "@t3tools/source-control-core/server/SourceControlProvider";
+import type * as SourceControlProvider from "@cinderdeck/source-control-core/server/SourceControlProvider";
 import * as SourceControlProviderRegistry from "./SourceControlProviderRegistry.ts";
 import * as SourceControlRepositoryService from "./SourceControlRepositoryService.ts";
 

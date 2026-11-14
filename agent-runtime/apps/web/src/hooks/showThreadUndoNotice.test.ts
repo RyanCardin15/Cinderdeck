@@ -9,7 +9,7 @@ import {
   threadUndoClaimsShortcut,
   useThreadUndoNotice,
 } from "./showThreadUndoNotice";
-import * as ThreadUndo from "@t3tools/client-runtime/state/thread-undo";
+import * as ThreadUndo from "@cinderdeck/client-runtime/state/thread-undo";
 
 vi.mock("../lib/announce", () => ({ announce: vi.fn(), cancelAnnouncement: vi.fn() }));
 

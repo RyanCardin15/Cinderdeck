@@ -1,9 +1,9 @@
 import { PullRequestGlyph } from "../pullRequest/pullRequestIcons";
-import { type ToolActivityIcon } from "@t3tools/contracts";
-import { toolActivityFaviconUrl } from "@t3tools/shared/favicon";
-import { getProjectFaviconCacheKey } from "@t3tools/shared/projectFavicon";
+import { type ToolActivityIcon } from "@cinderdeck/contracts";
+import { toolActivityFaviconUrl } from "@cinderdeck/shared/favicon";
+import { getProjectFaviconCacheKey } from "@cinderdeck/shared/projectFavicon";
 import { use, useState } from "react";
-import { T3Wordmark } from "../T3Wordmark";
+import { CinderdeckMark } from "../CinderdeckMark";
 import {
   BotIcon,
   BrainIcon,
@@ -245,7 +245,7 @@ function WorkEntryIcon({ name, className }: { name: WorkEntryIconName; className
     case "device":
       return <SmartphoneIcon className={className} aria-hidden />;
     case "t3-code":
-      return <T3Wordmark className={className} aria-hidden />;
+      return <CinderdeckMark className={className} aria-hidden />;
     case "check":
       return <CheckIcon className={className} aria-hidden />;
     case "list-todo":

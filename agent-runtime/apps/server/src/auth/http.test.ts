@@ -5,7 +5,7 @@ import {
   AuthEnvironmentBootstrapTokenType,
   AuthAccessTokenType,
   EnvironmentHttpApi,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import { expect, it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";

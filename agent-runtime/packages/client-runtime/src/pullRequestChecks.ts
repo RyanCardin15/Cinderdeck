@@ -1,4 +1,4 @@
-import type { PullRequestCheck, PullRequestChecks, PullRequestDetail } from "@t3tools/contracts";
+import type { PullRequestCheck, PullRequestChecks, PullRequestDetail } from "@cinderdeck/contracts";
 
 export function resolvePullRequestDetailChecks(
   detail: PullRequestDetail | null,

@@ -42,34 +42,34 @@ import {
   type ThreadPullRequestKey,
   type VcsCreateWorktreeInput,
   type VcsCreateWorktreeResult,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   hasProjectSettingsOverrides,
   resolveProjectSettings,
-} from "@t3tools/shared/projectSettings";
+} from "@cinderdeck/shared/projectSettings";
 import {
   mergeGitStatusParts,
   resolveAutoFeatureBranchName,
   sanitizeBranchFragment,
   sanitizeFeatureBranchName,
-} from "@t3tools/shared/git";
-import { isSshRemoteUrl } from "@t3tools/shared/sourceControl";
+} from "@cinderdeck/shared/git";
+import { isSshRemoteUrl } from "@cinderdeck/shared/sourceControl";
 import {
   type ChangeRequestTerminology,
   UNKNOWN_SOURCE_CONTROL_CLIENT,
-} from "@t3tools/source-control-core/shared/definition";
+} from "@cinderdeck/source-control-core/shared/definition";
 import {
   normalizeThreadPullRequestKey,
   threadPullRequestKeyOf,
 } from "../sourceControl/threadPullRequests.ts";
 import { sourceControlDefinitions } from "../sourceControl/sourceControlDefinitions.ts";
 
-import { GitManagerError, GitPullRequestMaterializationError } from "@t3tools/contracts";
+import { GitManagerError, GitPullRequestMaterializationError } from "@cinderdeck/contracts";
 import {
   historicalMessage,
   renderHistory,
   selectHistory,
-} from "@t3tools/provider-core/server/handoffBudget";
+} from "@cinderdeck/provider-core/server/handoffBudget";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";
 import {
   conventionalCommitsTextGenerationPolicy,
@@ -83,12 +83,12 @@ import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import { extractBranchNameFromRemoteRef } from "./remoteRefs.ts";
 import { detachStackFrame } from "./detachStackFrame.ts";
 import * as ServerSettings from "../serverSettings.ts";
-import type { GitManagerServiceError } from "@t3tools/contracts";
+import type { GitManagerServiceError } from "@cinderdeck/contracts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
-import * as SourceControlProvider from "@t3tools/source-control-core/server/SourceControlProvider";
-import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
+import * as SourceControlProvider from "@cinderdeck/source-control-core/server/SourceControlProvider";
+import * as SourceControlRateLimit from "@cinderdeck/source-control-core/server/SourceControlRateLimit";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
-import type { ChangeRequest } from "@t3tools/contracts";
+import type { ChangeRequest } from "@cinderdeck/contracts";
 
 export interface GitActionProgressReporter {
   readonly publish: (event: GitActionProgressEvent) => Effect.Effect<void, never>;
@@ -157,7 +157,7 @@ export class GitManager extends Context.Service<
       Scope.Scope
     >;
   }
->()("t3/git/GitManager") {}
+>()("@cinderdeck/server/git/GitManager") {}
 
 const COMMIT_TIMEOUT_MS = 10 * 60_000;
 const MAX_PROGRESS_TEXT_LENGTH = 500;

@@ -1,4 +1,4 @@
-import { SourceControlProviderKind } from "@t3tools/contracts";
+import { SourceControlProviderKind } from "@cinderdeck/contracts";
 import {
   buildCommitUrl,
   changeRequestUrlBelow,
@@ -12,7 +12,7 @@ import {
   parseCommitPath,
   projectChangeRequestHost,
   remoteWebOrigin,
-} from "@t3tools/source-control-core/shared/definition";
+} from "@cinderdeck/source-control-core/shared/definition";
 import { icon } from "./icon.ts";
 
 const CHECKOUT_COMMAND = /^tea\s+(?:pr|pulls)\s+checkout\s+(.+)$/i;
@@ -93,7 +93,8 @@ export const definition = defineSourceControl({
     repositoryUrl
       ? `git fetch '${repositoryUrl.replaceAll("'", "'\\''")}' ${changeRequestHeadRef(number)} && git checkout -B pulls/${number} FETCH_HEAD`
       : null,
-  changeRequestCloseCommand: /\b(?:tea\s+(?:pr|pulls)|fj\s+pr)\s+(?:merge|close)\b/u,
+  // tea also takes `pull` for `pulls` and `m` for `merge`.
+  changeRequestCloseCommand: /\b(?:tea\s+(?:pr|pulls?)|fj\s+pr)\s+(?:merge|m|close)\b/u,
   authorProfileUrl: () => null,
   hardLineBreaks: true,
   // Forgejo refuses a change request review without a summary, even with inline comments.

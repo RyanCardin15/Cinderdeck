@@ -3,9 +3,9 @@ import type {
   ServerConfig,
   ServerInstallation,
   ServerSelfUpdateCapability,
-} from "@t3tools/contracts";
-import type { ServerUpdateState } from "@t3tools/client-runtime/state/server";
-import { compareSemverVersions, parseSemver } from "@t3tools/shared/semver";
+} from "@cinderdeck/contracts";
+import type { ServerUpdateState } from "@cinderdeck/client-runtime/state/server";
+import { compareSemverVersions, parseSemver } from "@cinderdeck/shared/semver";
 import * as Schema from "effect/Schema";
 
 import { APP_VERSION } from "./branding";

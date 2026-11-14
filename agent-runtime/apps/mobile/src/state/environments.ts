@@ -3,9 +3,9 @@ import {
   connectionCatalogDisplayUrl,
   hasRelayRoute,
   type EnvironmentPresentation as BaseEnvironmentPresentation,
-} from "@t3tools/client-runtime/connection";
-import type { ComposerEnvironmentCandidate } from "@t3tools/client-runtime/composerThreadItems";
-import { type EnvironmentId, resolveEnvironmentMachineKind } from "@t3tools/contracts";
+} from "@cinderdeck/client-runtime/connection";
+import type { ComposerEnvironmentCandidate } from "@cinderdeck/client-runtime/composerThreadItems";
+import { type EnvironmentId, resolveEnvironmentMachineKind } from "@cinderdeck/contracts";
 
 import { environmentCatalog } from "../connection/catalog";
 import { environmentPresentations } from "./presentation";

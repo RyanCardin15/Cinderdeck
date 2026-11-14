@@ -3,9 +3,9 @@ import type {
   OrchestrationV2ThreadShell,
   OrchestrationProjectShell,
   ServerProvider,
-} from "@t3tools/contracts";
-import { formatModelSlugName, resolveSelectableModel } from "@t3tools/shared/model";
-import { fileBasename } from "@t3tools/shared/path";
+} from "@cinderdeck/contracts";
+import { formatModelSlugName, resolveSelectableModel } from "@cinderdeck/shared/model";
+import { fileBasename } from "@cinderdeck/shared/path";
 import { resolveModelShortName } from "../providerClients.ts";
 import { isTerminalSubagentStatus } from "./subagentRuntime.ts";
 

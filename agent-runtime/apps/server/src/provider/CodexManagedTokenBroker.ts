@@ -4,8 +4,8 @@ import * as NodeNet from "node:net";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeCrypto from "node:crypto";
-import { EnvironmentId, ProviderInstanceId } from "@t3tools/contracts";
-import * as HostProcess from "@t3tools/shared/HostProcess";
+import { EnvironmentId, ProviderInstanceId } from "@cinderdeck/contracts";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
@@ -38,7 +38,7 @@ export class CodexManagedTokenBroker extends Context.Service<
     readonly endpoint: Effect.Effect<string, BrokerStartError>;
     readonly awaitIdle: Effect.Effect<void>;
   }
->()("t3/provider/CodexManagedTokenBroker") {}
+>()("@cinderdeck/server/provider/CodexManagedTokenBroker") {}
 
 const io = <A>(f: () => Promise<A>) =>
   Effect.tryPromise({ try: f, catch: (cause) => new BrokerStartError({ cause }) });

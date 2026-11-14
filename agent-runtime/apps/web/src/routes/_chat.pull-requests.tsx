@@ -1,4 +1,4 @@
-import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
+import type { EnvironmentId, ProjectId } from "@cinderdeck/contracts";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { type PullRequestListSort } from "../components/pullRequest/pullRequestListPreferences";

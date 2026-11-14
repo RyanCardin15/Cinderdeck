@@ -1,4 +1,4 @@
-import type { ServerUpdateState } from "@t3tools/client-runtime/state/server";
+import type { ServerUpdateState } from "@cinderdeck/client-runtime/state/server";
 import {
   type DesktopUpdateChannel,
   type EnvironmentId,
@@ -6,9 +6,9 @@ import {
   managedUpdatesDenial,
   type ServerConfig,
   type ServerSelfUpdateCapability,
-} from "@t3tools/contracts";
-import { cliReleaseChannelOf, desktopUpdateChannelOf } from "@t3tools/shared/cliRelease";
-import { compareSemverVersions } from "@t3tools/shared/semver";
+} from "@cinderdeck/contracts";
+import { cliReleaseChannelOf, desktopUpdateChannelOf } from "@cinderdeck/shared/cliRelease";
+import { compareSemverVersions } from "@cinderdeck/shared/semver";
 
 import {
   resolveServerSelfUpdateCapability,

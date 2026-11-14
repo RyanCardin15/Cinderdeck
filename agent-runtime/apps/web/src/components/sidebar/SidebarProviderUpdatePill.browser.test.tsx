@@ -1,4 +1,4 @@
-import { ProviderDriverKind, ProviderInstanceId, type ServerProvider } from "@t3tools/contracts";
+import { ProviderDriverKind, ProviderInstanceId, type ServerProvider } from "@cinderdeck/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { act, fakeTimers, render } from "../../../test/render";

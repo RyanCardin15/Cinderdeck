@@ -18,8 +18,8 @@ import {
 import {
   mergeToolCallState,
   parseSessionUpdateEvent,
-} from "@t3tools/provider-acp/server/runtimeModel";
-import { acpToolCallDiffPatch } from "@t3tools/provider-acp/server/adapter";
+} from "@cinderdeck/provider-acp/server/runtimeModel";
+import { acpToolCallDiffPatch } from "@cinderdeck/provider-acp/server/adapter";
 
 const isSessionNotification = Schema.is(AcpWireSchema.SessionNotification);
 

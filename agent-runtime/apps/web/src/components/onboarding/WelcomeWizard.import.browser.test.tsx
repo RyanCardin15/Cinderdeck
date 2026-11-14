@@ -7,7 +7,7 @@ import {
   type AgentSessionProjectCandidate,
   type AuthEnvironmentScope,
   type AuthSessionState,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { expect, it, vi } from "vite-plus/test";
 
@@ -39,7 +39,7 @@ const state = vi.hoisted(() => ({
   waitForProject: vi.fn(),
 }));
 
-vi.mock(import("@t3tools/client-runtime/state/session"), async (original) => {
+vi.mock(import("@cinderdeck/client-runtime/state/session"), async (original) => {
   const actual = await original();
   return {
     ...actual,

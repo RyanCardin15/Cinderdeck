@@ -2,8 +2,8 @@ import { pipe } from "effect/Function";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
-import type { EnvironmentId } from "@t3tools/contracts";
+} from "@cinderdeck/client-runtime/state/runtime";
+import type { EnvironmentId } from "@cinderdeck/contracts";
 import { useNavigation } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
 import Constants from "expo-constants";

@@ -7,8 +7,8 @@ import {
   type ServerProviderModel,
   type ServerProviderSlashCommand,
   type ServerProviderUsageLimits,
-} from "@t3tools/contracts";
-import { createModelCapabilities } from "@t3tools/shared/model";
+} from "@cinderdeck/contracts";
+import { createModelCapabilities } from "@cinderdeck/shared/model";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
@@ -22,19 +22,19 @@ import * as SubscriptionRef from "effect/SubscriptionRef";
 import type * as EffectAcpErrors from "effect-acp/errors";
 import type * as EffectAcpSchema from "effect-acp/compat";
 
-import type * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRuntime";
-import { acpProviderOptionDescriptors } from "@t3tools/provider-acp/server/sessionConfig";
-import { makeManagedServerProvider } from "@t3tools/provider-core/server/managedProvider";
+import type * as AcpSessionRuntime from "@cinderdeck/provider-acp/server/AcpSessionRuntime";
+import { acpProviderOptionDescriptors } from "@cinderdeck/provider-acp/server/sessionConfig";
+import { makeManagedServerProvider } from "@cinderdeck/provider-core/server/managedProvider";
 import {
   makeManualOnlyProviderMaintenanceCapabilities,
   type ProviderMaintenanceCapabilities,
-} from "@t3tools/provider-core/server/maintenanceResolver";
+} from "@cinderdeck/provider-core/server/maintenanceResolver";
 import {
   buildServerProvider,
   isCommandMissingCause,
   type ServerProviderDraft,
-} from "@t3tools/provider-core/server/snapshotProbe";
-import { resolveUsageLimitsAfterProbe } from "@t3tools/provider-core/server/usageLimits";
+} from "@cinderdeck/provider-core/server/snapshotProbe";
+import { resolveUsageLimitsAfterProbe } from "@cinderdeck/provider-core/server/usageLimits";
 
 import { antigravityThinkingConfig } from "./acp/AntigravityAcpSupport.ts";
 

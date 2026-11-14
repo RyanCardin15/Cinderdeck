@@ -1,4 +1,4 @@
-import { isTestChangedFile } from "@t3tools/shared/changedFileKind";
+import { isTestChangedFile } from "@cinderdeck/shared/changedFileKind";
 import type { ReviewParsedDiff } from "../review/reviewModel";
 
 export function filterPullRequestTestFiles(

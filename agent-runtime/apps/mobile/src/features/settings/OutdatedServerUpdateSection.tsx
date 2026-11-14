@@ -1,6 +1,6 @@
 import { useAtom, useAtomValue } from "@effect/atom-react";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import type { EnvironmentId } from "@t3tools/contracts";
+import { squashAtomCommandFailure } from "@cinderdeck/client-runtime/state/runtime";
+import type { EnvironmentId } from "@cinderdeck/contracts";
 import { AsyncResult } from "effect/reactivity";
 import { useState } from "react";
 import { View } from "react-native";

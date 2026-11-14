@@ -1,5 +1,5 @@
-import { settingsSecretLiteral } from "@t3tools/contracts";
-import { normalizeHost } from "@t3tools/source-control-core/server/pullRequestUtils";
+import { settingsSecretLiteral } from "@cinderdeck/contracts";
+import { normalizeHost } from "@cinderdeck/source-control-core/server/pullRequestUtils";
 import * as Cache from "effect/Cache";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
@@ -10,9 +10,9 @@ import * as Option from "effect/Option";
 import * as PlatformError from "effect/PlatformError";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
-import * as HostProcess from "@t3tools/shared/HostProcess";
-import * as SourceControlHost from "@t3tools/source-control-core/server/SourceControlHost";
-import { readSourceControlHostSettings } from "@t3tools/source-control-core/shared/definition";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
+import * as SourceControlHost from "@cinderdeck/source-control-core/server/SourceControlHost";
+import { readSourceControlHostSettings } from "@cinderdeck/source-control-core/shared/definition";
 
 import * as GitCafeClient from "../shared/definition.ts";
 
@@ -66,7 +66,7 @@ export class GitCafeCredentials extends Context.Service<
     readonly invalidate: (host: string) => Effect.Effect<void>;
     readonly cliEnv: (host: string) => Effect.Effect<Readonly<Record<string, string>>>;
   }
->()("@t3tools/source-control-gitcafe/server/GitCafeCredentials") {}
+>()("@cinderdeck/source-control-gitcafe/server/GitCafeCredentials") {}
 
 const DEFAULT_HOST = "git.cafe";
 

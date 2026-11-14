@@ -3,8 +3,8 @@ import type {
   ProviderInstanceId,
   ProviderInteractionMode,
   RuntimeMode,
-} from "@t3tools/contracts";
-import { createModelSelection } from "@t3tools/shared/model";
+} from "@cinderdeck/contracts";
+import { createModelSelection } from "@cinderdeck/shared/model";
 import { BotIcon, PencilRulerIcon } from "lucide-react";
 import { type ComponentProps, memo, useId, useRef, useState } from "react";
 

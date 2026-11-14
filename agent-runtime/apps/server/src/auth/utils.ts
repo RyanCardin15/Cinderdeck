@@ -2,12 +2,12 @@ import type {
   AuthClientMetadata,
   AuthClientMetadataDeviceType,
   AuthClientPresentationMetadata,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import type * as HttpServerRequest from "effect/http/HttpServerRequest";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- Effect's Crypto has no createHmac or timingSafeEqual.
 import * as NodeCrypto from "node:crypto";
 import * as NodeNet from "node:net";
-import { normalizeHostname } from "@t3tools/shared/hostClassification";
+import { normalizeHostname } from "@cinderdeck/shared/hostClassification";
 import * as Base64Url from "effect/encoding/Base64Url";
 import * as Result from "effect/Result";
 

@@ -11,8 +11,8 @@ import * as Schema from "effect/Schema";
 import { Command, Flag } from "effect/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-import * as HostProcess from "@t3tools/shared/HostProcess";
-import { fromJsonStringPretty } from "@t3tools/shared/schemaJson";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
+import { fromJsonStringPretty } from "@cinderdeck/shared/schemaJson";
 import serverPackageJson from "../apps/server/package.json" with { type: "json" };
 
 import { windowsSystemTar } from "./lib/windows-tar.ts";

@@ -1,7 +1,7 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
-import { currentDesktopBootstrapToken } from "@t3tools/shared/desktopBootstrapToken";
+import { currentDesktopBootstrapToken } from "@cinderdeck/shared/desktopBootstrapToken";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -968,7 +968,7 @@ describe("DesktopBackendConfiguration", () => {
   );
 
   it("resolvePrimaryLabel is runSync-safe against the real WSL availability probe", async () => {
-    // oxlint-disable-next-line t3code/no-manual-effect-runtime-in-tests -- This test intentionally replicates the sync IPC handler's runSync path to catch a regression to async-only resolution; it.effect would mask it.
+    // oxlint-disable-next-line cinderdeck/no-manual-effect-runtime-in-tests -- This test intentionally replicates the sync IPC handler's runSync path to catch a regression to async-only resolution; it.effect would mask it.
     const runtime = ManagedRuntime.make(
       layerBackendConfiguration().pipe(
         Layer.provideMerge(layerServerExposure),
@@ -992,7 +992,7 @@ describe("DesktopBackendConfiguration", () => {
       const configuration = await runtime.runPromise(
         DesktopBackendConfiguration.DesktopBackendConfiguration,
       );
-      // oxlint-disable-next-line t3code/no-manual-effect-runtime-in-tests -- Same reason: this is the synchronous resolution the IPC handler performs.
+      // oxlint-disable-next-line cinderdeck/no-manual-effect-runtime-in-tests -- Same reason: this is the synchronous resolution the IPC handler performs.
       const label = Effect.runSync(configuration.resolvePrimaryLabel);
       assert.equal(typeof label, "string");
     } finally {

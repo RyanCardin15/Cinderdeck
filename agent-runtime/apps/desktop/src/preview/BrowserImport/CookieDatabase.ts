@@ -3,7 +3,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as SqlClient from "effect/sql/SqlClient";
 
-import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
+import * as NodeSqliteClient from "@cinderdeck/shared/nodeSqliteClient";
 
 export interface ImportedCookie {
   readonly url: string;

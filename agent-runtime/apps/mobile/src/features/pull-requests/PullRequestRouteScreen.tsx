@@ -41,12 +41,12 @@ import {
   pullRequestDiffInitialPosition,
 } from "./pullRequestDiffDebug";
 import { usePullRequestDiffHighlightFiles } from "./usePullRequestDiffHighlightFiles";
-import { isTestChangedFile } from "@t3tools/shared/changedFileKind";
+import { isTestChangedFile } from "@cinderdeck/shared/changedFileKind";
 import { useFocusEffect, useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RegistryContext, useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { pullRequestReviewKey } from "./pullRequestReviewDrafts";
-import { type PullRequestDetail, type PullRequestListEntry } from "@t3tools/contracts";
+import { type PullRequestDetail, type PullRequestListEntry } from "@cinderdeck/contracts";
 import { PullRequestOverviewLoading } from "./PullRequestOverviewLoading";
 import { copyPullRequestLink, sharePullRequestLink } from "./pullRequestLink";
 import { pullRequestStatus } from "./pullRequestStatus";
@@ -129,7 +129,7 @@ import { pullRequestFileJumpScope, subscribePullRequestFileJump } from "./pullRe
 import {
   capitalizeTerm,
   sourceControlClients,
-} from "@t3tools/client-runtime/source-control-clients";
+} from "@cinderdeck/client-runtime/source-control-clients";
 
 const EMPTY_IDS: readonly string[] = [];
 
@@ -1087,7 +1087,7 @@ function PullRequestFileRouteContent({ route }: PullRequestFileRouteProps) {
   });
   // Subscribed for the whole screen, so a pick made while the diff is still loading is kept for
   // the first draw.
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to pull request file jump requests for the screen's lifetime
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- subscribes to pull request file jump requests for the screen's lifetime
   useEffect(() => subscribePullRequestFileJump(jumpScope, (path) => jumpToFile(path)), [jumpScope]);
   const { nativeReviewDiffStyle } = useAppearanceCodeSurface();
   const { themeAppearance, appearance, setCodeWordBreak } = useAppearancePreferences();
@@ -1102,7 +1102,7 @@ function PullRequestFileRouteContent({ route }: PullRequestFileRouteProps) {
     canHighlight: true,
   });
   const [NativeDiffView] = useState(() => resolveNativeReviewDiffView());
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- requests the next page of the paged diff query until the jump target file has loaded
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- requests the next page of the paged diff query until the jump target file has loaded
   useEffect(() => {
     if (!targetFile) loadMore();
   }, [targetFile, loadMore]);

@@ -1,4 +1,4 @@
-import { normalizeHost } from "@t3tools/source-control-core/server/pullRequestUtils";
+import { normalizeHost } from "@cinderdeck/source-control-core/server/pullRequestUtils";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
@@ -9,8 +9,8 @@ import * as Stream from "effect/Stream";
 import { HttpClient, HttpClientError, HttpClientResponse } from "effect/http";
 import * as Headers from "effect/http/Headers";
 import { GraphQLClientError, GraphQLMiddleware, GraphQLProtocol } from "effect/graphql";
-import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
-import { collectUint8StreamText } from "@t3tools/provider-core/server/collectStreamText";
+import * as SourceControlRateLimit from "@cinderdeck/source-control-core/server/SourceControlRateLimit";
+import { collectUint8StreamText } from "@cinderdeck/provider-core/server/collectStreamText";
 
 import * as GitHubCredentials from "./GitHubCredentials.ts";
 import * as GitHubRequestPolicy from "./GitHubRequestPolicy.ts";
@@ -31,7 +31,7 @@ export class GitHubGraphQlTarget extends Context.Service<
     /** A longer answer fails as a `GitHubApiResponseError`. Defaults to 8 MB. */
     readonly maxResponseBytes?: number | undefined;
   }
->()("@t3tools/source-control-github/server/gitHubGraphQlClient/GitHubGraphQlTarget") {}
+>()("@cinderdeck/source-control-github/server/gitHubGraphQlClient/GitHubGraphQlTarget") {}
 
 // Group traces by query without exposing query text.
 function queryHash(query: string): string {
@@ -52,7 +52,7 @@ export const isNotFoundOnly = (error: unknown): boolean =>
 export class GitHubGraphQlAuth extends GraphQLMiddleware.Service<
   GitHubGraphQlAuth,
   { requires: GitHubGraphQlTarget; error: GitHubRequestPolicy.GitHubApiError }
->()("@t3tools/source-control-github/server/gitHubGraphQlClient/GitHubGraphQlAuth") {
+>()("@cinderdeck/source-control-github/server/gitHubGraphQlClient/GitHubGraphQlAuth") {
   static readonly layer = Layer.effect(
     GitHubGraphQlAuth,
     Effect.gen(function* () {

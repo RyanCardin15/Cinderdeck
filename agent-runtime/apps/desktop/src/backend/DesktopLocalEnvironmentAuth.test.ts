@@ -8,11 +8,11 @@ import * as Ref from "effect/Ref";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
-import { PRIMARY_LOCAL_ENVIRONMENT_ID } from "@t3tools/contracts";
+import { PRIMARY_LOCAL_ENVIRONMENT_ID } from "@cinderdeck/contracts";
 import {
   DESKTOP_BOOTSTRAP_TOKEN_WINDOW_MS,
   currentDesktopBootstrapToken,
-} from "@t3tools/shared/desktopBootstrapToken";
+} from "@cinderdeck/shared/desktopBootstrapToken";
 import * as TestClock from "effect/testing/TestClock";
 
 import * as DesktopBackendPool from "./DesktopBackendPool.ts";

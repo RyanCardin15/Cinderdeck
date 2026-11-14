@@ -1,5 +1,5 @@
 {
-  "name": "@t3tools/secret-provider-onepassword",
+  "name": "@cinderdeck/secret-provider-onepassword",
   "private": true,
   "type": "module",
   "exports": {
@@ -17,10 +17,10 @@
     "test": "vp test run --config ../../vite.config.ts --dir ."
   },
   "dependencies": {
-    "@t3tools/contracts": "workspace:*",
-    "@t3tools/provider-core": "workspace:*",
-    "@t3tools/secret-provider-core": "workspace:*",
-    "@t3tools/shared": "workspace:*",
+    "@cinderdeck/contracts": "workspace:*",
+    "@cinderdeck/provider-core": "workspace:*",
+    "@cinderdeck/secret-provider-core": "workspace:*",
+    "@cinderdeck/shared": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {

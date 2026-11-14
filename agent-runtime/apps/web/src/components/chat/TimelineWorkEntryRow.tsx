@@ -5,25 +5,25 @@ import {
   getQuestionAnswerText,
   getQuestionTextPreview,
   hasQuestionAnswer,
-} from "@t3tools/client-runtime/work-log/user-input";
+} from "@cinderdeck/client-runtime/work-log/user-input";
 import {
   ORCHESTRATION_V2_WORKSPACE_PREPARATION_FAILURE_CODE,
   type EnvironmentId,
   ThreadId,
-} from "@t3tools/contracts";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+} from "@cinderdeck/contracts";
+import { scopeThreadRef } from "@cinderdeck/client-runtime/environment";
 import { Link } from "@tanstack/react-router";
-import { notificationChildThreadId } from "@t3tools/client-runtime/state/thread-execution";
+import { notificationChildThreadId } from "@cinderdeck/client-runtime/state/thread-execution";
 import {
   resolveViewedImageAsset,
   toolGroupAction,
   workEntryViewedImagePath,
-} from "@t3tools/client-runtime/work-log/presentation";
+} from "@cinderdeck/client-runtime/work-log/presentation";
 import {
   turnItemHasDetail,
   turnItemNeedsDetailFetch,
-} from "@t3tools/client-runtime/work-log/item-detail";
-import { claudeSkillInvocation } from "@t3tools/shared/toolActivity";
+} from "@cinderdeck/client-runtime/work-log/item-detail";
+import { claudeSkillInvocation } from "@cinderdeck/shared/toolActivity";
 import { memo, use, useState, type KeyboardEvent } from "react";
 import {
   workEntryDisplayIndicatesToolFailure,
@@ -570,7 +570,7 @@ function WorkEntryLogRow(props: WorkEntryRowProps) {
 function QuestionAnswerHistory({
   answer,
 }: {
-  answer: import("@t3tools/contracts").UserInputAttachmentAnswerPayload;
+  answer: import("@cinderdeck/contracts").UserInputAttachmentAnswerPayload;
 }) {
   const { activeThreadEnvironmentId } = use(TimelineRowCtx);
   const attachments = Object.values(answer.attachmentsByQuestionId).flat();

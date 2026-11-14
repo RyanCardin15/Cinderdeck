@@ -36,8 +36,8 @@ import type {
   PullRequestUpdateMethod,
   PullRequestViewerPermissions,
   SourceControlProviderKind,
-} from "@t3tools/contracts";
-import { SourceControlProviderKind as SourceControlProviderKindSchema } from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
+import { SourceControlProviderKind as SourceControlProviderKindSchema } from "@cinderdeck/contracts";
 
 export class PullRequestProviderError extends Schema.TaggedError<PullRequestProviderError>()(
   "PullRequestProviderError",

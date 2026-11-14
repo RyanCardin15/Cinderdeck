@@ -1,6 +1,6 @@
-import { SourceControlProviderKind, type VcsStatusResult } from "@t3tools/contracts";
-import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
-import { resolveAutoFeatureBranchName } from "@t3tools/shared/git";
+import { SourceControlProviderKind, type VcsStatusResult } from "@cinderdeck/contracts";
+import { sourceControlClients } from "@cinderdeck/client-runtime/source-control-clients";
+import { resolveAutoFeatureBranchName } from "@cinderdeck/shared/git";
 import { assert, describe, it } from "vite-plus/test";
 import {
   buildMenuItems,

@@ -1,9 +1,9 @@
-import { createServerEnvironmentAtoms } from "@t3tools/client-runtime/state/server";
+import { createServerEnvironmentAtoms } from "@cinderdeck/client-runtime/state/server";
 import {
   createOutdatedServerDescriptionCommand,
   createOutdatedServerUpdateCommand,
-} from "@t3tools/client-runtime/state/outdatedServerUpdate";
-import { createEnvironmentServerConfigsAtom } from "@t3tools/client-runtime/state/shell";
+} from "@cinderdeck/client-runtime/state/outdatedServerUpdate";
+import { createEnvironmentServerConfigsAtom } from "@cinderdeck/client-runtime/state/shell";
 
 import { environmentCatalog } from "../connection/catalog";
 import { connectionAtomRuntime } from "../connection/runtime";

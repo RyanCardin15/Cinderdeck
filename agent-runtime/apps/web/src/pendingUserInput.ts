@@ -1,13 +1,13 @@
-import type { ThreadContextRecord, UserInputQuestion } from "@t3tools/contracts";
-import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
-import { formatThreadLink } from "@t3tools/shared/threadLinks";
+import type { ThreadContextRecord, UserInputQuestion } from "@cinderdeck/contracts";
+import { replaceComposerContextReferences } from "@cinderdeck/shared/composerContextReferences";
+import { formatThreadLink } from "@cinderdeck/shared/threadLinks";
 import {
   buildPendingUserInputAnswers,
   normalizeSelectedOptionValues,
   resolvePendingUserInputAnswer,
   type PendingUserInputAnswer,
   type PendingUserInputDraftAnswer,
-} from "@t3tools/client-runtime/state/pending-user-input";
+} from "@cinderdeck/client-runtime/state/pending-user-input";
 
 import { collectInlineContextIds } from "./lib/composerContextReferences";
 

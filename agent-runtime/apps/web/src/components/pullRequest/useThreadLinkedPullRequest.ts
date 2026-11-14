@@ -4,12 +4,12 @@ import {
   type ScopedThreadRef,
   type ThreadLinkedPullRequest,
   type VcsStatusResult,
-} from "@t3tools/contracts";
-import { scopedThreadKey } from "@t3tools/client-runtime/environment";
+} from "@cinderdeck/contracts";
+import { scopedThreadKey } from "@cinderdeck/client-runtime/environment";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@cinderdeck/client-runtime/state/runtime";
 import { useEffect, useRef } from "react";
 import { selectActiveRightPanelSurface, useRightPanelStore } from "../../rightPanelStore";
 import { threadEnvironment } from "../../state/threads";
@@ -50,7 +50,7 @@ export function useThreadLinkedPullRequest(input: {
 
   const relinkKeysRef = useRef(new Map<string, string>());
   const relinkWriteRef = useRef(Promise.resolve());
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- persists the detected PR to the server thread once per change and retargets the open right panel store
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- persists the detected PR to the server thread once per change and retargets the open right panel store
   useEffect(() => {
     if (serverThreadRef === null) return;
     const threadKey = scopedThreadKey(serverThreadRef);

@@ -1,7 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import { ProviderInstanceId, type ThreadId } from "@t3tools/contracts";
+import { scopeThreadRef } from "@cinderdeck/client-runtime/environment";
+import { squashAtomCommandFailure } from "@cinderdeck/client-runtime/state/runtime";
+import { ProviderInstanceId, type ThreadId } from "@cinderdeck/contracts";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { useEffect, useEffectEvent, useState } from "react";
 
@@ -88,7 +88,7 @@ export function DevReplayHost() {
   const replayFromConsole = useEffectEvent(replay);
   const listScenarios = useEffectEvent(() => scenarios.map((scenario) => scenario.slug));
 
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- exposes the console API on window and listens for the hidden window hotkey
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- exposes the console API on window and listens for the hidden window hotkey
   useEffect(() => {
     window.t3dev = {
       replayScenarios: () => listScenarios(),

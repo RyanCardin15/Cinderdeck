@@ -1,8 +1,8 @@
 // @effect-diagnostics nodeBuiltinImport:off -- The synchronous shell probe runs real commands with isolated config files.
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it as effectIt } from "@effect/vitest";
-import * as HostProcess from "@t3tools/shared/HostProcess";
-import { DesktopHostTelemetryMessage } from "@t3tools/contracts";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
+import { DesktopHostTelemetryMessage } from "@cinderdeck/contracts";
 import * as Schema from "effect/Schema";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -72,7 +72,7 @@ describe("readEnvironmentFromLoginShell", () => {
     "captures Nushell PATH and multiline values without external tools",
     () => {
       const shell = process.env.T3_TEST_NU_PATH!;
-      const home = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-nu-env-"));
+      const home = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-nu-env-"));
       try {
         const toolPath = NodePath.join(home, "nu tools", "bin");
         const extraToolPath = NodePath.join(home, "extra-tools", "bin");
@@ -110,6 +110,51 @@ describe("readEnvironmentFromLoginShell", () => {
           CUSTOM_VAR: "  first\nsecond  ",
         });
       } finally {
+        NodeFS.rmSync(home, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.runIf(NodeFS.existsSync("/bin/bash"))(
+    "captures values when the profile replaces PATH and a DEBUG trap echoes commands",
+    () => {
+      const home = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-bash-env-"));
+      try {
+        const tools = NodePath.join(home, "tools 'quoted $dir");
+        NodeFS.mkdirSync(tools);
+        const printenv = NodeChildProcess.execFileSync("/bin/bash", ["-c", "type -P printenv"], {
+          encoding: "utf8",
+          env: { PATH: process.env.PATH },
+        }).trim();
+        // Keep the signed system executable intact on macOS.
+        NodeFS.symlinkSync(printenv, NodePath.join(tools, "printenv"));
+        vi.stubEnv("PATH", tools);
+        const shellPath = NodePath.join(home, "bin");
+        const bashEnv = NodePath.join(home, "env.bash");
+        NodeFS.writeFileSync(
+          bashEnv,
+          [
+            `export PATH='${shellPath.replaceAll("'", "'\\''")}'`,
+            // Simulate a non-FHS host while retaining the real executable in its private prefix.
+            "function /usr/bin/printenv { return 127; }",
+            `trap 'echo -ne "\\033]0;\${BASH_COMMAND}\\007"' DEBUG`,
+          ].join("\n"),
+        );
+
+        expect(
+          readEnvironmentFromLoginShell(
+            "/bin/bash",
+            ["XDG_DATA_HOME", "PATH"],
+            // Non-interactive bash reads only BASH_ENV, not the host's /etc startup files that -il runs.
+            (file, [, command = ""], options) =>
+              NodeChildProcess.execFileSync(file, ["-c", command], {
+                ...options,
+                env: { HOME: home, PATH: tools, TERM: "dumb", BASH_ENV: bashEnv },
+              }),
+          ),
+        ).toEqual({ PATH: shellPath });
+      } finally {
+        vi.unstubAllEnvs();
         NodeFS.rmSync(home, { recursive: true, force: true });
       }
     },
@@ -507,7 +552,9 @@ effectIt.layer(NodeServices.layer)("resolveCommandPath", (it) => {
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "t3-case-sensitive-path-" });
+        const cwd = yield* fs.makeTempDirectoryScoped({
+          prefix: "cinderdeck-case-sensitive-path-",
+        });
         const executable = path.join(cwd, "audit-command.cmd");
         yield* fs.writeFileString(executable, "@echo off\n");
 
@@ -745,7 +792,7 @@ effectIt.layer(NodeServices.layer)("resolveSpawnCommand", (it) => {
         Effect.gen(function* () {
           const fs = yield* FileSystem.FileSystem;
           const path = yield* Path.Path;
-          const prefix = yield* fs.makeTempDirectoryScoped({ prefix: "t3-npm-shim-" });
+          const prefix = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-npm-shim-" });
           const shim = path.join(prefix, "opencode.cmd");
           const executable = path.join(
             prefix,

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { EnvironmentId, ThreadId, type TerminalSummary } from "@t3tools/contracts";
-import { selectRunningSubprocessTerminalIds } from "@t3tools/client-runtime/state/terminal";
+import { EnvironmentId, ThreadId, type TerminalSummary } from "@cinderdeck/contracts";
+import { selectRunningSubprocessTerminalIds } from "@cinderdeck/client-runtime/state/terminal";
 import * as Cause from "effect/Cause";
 import * as Option from "effect/Option";
 import { AsyncResult, AtomRegistry } from "effect/reactivity";

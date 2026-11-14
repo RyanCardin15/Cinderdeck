@@ -5,7 +5,7 @@ import {
   replaceDescriptorCurrentValue,
   selectableProviderOptionChoices,
   isReasoningSelect,
-} from "@t3tools/client-runtime/model-traits";
+} from "@cinderdeck/client-runtime/model-traits";
 import {
   type ModelSelection,
   type ProviderDriverKind,
@@ -14,14 +14,14 @@ import {
   type ProviderOptionSelection,
   type ScopedThreadRef,
   type ServerProviderModel,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   buildProviderOptionSelectionsFromDescriptors,
   getProviderOptionCurrentLabel,
   getProviderOptionDescriptors,
   isClaudeUltrathinkPrompt,
   normalizeModelSlug,
-} from "@t3tools/shared/model";
+} from "@cinderdeck/shared/model";
 import { memo } from "react";
 import { GaugeIcon } from "lucide-react";
 import {

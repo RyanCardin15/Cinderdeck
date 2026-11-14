@@ -6,12 +6,12 @@ import {
   pullRequestReactionName,
   pullRequestReactionTooltip,
   pullRequestReactionsSignature,
-} from "@t3tools/client-runtime/pull-request-reactions";
+} from "@cinderdeck/client-runtime/pull-request-reactions";
 import type {
   PullRequestComment,
   PullRequestReaction,
   PullRequestReactionContent,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import { AsyncResult } from "effect/reactivity";
 import { useState } from "react";
 import { Pressable, View } from "react-native";

@@ -5,27 +5,27 @@ import {
   clampManagedRuntimeMode,
   managedCapabilityDenial,
   resolveProjectProviderInstanceEnabled,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import { readEnvironmentScope } from "../../state/session";
 import type {
   EnvironmentId,
   ProjectId,
   ScheduledTask,
   ScheduledTaskUpsertInput,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   MAX_WEBHOOK_DELIVERY_AGE_MINUTES,
   MAX_WEBHOOK_FILTERS,
   resolveEnvironmentMachineKind,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import type { MenuAction } from "@react-native-menu/menu";
 import { DateTimePicker } from "@expo/ui/community/datetime-picker";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
   type AtomCommandResult,
-} from "@t3tools/client-runtime/state/runtime";
-import { resolvePastedPath } from "@t3tools/shared/path";
+} from "@cinderdeck/client-runtime/state/runtime";
+import { resolvePastedPath } from "@cinderdeck/shared/path";
 import {
   DEFAULT_WEBHOOK_PROMPT,
   emptyWebhookFilterDraft,
@@ -34,7 +34,7 @@ import {
   removeWebhookFilterDraft,
   WEBHOOK_FILTER_OPS,
   type WebhookFilterDraft,
-} from "@t3tools/client-runtime/scheduled-task-webhook";
+} from "@cinderdeck/client-runtime/scheduled-task-webhook";
 import { useRef, useState, type ReactNode } from "react";
 import { useFocusEffect, useNavigation, usePreventRemove } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -53,7 +53,7 @@ import type { ComposerEditorSelection } from "../../components/ComposerEditor";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { ThemedSwitch } from "../../components/ui/ThemedSwitch";
-import { webhookAddress } from "@t3tools/client-runtime/webhook-address";
+import { webhookAddress } from "@cinderdeck/client-runtime/webhook-address";
 import { tryCopyTextWithHaptic } from "../../lib/copyTextWithHaptic";
 import { usePreparedConnection } from "../../state/session";
 import { buildModelOptions } from "../../lib/modelOptions";

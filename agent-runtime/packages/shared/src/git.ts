@@ -5,16 +5,17 @@ import type {
   VcsStatusRemoteResult,
   VcsStatusResult,
   VcsStatusStreamEvent,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Arr from "effect/Array";
 import * as Result from "effect/Result";
 
 export const WORKTREE_BRANCH_PREFIX = "t3";
+export const LEGACY_WORKTREE_BRANCH_PREFIX = "t3code";
 const TEMP_WORKTREE_HEX_TOKEN = "[0-9a-f]{8}";
 const TEMP_WORKTREE_UUID_V4_TOKEN =
   "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
 const TEMP_WORKTREE_BRANCH_PATTERN = new RegExp(
-  `^(?:${WORKTREE_BRANCH_PREFIX}[-/]${TEMP_WORKTREE_HEX_TOKEN}|t3code(?:[-/]${TEMP_WORKTREE_HEX_TOKEN}|\\/${TEMP_WORKTREE_UUID_V4_TOKEN}))$`,
+  `^(?:${WORKTREE_BRANCH_PREFIX}[-/]${TEMP_WORKTREE_HEX_TOKEN}|${LEGACY_WORKTREE_BRANCH_PREFIX}(?:[-/]${TEMP_WORKTREE_HEX_TOKEN}|\\/${TEMP_WORKTREE_UUID_V4_TOKEN}))$`,
 );
 
 export function sanitizeBranchFragment(raw: string): string {
@@ -154,10 +155,19 @@ export function parseGitRemoteRepository(
   // A userless one-letter prefix is a Windows drive, not an SCP host.
   const scpStyleHostAndPath = /^[a-z]:/i.test(normalized)
     ? null
-    : /^(?:[a-zA-Z0-9._-]+@)?([^@:/\\\s]+):\/?([^/\s]+(?:\/[^/\s]+)+)$/i.exec(normalized);
+    : /^(?:[a-zA-Z0-9._-]+@)?(\[[0-9a-f:.]+\]|[^@:/\\\s[\]]+):\/?([^/\s]+(?:\/[^/\s]+)+)$/i.exec(
+        normalized,
+      );
   const scpHost = scpStyleHostAndPath?.[1];
   const scpPath = scpStyleHostAndPath?.[2];
-  return scpHost && scpPath ? { host: scpHost, path: scpPath } : null;
+  if (!scpHost || !scpPath) return null;
+  if (!scpHost.startsWith("[")) return { host: scpHost, path: scpPath };
+  try {
+    // Spell an IPv6 host as the URL branch does, so `[::1]:a/b` and `ssh://[::1]/a/b` share a key.
+    return { host: new URL(`ssh://${scpHost}`).hostname, path: scpPath };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -175,7 +185,7 @@ function* gitConfigLines(configText: string) {
   let quoted = false;
   for (const line of configText.split(/\r?\n/)) {
     let continued = false;
-    if (line.endsWith("\\")) {
+    if (line.endsWith("\\") || pending.length > 0) {
       for (const [token] of line.matchAll(/\\[\s\S]?|["#;]/g)) {
         if (token === '"') quoted = !quoted;
         else if (!quoted && (token === "#" || token === ";")) break;
@@ -186,11 +196,11 @@ function* gitConfigLines(configText: string) {
       pending += line.slice(0, -1);
       continue;
     }
-    yield pending + line;
+    if (!quoted) yield pending + line;
     pending = "";
     quoted = false;
   }
-  if (pending.length > 0) yield pending;
+  if (pending.length > 0 && !quoted) yield pending;
 }
 
 function parseGitConfigValue(raw: string): string {
@@ -213,6 +223,21 @@ function parseGitConfigValue(raw: string): string {
   return out.trim();
 }
 
+function isTrueGitConfigValue(value: string): boolean {
+  if (value === "true" || value === "yes" || value === "on") return true;
+  const numeric = /^([+-]?)(0x[0-9a-f]+|0[0-7]*|[1-9][0-9]*)([kmg]?)$/.exec(value);
+  if (numeric === null) return false;
+  const digits = numeric[2]!;
+  const magnitude = digits.startsWith("0x")
+    ? Number.parseInt(digits.slice(2), 16)
+    : Number.parseInt(digits, digits.startsWith("0") ? 8 : 10);
+  const scale =
+    numeric[3] === "k" ? 1024 : numeric[3] === "m" ? 1024 ** 2 : numeric[3] === "g" ? 1024 ** 3 : 1;
+  const number = magnitude * scale * (numeric[1] === "-" ? -1 : 1);
+  // Git's boolean parser accepts integers only within its signed 32-bit range.
+  return number !== 0 && number >= -2147483648 && number <= 2147483647;
+}
+
 export function isBareGitConfig(configText: string): boolean {
   let inCore = false;
   let bare = false;
@@ -228,7 +253,7 @@ export function isBareGitConfig(configText: string): boolean {
     const match = /^bare\s*(?:=(.*)|[#;].*)?$/i.exec(line);
     if (match === null) continue;
     const value = match[1] === undefined ? "true" : parseGitConfigValue(match[1]).toLowerCase();
-    bare = value === "true" || value === "yes" || value === "on" || value === "1";
+    bare = isTrueGitConfigValue(value);
   }
   return bare;
 }

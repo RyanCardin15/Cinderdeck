@@ -26,7 +26,7 @@ import type {
 } from "@anthropic-ai/claude-agent-sdk/sdk-tools";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { toolOutputImages } from "@t3tools/shared/toolOutput";
+import { toolOutputImages } from "@cinderdeck/shared/toolOutput";
 import {
   ChatAttachmentId,
   type ChatAttachment,
@@ -52,7 +52,7 @@ import {
   RunAttemptId,
   RunId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -72,18 +72,18 @@ import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import { Tool } from "effect/ai";
-import { formatClaudeResumeCompactionQuestion } from "@t3tools/shared/claudeCompaction";
-import * as HostProcess from "@t3tools/shared/HostProcess";
-import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
-import { SpawnExecutableResolution } from "@t3tools/shared/shell";
+import { formatClaudeResumeCompactionQuestion } from "@cinderdeck/shared/claudeCompaction";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
+import { getModelSelectionStringOptionValue } from "@cinderdeck/shared/model";
+import { SpawnExecutableResolution } from "@cinderdeck/shared/shell";
 
 import * as PortScanner from "../../preview/PortScanner.ts";
 import { attachmentRelativePath } from "../../attachmentStore.ts";
 import { WorkflowAgentTranscriptReadObserver } from "../workflowAgentTranscript.ts";
 import * as ServerConfig from "../../config.ts";
-import * as McpProviderSession from "@t3tools/provider-core/server/mcpSession";
-import { T3_CODE_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH } from "@t3tools/provider-core/server/orchestrationInstructions";
-import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
+import * as McpProviderSession from "@cinderdeck/provider-core/server/mcpSession";
+import { CINDERDECK_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH } from "@cinderdeck/provider-core/server/orchestrationInstructions";
+import * as McpProviderSessions from "@cinderdeck/provider-core/server/McpProviderSessions";
 import { PreviewControlsToolkit } from "../../mcp/toolkits/previewControls/tools.ts";
 import { HtmlToolkit } from "../../mcp/toolkits/html/tools.ts";
 import { EnvironmentToolkit } from "../../mcp/toolkits/environment/tools.ts";
@@ -92,12 +92,12 @@ import { WorktreeToolkit } from "../../mcp/toolkits/worktree/tools.ts";
 import { ThreadToolkit } from "../../mcp/toolkits/thread/tools.ts";
 import { OrchestratorToolkit } from "../../mcp/toolkits/orchestrator/tools.ts";
 import { ClaudeExecutableFileCheck } from "../../provider/Drivers/ClaudeExecutable.ts";
-import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
-import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
-import type * as ProviderContinuationRequests from "@t3tools/provider-core/server/ProviderContinuationRequests";
-import { makeProviderFailure } from "@t3tools/provider-core/server/failure";
+import * as ProviderEventLoggers from "@cinderdeck/provider-core/server/ProviderEventLoggers";
+import * as ProviderAdapter from "@cinderdeck/provider-core/server/ProviderAdapter";
+import type * as ProviderContinuationRequests from "@cinderdeck/provider-core/server/ProviderContinuationRequests";
+import { makeProviderFailure } from "@cinderdeck/provider-core/server/failure";
 import * as ClaudeAdapterV2 from "./ClaudeAdapterV2.ts";
-import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
+import * as IdAllocator from "@cinderdeck/provider-core/server/IdAllocator";
 import { ClaudeOrchestratorReplayHarness } from "./ClaudeAdapterV2.testkit.ts";
 import { provideDeterministicTestRuntime } from "../testkit/DeterministicRuntime.ts";
 import { runOrchestratorV2Scenario } from "../testkit/OrchestratorScenario.ts";
@@ -644,7 +644,7 @@ describe("ClaudeAdapterV2 native protocol logging", () => {
     assert.equal(systemPrompt.preset, "claude_code");
     assert.include(systemPrompt.append ?? "", "Use `delegate_task`");
     assert.include(systemPrompt.append ?? "", "call `t3_background_wait`");
-    assert.notInclude(systemPrompt.append ?? "", "## T3 Code devices");
+    assert.notInclude(systemPrompt.append ?? "", "## Cinderdeck devices");
     const logged = ClaudeAdapterV2.loggedClaudeQueryOptions(options);
     assert.equal(logged.hasMcpServers, true);
     assert.notInclude(JSON.stringify(logged), "secret-claude-token");
@@ -685,13 +685,13 @@ describe("ClaudeAdapterV2 device instructions", () => {
 
   it("gives a session with device access the device block and the ToolSearch line to load it", () => {
     const text = append({ mcp: true, deviceToolsAvailable: true });
-    assert.include(text, T3_CODE_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH);
+    assert.include(text, CINDERDECK_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH);
     assert.include(text, "Use `delegate_task`");
   });
 
   it("leaves the device block out without device access or without T3 tools", () => {
-    assert.notInclude(append({ mcp: true, deviceToolsAvailable: false }), "## T3 Code devices");
-    assert.notInclude(append({ mcp: false, deviceToolsAvailable: true }), "## T3 Code devices");
+    assert.notInclude(append({ mcp: true, deviceToolsAvailable: false }), "## Cinderdeck devices");
+    assert.notInclude(append({ mcp: false, deviceToolsAvailable: true }), "## Cinderdeck devices");
   });
 
   it("gives native subagents the device block only in a session with device access", async () => {
@@ -722,7 +722,7 @@ describe("ClaudeAdapterV2 device instructions", () => {
       {
         hookSpecificOutput: {
           hookEventName: "SubagentStart",
-          additionalContext: T3_CODE_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH,
+          additionalContext: CINDERDECK_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH,
         },
       },
     ]);

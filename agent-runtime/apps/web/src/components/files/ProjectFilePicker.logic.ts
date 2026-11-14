@@ -1,5 +1,5 @@
-import type { ProjectEntry } from "@t3tools/contracts";
-import { normalizeSearchQuery } from "@t3tools/shared/searchRanking";
+import type { ProjectEntry } from "@cinderdeck/contracts";
+import { normalizeSearchQuery } from "@cinderdeck/shared/searchRanking";
 
 export const PROJECT_FILE_PICKER_RESULT_LIMIT = 200;
 

@@ -8,7 +8,7 @@ import {
   type PullRequestThreadCommentsResult,
   type ThreadPullRequestLink,
   type ThreadPullRequestWatch,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   normalizeThreadPullRequestKey,
   threadPullRequestKeyOf,
@@ -29,7 +29,7 @@ import type * as Scope from "effect/Scope";
 import {
   type ProviderChangeRequestWatchFingerprint,
   PullRequestProviderError,
-} from "@t3tools/source-control-core/server/PullRequestProvider";
+} from "@cinderdeck/source-control-core/server/PullRequestProvider";
 import * as PullRequestService from "../pullRequest/PullRequestService.ts";
 import { forkParked } from "../serverActivation.ts";
 import * as Orchestrator from "./Orchestrator.ts";
@@ -189,7 +189,7 @@ export class PullRequestWatchReactor extends Context.Service<
     readonly start: () => Effect.Effect<void, never, Scope.Scope>;
     readonly sweep: Effect.Effect<void>;
   }
->()("t3/orchestration-v2/PullRequestWatchReactor") {}
+>()("@cinderdeck/server/orchestration-v2/PullRequestWatchReactor") {}
 
 /** @public */
 export const make = Effect.gen(function* () {

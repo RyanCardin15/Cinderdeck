@@ -4,9 +4,9 @@ import * as NodeHttp from "node:http";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodePathLayer from "@effect/platform-node/NodePath";
-import { codexAuthHandoffUrl, readCodexAuthDelivery } from "@t3tools/shared/codexAuthHandoff";
-import { EnvironmentId, ProviderInstanceId } from "@t3tools/contracts";
-import * as HostProcess from "@t3tools/shared/HostProcess";
+import { codexAuthHandoffUrl, readCodexAuthDelivery } from "@cinderdeck/shared/codexAuthHandoff";
+import { EnvironmentId, ProviderInstanceId } from "@cinderdeck/contracts";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -151,7 +151,7 @@ describe("DesktopClerk", () => {
         events.push("createClerkBridge");
         return { cleanup: vi.fn(), isPrimaryInstance: true };
       });
-      // oxlint-disable-next-line t3code/no-manual-effect-runtime-in-tests -- The assertion IS that the layer builds synchronously; it.effect would mask a regression to async.
+      // oxlint-disable-next-line cinderdeck/no-manual-effect-runtime-in-tests -- The assertion IS that the layer builds synchronously; it.effect would mask a regression to async.
       Effect.runSync(
         Effect.scoped(
           Layer.build(

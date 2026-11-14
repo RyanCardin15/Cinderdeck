@@ -16,7 +16,7 @@ import {
   ThreadId,
   WsRpcGroup,
   type OrchestrationV2ThreadProjection,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Console from "effect/Console";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";

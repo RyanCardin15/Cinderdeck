@@ -3,10 +3,10 @@ import {
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   EnvironmentHttpApi,
-} from "@t3tools/contracts";
-import { isDevProxiedPath } from "@t3tools/shared/devProxy";
-import { injectMcpAppCookieBootstrap, injectMcpAppThemeBootstrap } from "@t3tools/shared/mcpApp";
-import { decodeOtlpTraceRecords } from "@t3tools/shared/observability";
+} from "@cinderdeck/contracts";
+import { isDevProxiedPath } from "@cinderdeck/shared/devProxy";
+import { injectMcpAppCookieBootstrap, injectMcpAppThemeBootstrap } from "@cinderdeck/shared/mcpApp";
+import { decodeOtlpTraceRecords } from "@cinderdeck/shared/observability";
 import * as ByteSize from "effect/ByteSize";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";

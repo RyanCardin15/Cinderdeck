@@ -152,7 +152,7 @@ async function startupCleanupPattern(desktopDir) {
 }
 
 it
-  // oxlint-disable-next-line t3code/no-global-process-runtime -- Native pgrep is unavailable on Windows.
+  // oxlint-disable-next-line cinderdeck/no-global-process-runtime -- Native pgrep is unavailable on Windows.
   .skipIf(NodeOS.platform() === "win32")
   .each([
     "/tmp/t3-feature.one/apps/desktop",

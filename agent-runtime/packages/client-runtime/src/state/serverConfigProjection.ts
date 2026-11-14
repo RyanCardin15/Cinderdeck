@@ -1,4 +1,4 @@
-import type { ServerConfig, ServerConfigStreamEvent } from "@t3tools/contracts";
+import type { ServerConfig, ServerConfigStreamEvent } from "@cinderdeck/contracts";
 import * as Equal from "effect/Equal";
 import * as Option from "effect/Option";
 

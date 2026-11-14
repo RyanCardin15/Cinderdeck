@@ -8,7 +8,7 @@ import {
   ScheduledTaskUpsertInput,
   ScheduledTaskWebhookDeliveryId,
   SecretRequestError,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as DateTime from "effect/DateTime";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Deferred from "effect/Deferred";

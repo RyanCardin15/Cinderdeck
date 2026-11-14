@@ -18,8 +18,8 @@ import {
   LOCAL_DEVICE_HOST_LABEL,
   ProviderInstanceId,
   ThreadId,
-} from "@t3tools/contracts";
-import * as HostProcess from "@t3tools/shared/HostProcess";
+} from "@cinderdeck/contracts";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
 import * as Context from "effect/Context";
 import * as Digest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
@@ -29,7 +29,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as References from "effect/References";
 import * as Schema from "effect/Schema";
-// oxlint-disable-next-line t3code/no-raw-mcp-registration -- the eval calls the device tools McpHttpServer registered and registers none.
+// oxlint-disable-next-line cinderdeck/no-raw-mcp-registration -- the eval calls the device tools McpHttpServer registered and registers none.
 import { McpSchema, McpServer } from "effect/ai";
 
 import * as ServerConfig from "../../apps/server/src/config.ts";
@@ -537,7 +537,7 @@ const decodeDeviceError = Schema.decodeUnknownOption(DeviceError);
 export const deviceFailure = (mock: unknown) => Option.getOrUndefined(decodeDeviceError(mock));
 
 const Injected = Context.Reference<DeviceError | undefined>(
-  "@t3tools/evals/mcp-tool-use/devices/Injected",
+  "@cinderdeck/evals/mcp-tool-use/devices/Injected",
   { defaultValue: () => undefined },
 );
 const failing = <A, R>(effect: Effect.Effect<A, DeviceError, R>) =>

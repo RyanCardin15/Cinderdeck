@@ -6,7 +6,7 @@ import {
   ProviderThreadId,
   ThreadId,
   VcsProcessExitError,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -27,11 +27,11 @@ import {
 } from "./CheckpointRestoreSafety.ts";
 import { CheckpointRestoreError, CheckpointServiceV2 } from "./CheckpointService.ts";
 import { EventSinkV2 } from "./EventSink.ts";
-import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
+import * as IdAllocator from "@cinderdeck/provider-core/server/IdAllocator";
 import { ProjectionStoreV2 } from "./ProjectionStore.ts";
 import { GIT_INDEX_LOCKED_DETAIL } from "../vcs/VcsProcess.ts";
 import * as ProjectStore from "./ProjectStore.ts";
-import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
+import type * as ProviderAdapter from "@cinderdeck/provider-core/server/ProviderAdapter";
 import { ProviderSessionManagerV2 } from "./ProviderSessionManager.ts";
 import { RuntimePolicyAboveCeilingError, RuntimePolicyV2 } from "./RuntimePolicy.ts";
 import * as ThreadCommandExecutor from "./ThreadCommandExecutor.ts";
@@ -102,7 +102,7 @@ export interface CheckpointRollbackServiceV2Shape {
 export class CheckpointRollbackServiceV2 extends Context.Service<
   CheckpointRollbackServiceV2,
   CheckpointRollbackServiceV2Shape
->()("t3/orchestration-v2/CheckpointRollbackService/CheckpointRollbackServiceV2") {}
+>()("@cinderdeck/server/orchestration-v2/CheckpointRollbackService/CheckpointRollbackServiceV2") {}
 
 export const layer: Layer.Layer<
   CheckpointRollbackServiceV2,

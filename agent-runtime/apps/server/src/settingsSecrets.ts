@@ -10,14 +10,14 @@ import {
   UsageLimitSourceConfig,
   isSecretReference,
   secretSettingsFields,
-} from "@t3tools/contracts";
-import { acpRegistryClient } from "@t3tools/provider-acp-registry/client";
-import { cursorClient } from "@t3tools/provider-cursor/client";
-import { grokClient } from "@t3tools/provider-grok/client";
-import { kiroClient } from "@t3tools/provider-kiro/client";
-import { museClient } from "@t3tools/provider-muse/client";
-import { openCodeClient } from "@t3tools/provider-opencode/client";
-import { piClient } from "@t3tools/provider-pi/client";
+} from "@cinderdeck/contracts";
+import { acpRegistryClient } from "@cinderdeck/provider-acp-registry/client";
+import { cursorClient } from "@cinderdeck/provider-cursor/client";
+import { grokClient } from "@cinderdeck/provider-grok/client";
+import { kiroClient } from "@cinderdeck/provider-kiro/client";
+import { museClient } from "@cinderdeck/provider-muse/client";
+import { openCodeClient } from "@cinderdeck/provider-opencode/client";
+import { piClient } from "@cinderdeck/provider-pi/client";
 import {
   readSecretFieldValues,
   SOURCE_CONTROL_HOST_SECRET_FIELDS,

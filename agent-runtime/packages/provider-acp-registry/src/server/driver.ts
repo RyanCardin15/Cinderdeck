@@ -6,10 +6,10 @@ import {
   type AcpRegistryOperationError,
   type ServerProvider,
   type ServerProviderModel,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import { AcpRegistrySettings } from "../settings.ts";
-import * as HostProcess from "@t3tools/shared/HostProcess";
-import { createModelCapabilities } from "@t3tools/shared/model";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
+import { createModelCapabilities } from "@cinderdeck/shared/model";
 import * as Clock from "effect/Clock";
 import * as Digest from "effect/crypto/Digest";
 import * as SecureRandom from "effect/crypto/SecureRandom";
@@ -22,24 +22,24 @@ import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
-import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
+import * as ProviderHost from "@cinderdeck/provider-core/server/ProviderHost";
 import { AcpRegistryAdapterV2Driver, type AcpRegistryAdapterV2DriverEnv } from "./adapter.ts";
-import type { ProviderTextGeneration } from "@t3tools/provider-core/server/textGeneration";
-import { ProviderDriverError } from "@t3tools/provider-core/server/errors";
-import { makeManagedServerProvider } from "@t3tools/provider-core/server/managedProvider";
-import { mergeProviderInstanceEnvironment } from "@t3tools/provider-core/server/instanceEnvironment";
+import type { ProviderTextGeneration } from "@cinderdeck/provider-core/server/textGeneration";
+import { ProviderDriverError } from "@cinderdeck/provider-core/server/errors";
+import { makeManagedServerProvider } from "@cinderdeck/provider-core/server/managedProvider";
+import { mergeProviderInstanceEnvironment } from "@cinderdeck/provider-core/server/instanceEnvironment";
 import {
   defaultProviderContinuationIdentity,
   type ProviderDriver,
   type ProviderInstance,
-} from "@t3tools/provider-core/server/driver";
-import { providerModelsFromSettings } from "@t3tools/provider-core/server/snapshotProbe";
-import { makeManualOnlyProviderMaintenanceCapabilities } from "@t3tools/provider-core/server/maintenanceResolver";
+} from "@cinderdeck/provider-core/server/driver";
+import { providerModelsFromSettings } from "@cinderdeck/provider-core/server/snapshotProbe";
+import { makeManualOnlyProviderMaintenanceCapabilities } from "@cinderdeck/provider-core/server/maintenanceResolver";
 import {
   haveProviderSnapshotSettingsChanged,
   makeProviderSnapshotSettingsSource,
   type ProviderSnapshotSettings,
-} from "@t3tools/provider-core/server/snapshotSettings";
+} from "@cinderdeck/provider-core/server/snapshotSettings";
 import {
   type AcpRegistryAvailableCommands,
   type AcpRegistryConfigurationProbe,

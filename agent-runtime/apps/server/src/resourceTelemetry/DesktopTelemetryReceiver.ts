@@ -13,10 +13,10 @@ import {
   type DesktopUpdateChannel,
   type DesktopUpdateStatusReport,
   type ResourceTelemetrySourceStatus,
-} from "@t3tools/contracts";
-import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
-import * as HostProcess from "@t3tools/shared/HostProcess";
-import { applyShellEnvironment } from "@t3tools/shared/shell";
+} from "@cinderdeck/contracts";
+import { resolveServerBackgroundActivitySettings } from "@cinderdeck/shared/backgroundActivitySettings";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
+import { applyShellEnvironment } from "@cinderdeck/shared/shell";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -206,7 +206,7 @@ export class DesktopTelemetryReceiver extends Context.Service<
       Scope.Scope
     >;
   }
->()("t3/resourceTelemetry/DesktopTelemetryReceiver") {}
+>()("@cinderdeck/server/resourceTelemetry/DesktopTelemetryReceiver") {}
 
 class DesktopShellCertificatesUpdateFailed extends Schema.TaggedError<DesktopShellCertificatesUpdateFailed>()(
   "DesktopShellCertificatesUpdateFailed",

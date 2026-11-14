@@ -1,19 +1,19 @@
 import { useAtomValue } from "@effect/atom-react";
-import { createDeviceEnvironmentAtoms } from "@t3tools/client-runtime/state/device";
+import { createDeviceEnvironmentAtoms } from "@cinderdeck/client-runtime/state/device";
 import {
   type DeviceHubAccess,
   resolveDeviceHubAccess,
-} from "@t3tools/client-runtime/state/deviceHubAccess";
+} from "@cinderdeck/client-runtime/state/deviceHubAccess";
 import {
   createEnvironmentRpcQueryAtomFamily,
   runAtomCommand,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@cinderdeck/client-runtime/state/runtime";
 import {
   type DeviceDetail,
   type DeviceServiceState,
   type EnvironmentId,
   WS_METHODS,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";

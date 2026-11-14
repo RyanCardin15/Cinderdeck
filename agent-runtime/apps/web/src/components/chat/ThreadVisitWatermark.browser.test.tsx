@@ -1,5 +1,5 @@
-import { claimThreadOpen } from "@t3tools/client-runtime/state/thread-search";
-import { EnvironmentId, type ScopedThreadRef, ThreadId } from "@t3tools/contracts";
+import { claimThreadOpen } from "@cinderdeck/client-runtime/state/thread-search";
+import { EnvironmentId, type ScopedThreadRef, ThreadId } from "@cinderdeck/contracts";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { expect, it, vi } from "vite-plus/test";
 

@@ -10,7 +10,7 @@ import {
   type ProjectId,
   type SecretRequestAnswerInput,
   type ThreadId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- Effect's Crypto has no createHmac.
 import * as NodeCrypto from "node:crypto";
 
@@ -76,7 +76,7 @@ export class SecretRequests extends Context.Service<
       readonly value: string;
     }) => Effect.Effect<string, SecretRequestError>;
   }
->()("t3/secrets/SecretRequests") {}
+>()("@cinderdeck/server/secrets/SecretRequests") {}
 
 const make = Effect.gen(function* () {
   const store = yield* ServerSecretStore.ServerSecretStore;

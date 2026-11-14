@@ -9,16 +9,16 @@ import {
   type ServerLifecycleWelcomePayload,
   type ServerProvider,
   type ServerSettings,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   AVAILABLE_CONNECTION_STATE,
   presentConnectionState,
   type EnvironmentPresentation,
-} from "@t3tools/client-runtime/connection";
-import { createServerEnvironmentAtoms } from "@t3tools/client-runtime/state/server";
-import { createOutdatedServerUpdateCommand } from "@t3tools/client-runtime/state/outdatedServerUpdate";
-import { createEnvironmentServerConfigsAtom } from "@t3tools/client-runtime/state/shell";
-import { mergeWithDefaultKeybindings } from "@t3tools/shared/keybindings";
+} from "@cinderdeck/client-runtime/connection";
+import { createServerEnvironmentAtoms } from "@cinderdeck/client-runtime/state/server";
+import { createOutdatedServerUpdateCommand } from "@cinderdeck/client-runtime/state/outdatedServerUpdate";
+import { createEnvironmentServerConfigsAtom } from "@cinderdeck/client-runtime/state/shell";
+import { mergeWithDefaultKeybindings } from "@cinderdeck/shared/keybindings";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/reactivity";
 

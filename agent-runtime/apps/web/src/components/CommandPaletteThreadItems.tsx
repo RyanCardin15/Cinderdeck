@@ -1,18 +1,18 @@
-import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { scopedThreadKey, scopeThreadRef } from "@cinderdeck/client-runtime/environment";
 import { findForMessageMatch, openThreadFindOnQuery } from "./chat/threadFindStore";
 import {
   claimThreadOpen,
   nextShownOrder,
   type EnvironmentThreadSearchMatch,
   type ShownOrder,
-} from "@t3tools/client-runtime/state/thread-search";
+} from "@cinderdeck/client-runtime/state/thread-search";
 import {
   foldSearchQuery,
   PALETTE_MESSAGE_LIMIT,
   pickedQuery,
   rankMessageMatches,
-} from "@t3tools/shared/paletteSearch";
-import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+} from "@cinderdeck/shared/paletteSearch";
+import type { EnvironmentId, ThreadId } from "@cinderdeck/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { useNavigate } from "@tanstack/react-router";
 import { MessageSquareIcon } from "lucide-react";

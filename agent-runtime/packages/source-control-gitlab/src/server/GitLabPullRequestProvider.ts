@@ -1,4 +1,4 @@
-import { SourceControlProviderKind } from "@t3tools/contracts";
+import { SourceControlProviderKind } from "@cinderdeck/contracts";
 import * as Cache from "effect/Cache";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -8,7 +8,7 @@ import type {
   PullRequestReaction,
   PullRequestReviewDecision,
   PullRequestViewerPermissions,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 
 import * as GitLabPullRequestCli from "./GitLabPullRequestCli.ts";
 import {
@@ -17,7 +17,7 @@ import {
   type ProviderChangeRequestActivity,
   type ProviderChangeRequestDetail,
   type PullRequestProviderApi,
-} from "@t3tools/source-control-core/server/PullRequestProvider";
+} from "@cinderdeck/source-control-core/server/PullRequestProvider";
 import { definition } from "../shared/definition.ts";
 
 const CAPABILITIES: PullRequestCapabilities = {

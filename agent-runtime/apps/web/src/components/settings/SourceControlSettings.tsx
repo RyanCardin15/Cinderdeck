@@ -8,7 +8,7 @@ import type {
   SourceControlProviderDiscoveryItem,
   VcsDriverKind,
   VcsDiscoveryItem,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
 import { cn } from "../../lib/utils";
@@ -44,7 +44,7 @@ import {
 } from "./settingsLayout";
 import { searchableSetting, sourceControlHostSettingsSearchId } from "./settingsSearch";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
-import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
+import { sourceControlClients } from "@cinderdeck/client-runtime/source-control-clients";
 import { sourceControlIcon } from "~/sourceControlPresentation";
 
 const EMPTY_DISCOVERY_RESULT: SourceControlDiscoveryResult = {

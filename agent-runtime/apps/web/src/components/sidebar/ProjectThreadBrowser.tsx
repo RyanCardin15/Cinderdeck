@@ -1,6 +1,6 @@
-import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
-import type { ScopedThreadRef } from "@t3tools/contracts";
+import { scopeThreadRef, scopedThreadKey } from "@cinderdeck/client-runtime/environment";
+import type { EnvironmentThreadShell } from "@cinderdeck/client-runtime/state/models";
+import type { ScopedThreadRef } from "@cinderdeck/contracts";
 import { CheckIcon, SearchIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
@@ -111,7 +111,7 @@ export function ProjectThreadBrowser({
                 <button
                   type="button"
                   key={scopedThreadKey(ref)}
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm hover:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                   onClick={() => {
                     onOpenThread(ref);
                     close();

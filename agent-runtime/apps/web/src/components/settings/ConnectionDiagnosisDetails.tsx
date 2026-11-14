@@ -6,7 +6,7 @@ import {
   connectionRoutes,
   hasRelayRoute,
   presentConnectionDiagnosis,
-} from "@t3tools/client-runtime/connection";
+} from "@cinderdeck/client-runtime/connection";
 import * as Option from "effect/Option";
 import { AsyncResult } from "effect/reactivity";
 import { ChevronRightIcon } from "lucide-react";

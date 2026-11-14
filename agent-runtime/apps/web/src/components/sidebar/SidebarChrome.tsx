@@ -13,7 +13,7 @@ import {
 } from "../../navigationHistory";
 import { primaryServerKeybindingsAtom } from "../../state/server";
 import { cn } from "../../lib/utils";
-import { T3Wordmark } from "../T3Wordmark";
+import { CinderdeckMark } from "../CinderdeckMark";
 import {
   resolveEnvironmentIdentificationPillLabel,
   resolveSidebarStageBackdropVariant,
@@ -177,7 +177,7 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
 function SidebarBrandMark({ onBackdrop }: { onBackdrop: boolean }) {
   return (
     <span className="inline-flex min-w-0 items-baseline gap-1 text-sm font-medium tracking-tight">
-      <T3Wordmark aria-label="Cinderdeck" className="h-[1cap] w-auto shrink-0" />
+      <CinderdeckMark aria-label="Cinderdeck" className="h-[1cap] w-auto shrink-0" />
       <span
         className={cn(
           "truncate [text-box:trim-both_cap_alphabetic] supports-[text-box:trim-both_cap_alphabetic]:py-1",

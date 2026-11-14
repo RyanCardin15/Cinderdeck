@@ -36,7 +36,7 @@ import {
   type ProviderInstanceId,
   type RunId,
   type RuntimeRequestId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import type * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
@@ -52,40 +52,40 @@ import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
-import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
+import * as ProviderHost from "@cinderdeck/provider-core/server/ProviderHost";
 import * as OpenCode2Client from "./OpenCode2Client.ts";
 import * as OpenCode2Server from "./OpenCode2Server.ts";
 import * as OpenCodeRuntime from "../OpenCodeRuntime.ts";
 import { readableProviderErrorMessage } from "../providerErrorMessage.ts";
-import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
-import { buildRuntimeInstructions } from "@t3tools/provider-core/server/runtimeInstructions";
-import { t3OrchestrationSystemPrompt } from "@t3tools/provider-core/server/orchestrationInstructions";
-import { SKILL_MENTION_PATTERN } from "@t3tools/shared/composerInlineTokens";
-import * as KeyedLock from "@t3tools/shared/KeyedLock";
-import { getModelSelectionStringOptionValue, modelSelectionsEqual } from "@t3tools/shared/model";
-import { causeErrorTag } from "@t3tools/shared/observability";
+import * as McpProviderSessions from "@cinderdeck/provider-core/server/McpProviderSessions";
+import { buildRuntimeInstructions } from "@cinderdeck/provider-core/server/runtimeInstructions";
+import { cinderdeckOrchestrationSystemPrompt } from "@cinderdeck/provider-core/server/orchestrationInstructions";
+import { SKILL_MENTION_PATTERN } from "@cinderdeck/shared/composerInlineTokens";
+import * as KeyedLock from "@cinderdeck/shared/KeyedLock";
+import { getModelSelectionStringOptionValue, modelSelectionsEqual } from "@cinderdeck/shared/model";
+import { causeErrorTag } from "@cinderdeck/shared/observability";
 
 import {
   isProviderNativeImageAttachment,
   providerMessageTextWithAttachmentPaths,
-} from "@t3tools/provider-core/server/attachmentPrompt";
-import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
+} from "@cinderdeck/provider-core/server/attachmentPrompt";
+import * as IdAllocator from "@cinderdeck/provider-core/server/IdAllocator";
 import {
   backgroundWorkNotification,
   type BackgroundWorkReport,
-} from "@t3tools/provider-core/server/notification";
-import * as ProviderContinuationRequests from "@t3tools/provider-core/server/ProviderContinuationRequests";
+} from "@cinderdeck/provider-core/server/notification";
+import * as ProviderContinuationRequests from "@cinderdeck/provider-core/server/ProviderContinuationRequests";
 import {
   makeProviderFailure,
   makeProviderRetryTurnItem,
-} from "@t3tools/provider-core/server/failure";
+} from "@cinderdeck/provider-core/server/failure";
 import {
   makeSubagentChildThread,
   makeSubagentConversationArtifacts,
   subagentThreadTitle,
-} from "@t3tools/provider-core/server/subagentProjection";
-import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
-import { turnScopedSelectionTransition } from "@t3tools/provider-core/server/selectionTransition";
+} from "@cinderdeck/provider-core/server/subagentProjection";
+import * as ProviderAdapter from "@cinderdeck/provider-core/server/ProviderAdapter";
+import { turnScopedSelectionTransition } from "@cinderdeck/provider-core/server/selectionTransition";
 import { OPENCODE_PROVIDER, openCodePermissionRequestKind } from "../adapter.ts";
 import { openCodeCommandFailed, openCodeToolTurnItem } from "../toolItems.ts";
 
@@ -3133,7 +3133,10 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
       }
       const instructions = [
         buildRuntimeInstructions({ harness: "OpenCode", model: turnInput.modelSelection.model }),
-        t3OrchestrationSystemPrompt(mcpAvailable, mcpSession?.capabilities?.has("device") === true),
+        cinderdeckOrchestrationSystemPrompt(
+          mcpAvailable,
+          mcpSession?.capabilities?.has("device") === true,
+        ),
       ]
         .filter((part) => part !== undefined && part.length > 0)
         .join("\n\n");

@@ -16,11 +16,11 @@ import {
   type SourceControlProviderInfo,
   type SourceControlRepositoryCloneUrls,
   type SourceControlRepositoryVisibility,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
-import { sanitizeBranchFragment } from "@t3tools/shared/git";
-import { isSshRemoteUrl } from "@t3tools/shared/sourceControl";
-import { recognizeRemoteWith } from "@t3tools/source-control-core/shared/definition";
+import { sanitizeBranchFragment } from "@cinderdeck/shared/git";
+import { isSshRemoteUrl } from "@cinderdeck/shared/sourceControl";
+import { recognizeRemoteWith } from "@cinderdeck/source-control-core/shared/definition";
 import { definition } from "../shared/definition.ts";
 
 import {
@@ -29,13 +29,13 @@ import {
   normalizeBitbucketPullRequestRecord,
   type NormalizedBitbucketPullRequestRecord,
 } from "./bitbucketPullRequests.ts";
-import { collectUint8StreamText } from "@t3tools/provider-core/server/collectStreamText";
-import * as SourceControlProvider from "@t3tools/source-control-core/server/SourceControlProvider";
-import * as SourceControlHost from "@t3tools/source-control-core/server/SourceControlHost";
-import { readSourceControlHostSettings } from "@t3tools/source-control-core/shared/definition";
+import { collectUint8StreamText } from "@cinderdeck/provider-core/server/collectStreamText";
+import * as SourceControlProvider from "@cinderdeck/source-control-core/server/SourceControlProvider";
+import * as SourceControlHost from "@cinderdeck/source-control-core/server/SourceControlHost";
+import { readSourceControlHostSettings } from "@cinderdeck/source-control-core/shared/definition";
 
 import * as BitbucketClient from "../shared/definition.ts";
-import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
+import * as SourceControlRateLimit from "@cinderdeck/source-control-core/server/SourceControlRateLimit";
 
 const DEFAULT_API_BASE_URL = "https://api.bitbucket.org/2.0";
 const DEFAULT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
@@ -390,7 +390,7 @@ export class BitbucketApi extends Context.Service<
       readonly force?: boolean;
     }) => Effect.Effect<void, BitbucketApiError>;
   }
->()("@t3tools/source-control-bitbucket/server/BitbucketApi") {}
+>()("@cinderdeck/source-control-bitbucket/server/BitbucketApi") {}
 
 function nonEmpty(value: string | undefined): Option.Option<string> {
   const trimmed = value?.trim();

@@ -93,7 +93,7 @@ export class MobileStorage extends Context.Service<
       MobileSecureStorage.MobileSecureStorageError | MobileStorageEncodeError
     >;
   }
->()("@t3tools/mobile/persistence/MobileStorage") {}
+>()("@cinderdeck/mobile/persistence/MobileStorage") {}
 
 export const make = Effect.fn("MobileStorage.make")(function* () {
   const secureStorage = yield* MobileSecureStorage.MobileSecureStorage;

@@ -6,14 +6,14 @@ import {
   type ProviderOptionSelection,
   type ScopedThreadRef,
   type ServerProviderModel,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   buildExplicitProviderOptionSelectionsFromDescriptors,
   getProviderOptionCurrentValue,
   getProviderOptionDescriptors,
   isClaudeUltrathinkPrompt,
   normalizeModelSlug,
-} from "@t3tools/shared/model";
+} from "@cinderdeck/shared/model";
 
 import type { DraftId } from "../../composerDraftStore";
 import { getProviderModelCapabilities } from "../../providerModels";

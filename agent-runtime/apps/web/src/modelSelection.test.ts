@@ -6,14 +6,14 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   type ServerProvider,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   DEFAULT_CLIENT_SETTINGS,
   DEFAULT_UNIFIED_SETTINGS,
   type UnifiedSettings,
-} from "@t3tools/contracts/settings";
+} from "@cinderdeck/contracts/settings";
 import { describe, expect, it } from "vite-plus/test";
-import { createModelSelection } from "@t3tools/shared/model";
+import { createModelSelection } from "@cinderdeck/shared/model";
 import { deriveEffectiveComposerModelState } from "./composerDraftStore";
 import { getComposerProviderState } from "./components/chat/composerProviderState";
 import { resolveComposerProviderSelection } from "./components/ChatView.logic";

@@ -4,7 +4,7 @@ import {
   type ServerProvider,
   type ServerProviderSlashCommand,
   type ServerProviderResetCredits,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -14,8 +14,8 @@ import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
-import { createModelCapabilities } from "@t3tools/shared/model";
-import { resolveSpawnCommand } from "@t3tools/shared/shell";
+import { createModelCapabilities } from "@cinderdeck/shared/model";
+import { resolveSpawnCommand } from "@cinderdeck/shared/shell";
 import {
   query as claudeQuery,
   type ModelInfo as ClaudeModelInfo,
@@ -35,12 +35,12 @@ import {
   providerModelsFromSettings,
   spawnAndCollect,
   type ServerProviderDraft,
-} from "@t3tools/provider-core/server/snapshotProbe";
+} from "@cinderdeck/provider-core/server/snapshotProbe";
 import { resolveClaudeSdkExecutablePath } from "./Drivers/ClaudeExecutable.ts";
 import { hasClaudeManagedMcpConfig, makeClaudeEnvironment } from "./Drivers/ClaudeHome.ts";
 import { discoverClaudeSkills, readClaudeSettingsEnv } from "./Drivers/ClaudeSkills.ts";
-import type { ProviderWorkspaceSnapshot } from "@t3tools/provider-core/server/driver";
-import { makeUnavailableUsageLimits } from "@t3tools/provider-core/server/usageLimits";
+import type { ProviderWorkspaceSnapshot } from "@cinderdeck/provider-core/server/driver";
+import { makeUnavailableUsageLimits } from "@cinderdeck/provider-core/server/usageLimits";
 import {
   type ClaudeScopedLimitNames,
   claudeUsageResponseToLimits,

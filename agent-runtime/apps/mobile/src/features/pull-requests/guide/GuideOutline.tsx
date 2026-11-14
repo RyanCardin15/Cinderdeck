@@ -1,6 +1,6 @@
 import { Button } from "../../../components/ui/Button";
-import type { PullRequestReviewGuide } from "@t3tools/contracts";
-import { stopFilePaths } from "@t3tools/client-runtime/review-guide-tour";
+import type { PullRequestReviewGuide } from "@cinderdeck/contracts";
+import { stopFilePaths } from "@cinderdeck/client-runtime/review-guide-tour";
 import { Pressable, View } from "react-native";
 import { AppText as Text } from "../../../components/ui/AppText";
 import { SymbolView } from "../../../components/ui/AppSymbol";

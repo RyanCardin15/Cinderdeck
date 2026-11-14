@@ -6,10 +6,10 @@ import * as NodeOS from "node:os";
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as NetService from "@t3tools/shared/Net";
-import { resolveGitWorktreePath, resolveWorktreeT3Home } from "@t3tools/shared/devHome";
-import * as HostProcess from "@t3tools/shared/HostProcess";
-import { resolveSpawnCommand } from "@t3tools/shared/shell";
+import * as NetService from "@cinderdeck/shared/Net";
+import { resolveGitWorktreePath, resolveWorktreeT3Home } from "@cinderdeck/shared/devHome";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
+import { resolveSpawnCommand } from "@cinderdeck/shared/shell";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -68,23 +68,23 @@ export const DEFAULT_T3_HOME = Effect.map(Effect.service(Path.Path), (path) =>
 const MODE_ARGS = {
   dev: [
     "run",
-    "--filter=@t3tools/contracts",
-    "--filter=@t3tools/web",
-    "--filter=t3",
+    "--filter=@cinderdeck/contracts",
+    "--filter=@cinderdeck/web",
+    "--filter=@cinderdeck/server",
     "--parallel",
     "dev",
   ],
-  "dev:server": ["run", "--filter=t3", "dev"],
-  "dev:web": ["run", "--filter=@t3tools/web", "dev"],
-  "dev:desktop": ["run", "--filter=@t3tools/desktop", "--filter=@t3tools/web", "dev"],
+  "dev:server": ["run", "--filter=@cinderdeck/server", "dev"],
+  "dev:web": ["run", "--filter=@cinderdeck/web", "dev"],
+  "dev:desktop": ["run", "--filter=@cinderdeck/desktop", "--filter=@cinderdeck/web", "dev"],
 } as const satisfies Record<string, ReadonlyArray<string>>;
 
 // `--built`: the web package rebuilds into apps/web/dist and the backend serves
 // it, so no Vite dev server runs.
 const BUILT_DEV_ARGS = [
   "run",
-  "--filter=@t3tools/web",
-  "--filter=t3",
+  "--filter=@cinderdeck/web",
+  "--filter=@cinderdeck/server",
   "--parallel",
   "dev:built",
 ] as const;
@@ -692,7 +692,10 @@ export const runDevRunnerWithInput = Effect.fn("dev-runner.runDevRunnerWithInput
   input: DevRunnerCliInput,
 ) {
   if (input.share || input.browser || input.built) {
-    return yield* new DevRunnerConfigurationError({ configKeys: ["--share", "--browser", "--built"], cause: "Use desktop development with an isolated --home-dir." });
+    return yield* new DevRunnerConfigurationError({
+      configKeys: ["--share", "--browser", "--built"],
+      cause: "Use desktop development with an isolated --home-dir.",
+    });
   }
   if (input.mode === "dev" || input.mode === "dev:web") input = { ...input, mode: "dev:desktop" };
   const { portOffset, devInstance } = yield* OffsetConfig.pipe(
@@ -735,7 +738,7 @@ export const runDevRunnerWithInput = Effect.fn("dev-runner.runDevRunnerWithInput
 
   const hostEnvironment = yield* HostProcess.Environment;
   // A dev server started inside a worktree defaults to that worktree's own
-  // (gitignored) `.t3` — see @t3tools/shared/devHome for why this must
+  // (gitignored) `.t3` — see @cinderdeck/shared/devHome for why this must
   // outrank an ambient T3CODE_HOME. `--home-dir` still wins.
   const worktreeHome = yield* resolveWorktreeT3Home(yield* HostProcess.WorkingDirectory);
   // Trim before choosing: `--home-dir ""` is not a selection, and treating it
@@ -926,13 +929,13 @@ const devRunnerCli = Command.make("dev-runner", {
   ),
   t3Home: Flag.String("home-dir").pipe(
     Flag.withDescription(
-      "Explicit T3 Code data directory; runtime state is stored under userdata (equivalent to T3CODE_HOME). Inside a git worktree this defaults to that worktree's own .t3 so dev state stays off the shared home.",
+      "Explicit Cinderdeck development data directory. Defaults to isolated worktree or disposable state; inherited live data is ignored.",
     ),
     Flag.optional,
     Flag.map(Option.getOrUndefined),
   ),
   browser: Flag.Boolean("browser").pipe(
-    Flag.withDescription("Open a browser automatically (disabled by default for web dev)."),
+    Flag.withDescription("Unsupported compatibility flag; browser launch is rejected."),
     Flag.withDefault(false),
   ),
   autoBootstrapProjectFromCwd: Flag.Boolean("auto-bootstrap-project-from-cwd").pipe(
@@ -968,20 +971,16 @@ const devRunnerCli = Command.make("dev-runner", {
     Flag.withDefault(false),
   ),
   share: Flag.Boolean("share").pipe(
-    Flag.withDescription(
-      "Publish the web dev server on this machine's tailnet over HTTPS (via `tailscale serve`) and print the pairing URL for it. Removed again on exit.",
-    ),
+    Flag.withDescription("Unsupported compatibility flag; renderer sharing is rejected."),
     Flag.withDefault(false),
   ),
   seed: Flag.Boolean("seed").pipe(
-    Flag.withDescription(
-      "Seed an empty worktree database from ~/.t3 on first start (read-only, via migrate-dev-db) if the source is at most 500 MiB. On by default; --no-seed or T3CODE_DEV_SEED=0 skips it.",
-    ),
+    Flag.withDescription("Compatibility flag; development never seeds from an ambient database."),
     Flag.withFallbackConfig(optionalBooleanConfig("T3CODE_DEV_SEED")),
   ),
   built: Flag.Boolean("built").pipe(
     Flag.withDescription(
-      "With --share: serve a production web build from the backend instead of the Vite dev server. Rebuilds on change, no HMR, much smaller remote loads.",
+      "Unsupported compatibility flag; use the whole-app builder for packaged validation.",
     ),
     Flag.withDefault(false),
   ),

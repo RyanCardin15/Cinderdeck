@@ -31,6 +31,15 @@ class BrandingTests(unittest.TestCase):
         self.assertTrue(branding.violations("agent-runtime/packages/contracts/src/mcp.ts", '"t3_new_product"'))
         self.assertTrue(branding.violations("agent-runtime/apps/mobile/src/native/T3ComposerEditor.tsx", 'const name = "T3ComposerEditorPromo";'))
 
+    def test_uppercase_internal_branding_cannot_hide_in_constant_names(self):
+        for value in ("export const T3_CODE_DEVICE_TOOLS = [];", "T3_CODE_NEW_FEATURE"):
+            self.assertTrue(branding.violations("agent-runtime/packages/provider-core/src/new.ts", value))
+        self.assertEqual(branding.violations(
+            "agent-runtime/packages/provider-core/src/new.ts", 'process.env.T3_ACP_MCP_NODE'), [])
+        self.assertTrue(branding.violations(
+            "agent-runtime/packages/provider-core/src/new.ts",
+            'const T3_CODE_NEW_FEATURE = process.env.T3_ACP_MCP_NODE;'))
+
     def test_display_identity_cannot_use_compatibility_exceptions(self):
         for value in (
             'productName: "t3-code"',
@@ -132,6 +141,18 @@ class BrandingTests(unittest.TestCase):
         self.assertTrue(branding.violations("agent-runtime/apps/web/src/NewPanel.tsx", '"https://github.com/example/t3code.git"'))
         self.assertTrue(branding.violations("agent-runtime/apps/mobile/app.config.ts", '"com.t3tools.mobile"'))
 
+    def test_fixture_import_aliases_cannot_exempt_product_imports(self):
+        line = '"@t3tools/contracts": ["../../packages/contracts/src/index.ts"],'
+        self.assertEqual(branding.violations("agent-runtime/apps/server/tsconfig.json", line), [])
+        self.assertTrue(branding.violations("agent-runtime/apps/server/src/new.ts", line))
+        self.assertTrue(branding.violations("agent-runtime/apps/server/tsconfig.json", line + ' "T3 Code"'))
+
+    def test_worktree_prefix_exception_only_covers_the_exact_compatibility_declaration(self):
+        line = 'export const LEGACY_WORKTREE_BRANCH_PREFIX = "t3code";'
+        self.assertEqual(branding.violations("agent-runtime/packages/shared/src/git.ts", line), [])
+        self.assertTrue(branding.violations("agent-runtime/apps/web/src/new.ts", line))
+        self.assertTrue(branding.violations("agent-runtime/packages/shared/src/git.ts", line + ' const brand = "T3 Code";'))
+
     def test_credential_exception_is_only_for_the_persisted_owner(self):
         path = "agent-runtime/packages/contracts/src/providerSetup.ts"
         self.assertEqual(branding.violations(path, 'credentialOwner: Schema.Literals(["provider", "t3"]),'), [])
@@ -141,6 +162,15 @@ class BrandingTests(unittest.TestCase):
         path = "agent-runtime/apps/mobile/modules/t3-terminal/ios/T3TerminalNative.swift"
         self.assertEqual(branding.violations(path, 'class T3TerminalNative {}'), [])
         self.assertTrue(branding.violations(path, 'let label = "T3 Code"'))
+
+    def test_lowercase_product_identity_cannot_hide_behind_compatibility(self):
+        path = "agent-runtime/apps/web/src/NewPanel.tsx"
+        for line in ('const product = "t3code";', 'const url = "https://example.com/t3code";', 'const t3code = {};'):
+            self.assertTrue(branding.violations(path, line), line)
+        for token in ("t3code-client.db", "t3code://thread/1", "t3code:renderer-state:v8"):
+            line = f'const key = "{token}";'
+            self.assertEqual(branding.violations(path, line), [], token)
+            self.assertTrue(branding.violations(path, line + ' const product = "t3code";'), token)
 
     def test_lowercase_identifiers_help_and_demo_urls_are_rejected(self):
         for text in ('const t3 = {};', 'const t3Panel = {};', '"t3dotgg/fleet"', '"t3chat"', '"Run t3 theme set"', '"https://demo.t3.sh"'):
