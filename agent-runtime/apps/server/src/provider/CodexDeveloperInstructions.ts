@@ -2,9 +2,9 @@ import type { V2TurnStartParams__AdditionalContextEntry } from "effect-codex-app
 import { buildRuntimeInstructions } from "@cinderdeck/provider-core/server/runtimeInstructions";
 
 import {
-  T3_CODE_BROWSER_TOOL_INSTRUCTIONS,
-  T3_CODE_DEVICE_TOOL_INSTRUCTIONS,
-  T3_CODE_ORCHESTRATION_SECTIONS,
+  CINDERDECK_BROWSER_TOOL_INSTRUCTIONS,
+  CINDERDECK_DEVICE_TOOL_INSTRUCTIONS,
+  CINDERDECK_ORCHESTRATION_SECTIONS,
 } from "@cinderdeck/provider-core/server/orchestrationInstructions";
 
 /** Codex silently truncates additionalContext values over 1,000 tokens, counted as UTF-8 bytes / 4. */
@@ -24,8 +24,8 @@ const normalizeAvailability = (
 const toolInstructions = (availability: boolean | T3CodeToolAvailability): string => {
   const tools = normalizeAvailability(availability);
   return [
-    tools.browser ? T3_CODE_BROWSER_TOOL_INSTRUCTIONS : "",
-    tools.device ? T3_CODE_DEVICE_TOOL_INSTRUCTIONS : "",
+    tools.browser ? CINDERDECK_BROWSER_TOOL_INSTRUCTIONS : "",
+    tools.device ? CINDERDECK_DEVICE_TOOL_INSTRUCTIONS : "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -46,7 +46,7 @@ export function buildCodexAdditionalContext(
   // Split values to fit per-entry caps; number keys because Codex emits them in key order.
   return {
     ...Object.fromEntries(
-      T3_CODE_ORCHESTRATION_SECTIONS.map((section, index) => [
+      CINDERDECK_ORCHESTRATION_SECTIONS.map((section, index) => [
         `t3_code_orchestration_${String(index + 1).padStart(2, "0")}`,
         { kind: "application" as const, value: section },
       ]),

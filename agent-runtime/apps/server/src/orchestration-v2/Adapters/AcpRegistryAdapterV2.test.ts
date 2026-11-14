@@ -44,7 +44,7 @@ import * as AcpRegistrySupport from "@cinderdeck/provider-acp-registry/server/Ac
 import * as AcpRegistryRuntimeCoordinator from "@cinderdeck/provider-acp-registry/server/AcpRegistryRuntimeCoordinator";
 import { ACP_SESSION_MODE_OPTION_ID } from "@cinderdeck/provider-acp/server/sessionConfig";
 import * as AcpSessionRuntime from "@cinderdeck/provider-acp/server/AcpSessionRuntime";
-import { t3AcpPromptWithInstructions } from "@cinderdeck/provider-core/server/orchestrationInstructions";
+import { cinderdeckAcpPromptWithInstructions } from "@cinderdeck/provider-core/server/orchestrationInstructions";
 import { buildRuntimeInstructions } from "@cinderdeck/provider-core/server/runtimeInstructions";
 import * as IdAllocator from "@cinderdeck/provider-core/server/IdAllocator";
 import {
@@ -1261,7 +1261,7 @@ describe("AcpRegistryAdapterV2", () => {
             type: "text",
             text:
               ordinal === 1
-                ? t3AcpPromptWithInstructions({
+                ? cinderdeckAcpPromptWithInstructions({
                     prompt: "test prompt",
                     state: { interactionMode: "default", hasT3Mcp: false, hasDeviceTools: false },
                   })

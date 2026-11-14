@@ -31,6 +31,15 @@ class BrandingTests(unittest.TestCase):
         self.assertTrue(branding.violations("agent-runtime/packages/contracts/src/mcp.ts", '"t3_new_product"'))
         self.assertTrue(branding.violations("agent-runtime/apps/mobile/src/native/T3ComposerEditor.tsx", 'const name = "T3ComposerEditorPromo";'))
 
+    def test_uppercase_internal_branding_cannot_hide_in_constant_names(self):
+        for value in ("export const T3_CODE_DEVICE_TOOLS = [];", "T3_CODE_NEW_FEATURE"):
+            self.assertTrue(branding.violations("agent-runtime/packages/provider-core/src/new.ts", value))
+        self.assertEqual(branding.violations(
+            "agent-runtime/packages/provider-core/src/new.ts", 'process.env.T3_ACP_MCP_NODE'), [])
+        self.assertTrue(branding.violations(
+            "agent-runtime/packages/provider-core/src/new.ts",
+            'const T3_CODE_NEW_FEATURE = process.env.T3_ACP_MCP_NODE;'))
+
     def test_display_identity_cannot_use_compatibility_exceptions(self):
         for value in (
             'productName: "t3-code"',

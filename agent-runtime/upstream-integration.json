@@ -100,6 +100,18 @@
     {
       "commit": "d152d2c8240618f60308c3b42a160a414be57538",
       "subject": "fix(client-runtime): a search query pasted from github.com lists pull requests again (#30150)"
+    },
+    {
+      "commit": "294e061a2027fccbc1615a4c395f2031c2e18cb9",
+      "subject": "fix(shared): IPv6 SCP remotes match SSH repository identities (#36547)"
+    },
+    {
+      "commit": "9ef52de2930782e413ca9d2b5fef7500496d7123",
+      "subject": "fix(shared): keep spreadsheet shorthand as inline code (#23203)"
+    },
+    {
+      "commit": "388424db26888211304931461e947de1b6091c8d",
+      "subject": "fix(shared): capture shell values after profiles replace PATH (#35617)"
     }
   ],
   "deferred": [
@@ -270,13 +282,13 @@
   ],
   "compatibility": "Preserve legal notices, provider fixtures, persisted keys, native module registrations and wire identifiers. No repository-root upstream merge. reviewedThrough is an examined target, not complete parity.",
   "latestSelectedPortBatch": {
-    "upstreamBase": "dff0b1159bf7aa3ad5e5598d6e1bb7d6243f51a2",
-    "upstreamTarget": "46afd69a8b6dd4149747fd04d86576af009f7eec",
-    "newUpstreamCommits": 336,
+    "upstreamBase": "46afd69a8b6dd4149747fd04d86576af009f7eec",
+    "upstreamTarget": "e4688f7cb9f265249d077f8c68ab2bd7ee0b2a13",
+    "newUpstreamCommits": 1173,
     "portedCommits": 3,
-    "remainingCommits": 333,
-    "previousBatchRemainingCommits": 281,
-    "reviewScope": "Commit inventory examined; source diffs reviewed and ported for the three listed fixes only. The earlier 281 pending changes and 333 remaining newer changes require further review; reviewedThrough remains unchanged. No upstream parity claim."
+    "remainingCommits": 1170,
+    "previousBatchRemainingCommits": 614,
+    "reviewScope": "Commit inventory examined; source diffs reviewed for the three selected shared-helper fixes only. Earlier 614 pending commits and the remaining newer commits need further source review and adaptation. reviewedThrough remains unchanged; no upstream parity claim."
   },
   "selectedPortBatches": [
     {
@@ -286,6 +298,15 @@
       "portedCommits": 13,
       "remainingCommits": 281,
       "reviewScope": "Commit and path inventory triaged; source diffs reviewed for selected ports only. reviewedThrough remains the prior full triage boundary. Remaining changes require dependency, provider, native/mobile or owned-product adaptation review."
+    },
+    {
+      "upstreamBase": "dff0b1159bf7aa3ad5e5598d6e1bb7d6243f51a2",
+      "upstreamTarget": "46afd69a8b6dd4149747fd04d86576af009f7eec",
+      "newUpstreamCommits": 336,
+      "portedCommits": 3,
+      "remainingCommits": 333,
+      "previousBatchRemainingCommits": 281,
+      "reviewScope": "Commit inventory examined; source diffs reviewed and ported for the three listed fixes only. The earlier 281 pending changes and 333 remaining newer changes require further review; reviewedThrough remains unchanged. No upstream parity claim."
     }
   ]
 }

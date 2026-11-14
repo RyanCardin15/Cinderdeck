@@ -669,9 +669,9 @@ function assertReinjectedInstructions(
   request: string,
 ) {
   const text = blocks[0]?.text ?? "";
-  assert.include(text, "T3 Code interaction mode: Default");
-  assert.include(text, "## T3 Code browser");
-  assert.include(text, "T3 Code orchestration");
+  assert.include(text, "Cinderdeck interaction mode: Default");
+  assert.include(text, "## Cinderdeck browser");
+  assert.include(text, "Cinderdeck orchestration");
   assert.include(text, `<user_request>\n${request}\n</user_request>`);
 }
 
@@ -1682,7 +1682,9 @@ describe("AcpAdapterV2", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-droid-form-" });
+      const directory = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "cinderdeck-droid-form-",
+      });
       const statusPath = path.join(directory, "status.json");
       const expectedResult = typeof result === "function" ? result(directory) : result;
       let preparedAnswers: ProviderUserInputAnswers | undefined = answers;
@@ -1949,7 +1951,7 @@ describe("AcpAdapterV2", () => {
       buildModeId: "https://agentclientprotocol.com/protocol/session-modes#agent",
     },
     {
-      // Without a `mode` category, T3 derives no mode state and only the config option switches.
+      // Without a `mode` category, Cinderdeck derives no mode state and only the config option switches.
       modeIds: "Copilot URL collaboration_mode",
       environment: { T3_ACP_COPILOT_MODES: "1", T3_ACP_MODE_OPTION_CATEGORY: "collaboration_mode" },
       planModeId: "https://agentclientprotocol.com/protocol/session-modes#plan",
@@ -2067,9 +2069,9 @@ describe("AcpAdapterV2", () => {
         assert.notInclude(whitespaceCommand.prompt, "<t3_code_instructions>");
         const firstDefault = yield* runTurn(2, defaultPolicy, "First default request.");
         assert.equal(firstDefault.textBlockCount, 2);
-        assert.include(firstDefault.prompt, "T3 Code interaction mode: Default");
-        assert.include(firstDefault.prompt, "## T3 Code browser");
-        assert.include(firstDefault.prompt, "T3 Code orchestration");
+        assert.include(firstDefault.prompt, "Cinderdeck interaction mode: Default");
+        assert.include(firstDefault.prompt, "## Cinderdeck browser");
+        assert.include(firstDefault.prompt, "Cinderdeck orchestration");
         assert.notInclude(
           firstDefault.methods,
           "session/set_config_option",
@@ -2082,18 +2084,18 @@ describe("AcpAdapterV2", () => {
 
         const planPolicy = policy("plan");
         const firstPlan = yield* runTurn(4, planPolicy, "Plan this change.");
-        assert.include(firstPlan.prompt, "T3 Code interaction mode: Plan");
+        assert.include(firstPlan.prompt, "Cinderdeck interaction mode: Plan");
         assert.deepEqual(firstPlan.modeSets, [planModeId]);
         assert.include(
           (yield* runTurn(5, planPolicy, "Continue planning.")).prompt,
           "Continue planning.",
         );
         const restoredBuild = yield* runTurn(6, defaultPolicy, "Implement the change.");
-        assert.include(restoredBuild.prompt, "T3 Code interaction mode: Default");
+        assert.include(restoredBuild.prompt, "Cinderdeck interaction mode: Default");
         assert.deepEqual(
           restoredBuild.modeSets,
           [buildModeId],
-          "Build should restore the native mode that T3 temporarily replaced for Plan",
+          "Build should restore the native mode that Cinderdeck temporarily replaced for Plan",
         );
       }).pipe(Effect.provide(layerTest), Effect.scoped),
   );
@@ -2232,7 +2234,7 @@ describe("AcpAdapterV2", () => {
     }).pipe(Effect.provide(layerTest), Effect.scoped),
   );
 
-  // regression: #21499 turns blocked only on T3 thread waits must show as waiting
+  // regression: #21499 turns blocked only on Cinderdeck thread waits must show as waiting
   it.effect.each(["agent_message_chunk"] as const)(
     "keeps named ACP %s open while deriving thread wait execution state",
     (sessionUpdate) =>
@@ -4230,7 +4232,7 @@ describe("AcpAdapterV2", () => {
           new URL("../../../scripts/acp-mock-agent.ts", import.meta.url),
         );
         const workspace = yield* fileSystem.makeTempDirectoryScoped({
-          prefix: "t3-acp-no-client-fs-",
+          prefix: "cinderdeck-acp-no-client-fs-",
         });
         const probePath = path.join(workspace, "planted.txt");
         const probeLogPath = path.join(workspace, "fs-probe.jsonl");

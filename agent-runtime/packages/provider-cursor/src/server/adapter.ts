@@ -52,7 +52,7 @@ import {
   hasCursorSkillMention,
   rewriteCursorSkillMentions,
 } from "./skills.ts";
-import { t3OrchestrationPrompt } from "@cinderdeck/provider-core/server/orchestrationInstructions";
+import { cinderdeckOrchestrationPrompt } from "@cinderdeck/provider-core/server/orchestrationInstructions";
 import { buildRuntimeInstructions } from "@cinderdeck/provider-core/server/runtimeInstructions";
 import * as IdAllocator from "@cinderdeck/provider-core/server/IdAllocator";
 import { makeProviderFailure } from "@cinderdeck/provider-core/server/failure";
@@ -2303,7 +2303,7 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
                 .map((skill) => skill.name),
             );
           }
-          const userText = t3OrchestrationPrompt({
+          const userText = cinderdeckOrchestrationPrompt({
             prompt: yield* providerMessageTextWithAttachmentPaths({
               text:
                 cursorSkillNames === undefined

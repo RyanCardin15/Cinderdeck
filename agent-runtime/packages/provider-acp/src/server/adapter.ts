@@ -111,8 +111,8 @@ import {
 } from "./sessionConfig.ts";
 import * as AcpSessionRuntime from "./AcpSessionRuntime.ts";
 import {
-  t3AcpPromptWithInstructions,
-  type T3AcpInstructionState,
+  cinderdeckAcpPromptWithInstructions,
+  type CinderdeckAcpInstructionState,
 } from "@cinderdeck/provider-core/server/orchestrationInstructions";
 import { buildRuntimeInstructions } from "@cinderdeck/provider-core/server/runtimeInstructions";
 import * as IdAllocator from "@cinderdeck/provider-core/server/IdAllocator";
@@ -1913,7 +1913,9 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
         });
         const activeSelection = yield* Ref.make<ModelSelection | null>(null);
         const activeInteractionMode = yield* Ref.make<ProviderInteractionMode | null>(null);
-        const promptInstructionStates = yield* Ref.make(new Map<string, T3AcpInstructionState>());
+        const promptInstructionStates = yield* Ref.make(
+          new Map<string, CinderdeckAcpInstructionState>(),
+        );
         // Unique markers keep delayed prompt completions from clearing later compactions.
         const compactionMarkers = yield* Ref.make(new Map<string, symbol>());
         const runtimeRestartRequired = yield* Ref.make(false);
@@ -7704,7 +7706,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
             interactionMode: turnInput.runtimePolicy.interactionMode,
             hasT3Mcp: mcpSession !== undefined,
             hasDeviceTools: mcpSession?.capabilities?.has("device") === true,
-          } satisfies T3AcpInstructionState;
+          } satisfies CinderdeckAcpInstructionState;
           const previousInstructionState = (yield* Ref.get(promptInstructionStates)).get(sessionId);
           const compactionMarker = (yield* Ref.get(compactionMarkers)).get(sessionId);
           const userText =
@@ -7725,7 +7727,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
             resolveExtractedTextPath: host.resolveExtractedTextPath,
           });
           const isNativeSlashCommand = userText.trimStart().startsWith("/");
-          const text = t3AcpPromptWithInstructions({
+          const text = cinderdeckAcpPromptWithInstructions({
             prompt: messageText,
             state: instructionState,
             ...(previousInstructionState === undefined || compactionMarker !== undefined

@@ -62,7 +62,7 @@ import {
   summarizeNativeProtocolPayload,
 } from "@cinderdeck/provider-core/server/nativeProtocolLogging";
 import { mergeProviderInstanceEnvironment } from "@cinderdeck/provider-core/server/instanceEnvironment";
-import { t3OrchestrationSystemPrompt } from "@cinderdeck/provider-core/server/orchestrationInstructions";
+import { cinderdeckOrchestrationSystemPrompt } from "@cinderdeck/provider-core/server/orchestrationInstructions";
 import { buildRuntimeInstructions } from "@cinderdeck/provider-core/server/runtimeInstructions";
 import * as OpenCodeRuntime from "./OpenCodeRuntime.ts";
 import { readableProviderErrorMessage } from "./providerErrorMessage.ts";
@@ -962,7 +962,7 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
 
         const mcpSession = yield* mcpSessions.read(input.threadId);
         const hasT3Mcp = mcpSession !== undefined && !connection.external;
-        const orchestrationSystemPrompt = t3OrchestrationSystemPrompt(
+        const orchestrationSystemPrompt = cinderdeckOrchestrationSystemPrompt(
           hasT3Mcp,
           mcpSession?.capabilities?.has("device") === true,
         );
