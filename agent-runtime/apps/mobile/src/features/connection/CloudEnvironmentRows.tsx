@@ -98,7 +98,7 @@ function CloudEnvironmentRowsContent(
     <View collapsable={false} className={cn("gap-3", showHeader && "mt-5")}>
       {showHeader ? (
         <View className="px-1">
-          <Text className="text-sm font-t3-bold uppercase text-foreground-muted">T3 Connect</Text>
+          <Text className="text-sm font-t3-bold uppercase text-foreground-muted">Cinderdeck Connect</Text>
         </View>
       ) : null}
 
@@ -153,7 +153,7 @@ function CloudEnvironmentRowsContent(
       !controller.relayDiscovery.isRefreshing ? (
         <View collapsable={false} className="gap-3 rounded-[24px] bg-grouped-card p-5">
           <Text className="text-base font-t3-bold text-foreground">
-            Could not load T3 Connect environments
+            Could not load Cinderdeck Connect environments
           </Text>
           <Text className="text-sm text-foreground-muted">{controller.relayDiscovery.error}</Text>
           {controller.relayDiscovery.errorTraceId ? (
@@ -203,6 +203,7 @@ function ConnectedCloudEnvironmentRow(props: {
       connectionError={enabled || unsupported ? props.environment.connectionError : null}
       connectionErrorTraceId={enabled ? props.environment.connectionErrorTraceId : null}
       connectionState={enabled || unsupported ? props.environment.connectionState : "available"}
+      awaitingApproval={enabled && presentation?.connection.awaitingApproval === true}
       errorExpanded={props.errorExpanded}
       label={props.environment.environmentLabel}
       machine={resolveEnvironmentMachineKind(
@@ -269,6 +270,8 @@ function CloudEnvironmentRowShell(props: {
   readonly connectionError: string | null;
   readonly connectionErrorTraceId: string | null;
   readonly connectionState: EnvironmentConnectionPhase;
+  /** Waiting on the host to approve this device: say so plainly, not as a failure. */
+  readonly awaitingApproval?: boolean;
   readonly disabled?: boolean;
   readonly errorExpanded: boolean;
   readonly label: string;
@@ -287,9 +290,10 @@ function CloudEnvironmentRowShell(props: {
       phase: props.connectionState,
       error: props.connectionError,
       traceId: props.connectionErrorTraceId,
+      ...(props.awaitingApproval ? { awaitingApproval: true as const } : {}),
     });
   const statusClassName =
-    props.connectionError && props.connectionState !== "unsupported"
+    props.connectionError && props.connectionState !== "unsupported" && !props.awaitingApproval
       ? "text-danger-foreground"
       : "text-foreground-muted";
   const [errorMeasurement, setErrorMeasurement] = useState<{

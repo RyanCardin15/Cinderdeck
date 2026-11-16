@@ -258,7 +258,7 @@ function PreviewStreamDocumentView({
   };
   const command = (input: PreviewStreamInput) =>
     webView.current?.injectJavaScript(
-      `window.T3PreviewStream?.command(${JSON.stringify(input)}); true;`,
+      `window.CinderdeckPreviewStream?.command(${JSON.stringify(input)}); true;`,
     );
   // Reads here rather than in the screen: a tab switch during the iOS paste prompt unmounts
   // this view and nulls its WebView ref, so the text can never type into another tab.
@@ -278,7 +278,7 @@ function PreviewStreamDocumentView({
     if (!active.current || failed.current) return;
     failed.current = true;
     clearBootstrapTimer();
-    webView.current?.injectJavaScript("window.T3PreviewStream?.stop(); true;");
+    webView.current?.injectJavaScript("window.CinderdeckPreviewStream?.stop(); true;");
     onStreamingChange?.(false);
     setControl(null);
     setFileChooser(null);
@@ -303,7 +303,7 @@ function PreviewStreamDocumentView({
       if (bootstrapTimer.current !== null) clearTimeout(bootstrapTimer.current);
       bootstrapTimer.current = null;
       active.current = false;
-      view?.injectJavaScript("window.T3PreviewStream?.stop(); true;");
+      view?.injectJavaScript("window.CinderdeckPreviewStream?.stop(); true;");
       streamEnded();
     };
   }, []);
@@ -315,7 +315,7 @@ function PreviewStreamDocumentView({
     command,
     paste,
     togglePictureInPicture: () =>
-      webView.current?.injectJavaScript("window.T3PreviewStream?.pictureInPicture(); true;"),
+      webView.current?.injectJavaScript("window.CinderdeckPreviewStream?.pictureInPicture(); true;"),
   }));
   const processTerminated = () => {
     if (!active.current || failed.current) return;
@@ -405,7 +405,7 @@ function PreviewStreamDocumentView({
                 onPictureInPicture?.(message, message.detail);
                 return;
               case "status":
-                clearBootstrapTimer();
+                if (message.status !== "connecting") clearBootstrapTimer();
                 if (message.status === "error") {
                   fail(message.detail ?? "Browser stream failed.");
                   return;

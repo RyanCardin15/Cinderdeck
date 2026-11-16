@@ -15,11 +15,13 @@ it("removes URL credentials, query parameters, and fragments from error transpor
 });
 
 it.each([
-  ["git@github.com:T3Tools/t3code.git", "T3Tools/t3code"],
-  ["github.com:T3Tools/t3code.git", "T3Tools/t3code"],
-  ["gitlab.com:T3Tools/platform/t3code", "T3Tools/platform/t3code"],
-  ["https://github.com/T3Tools/t3code.git", "T3Tools/t3code"],
-  ["C:/repos/t3code", null],
+  ["git@github.com:CinderdeckTools/cinderdeck.git", "CinderdeckTools/cinderdeck"],
+  ["github.com:CinderdeckTools/cinderdeck.git", "CinderdeckTools/cinderdeck"],
+  ["gitlab.com:CinderdeckTools/platform/cinderdeck", "CinderdeckTools/platform/cinderdeck"],
+  ["https://github.com/CinderdeckTools/cinderdeck.git", "CinderdeckTools/cinderdeck"],
+  ["https://github.com/CinderdeckTools/cinderdeck.git?view=compact", "CinderdeckTools/cinderdeck"],
+  ["https://github.com/CinderdeckTools/cinderdeck.git#section", "CinderdeckTools/cinderdeck"],
+  ["C:/repos/cinderdeck", null],
 ])("reads the repository path of %s", (remoteUrl, expected) => {
   assert.strictEqual(repositoryPathFromRemoteUrl(remoteUrl), expected);
 });

@@ -1,14 +1,14 @@
 # Antigravity
 
-T3 Code runs Google's official Antigravity ACP agent on your selected environment.
-It has its own sign-in, separate from the Antigravity IDE or CLI. Google controls
+Cinderdeck runs Google's official Antigravity ACP agent on your selected environment.
+Cinderdeck manages its own CLI installation and sign-in, separate from your terminal or IDE. Google controls
 which models and account access are available through this agent.
 
 ## Set up Antigravity
 
 On web or desktop, open **Settings > Providers**, choose the environment that runs
 your project, and enable Antigravity. Install its runtime there, then choose
-**Sign in** and complete the browser sign-in. Wait for T3 Code to confirm
+**Sign in** and complete the browser sign-in. Wait for Cinderdeck to confirm
 account access and load models before starting a thread. Once the runtime is installed,
 you can also sign in from **Settings > Providers** in the mobile app.
 
@@ -25,12 +25,12 @@ fail to load because the sign-in listener is on the environment.
 Copy the full return address, including everything after `?`, into the return URL
 field in the client where you started sign-in, then choose
 **Continue**. Keep the original address; do not replace it with the server's
-hostname. Only that T3 Code sign-in session can finish the attempt. If it expires,
+hostname. Only that Cinderdeck sign-in session can finish the attempt. If it expires,
 retry sign-in and use the new link.
 
 The return URL contains a temporary sign-in code. Paste it only into the setup
 field. A successful callback page alone does not confirm account access; wait for
-T3 Code's confirmation.
+Cinderdeck's confirmation.
 
 ### Other sign-in methods
 
@@ -51,20 +51,28 @@ account.
 
 ## Runtime installation
 
-Managed installation supports Apple Silicon macOS, Linux x64 or ARM64, and Windows
-x64 or ARM64. Intel Macs can connect to a supported remote environment. Allow
-several GB of free disk space, especially on Linux.
+Managed installation supports Apple Silicon and Intel macOS, Linux x64 or ARM64
+with glibc or musl, and Windows x64 or ARM64. Allow at least 1.25 GiB of free disk
+space for downloading and staging an update.
 
 ### Use a manual installation
 
-Download the archive for your environment from the [official ACP Registry][registry].
-Extract the ACP executable and its `localharness_external` helper into the same
-directory, at the same version. Make both executable on macOS or Linux; Windows
-uses `.exe` files.
-
-Set **Binary path** to the ACP executable on the environment and update it yourself.
+Install [Antigravity CLI](https://antigravity.google/docs/getting-started) on the environment.
+Set **Binary path** to its `agy` executable and update it yourself.
 Leave the field blank to use the managed runtime, or a compatible executable on
 `PATH` if no managed runtime is installed.
+
+## Update the managed runtime
+
+In web or desktop provider settings, choose **Update Antigravity** when an update
+is available. Cinderdeck checks Google's CLI release channel while provider update checks
+are enabled. Installing or reinstalling also checks that channel. Updates keep
+your profile and existing runtime available if the new release fails validation.
+
+Updating an older 1.4.5 installation migrates it to the native CLI. You may need to
+sign in again after migration. Threads already running finish with their original
+runtime; new sessions use the updated release. Custom binary paths keep using the
+executable you selected.
 
 ## Models and threads
 
@@ -78,21 +86,20 @@ Antigravity creates empty `.gemini/skills` and `.agents/skills` folders in the
 workspace when a session starts. Git does not track empty folders, so they never
 appear in commits.
 
-Use Antigravity's native `/plan` command for planning. T3 Code's separate Plan mode
-is unavailable. Tool approvals follow [Permission modes](./permission-modes.md).
+Use Antigravity's native `/plan` command for planning. Tool approvals follow [Permission modes](./permission-modes.md).
 Questions with fixed choices still need one of the offered answers, even in
 **Full access**.
 
-T3 Code keeps conversation history and file diffs, but Antigravity cannot rewind
+Cinderdeck keeps conversation history and file diffs, but Antigravity cannot rewind
 its conversation. Reverting a thread or editing and resubmitting an earlier turn
 is unavailable. Continue with a follow-up message or start a new thread.
 
 Manual context compaction is unavailable through Antigravity's ACP runtime, even
-though its CLI has `/compact`. Start a new thread when you need a fresh context.
+though its CLI has `/compact`. Send `/clear` when you need a fresh context.
 
 ### Skills and attachments
 
-Put project skills in `.agents/skills`. T3 Code also reads `.gemini/skills` and the
+Put project skills in `.agents/skills`. Cinderdeck also reads `.gemini/skills` and the
 legacy `.agent/skills` directory. Among these project locations, the first copy
 wins in this order: `.gemini/skills`, `.agents/skills`, `.agent/skills`. See
 [commands and skills](./composer.md#commands-and-skills) for invoking them.
@@ -136,11 +143,22 @@ Before removing a managed runtime, disable its instances and cancel any active
 installation. Clear any explicit binary path pointing into that runtime. Removal
 is refused while the runtime is in use.
 
+## Run a native goal
+
+When your Antigravity runtime offers `/goal`, send `/goal` followed by a verifiable
+objective. Antigravity keeps working until it completes the goal or you cancel it.
+If you still use the older 1.4.5 runtime, update Antigravity in provider settings,
+then refresh provider status.
+
+Use Stop to interrupt a running goal, then ask Antigravity to stop pursuing it
+before starting more work. Ordinary follow-ups wait until the running turn ends.
+Cinderdeck does not support Antigravity goal status, pause, resume, or clear commands.
+
 ## Check access and troubleshoot
 
 Open **Usage > Limits** to see the remaining Gemini and shared Claude/GPT allowances
 for Google sign-ins. Each group has separate five-hour and weekly limits and reset
-times. Limits refresh with provider status and include usage outside T3 Code.
+times. Limits refresh with provider status and include usage outside Cinderdeck.
 
 A server restart keeps your Google sign-in. The provider shows the saved account
 until a session, a refresh, or a sign-out reports something new.
@@ -153,5 +171,4 @@ If Google reports `SUBSCRIPTION_REQUIRED`, an account restriction, or a usage li
 follow the provider's message and any retry time. See [Google's account plans][plans]
 for eligibility.
 
-[registry]: https://github.com/agentclientprotocol/registry/blob/main/antigravity-acp/agent.json
 [plans]: https://antigravity.google/docs/plans

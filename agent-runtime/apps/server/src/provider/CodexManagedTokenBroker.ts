@@ -64,7 +64,7 @@ const acquireListener = Effect.gen(function* () {
           )
         )
           throw new Error("Untrusted IPC parent");
-        const directory = await NodeFSP.mkdtemp(NodePath.join(parent, "t3-token-"));
+        const directory = await NodeFSP.mkdtemp(NodePath.join(parent, "cinderdeck-token-"));
         try {
           await NodeFSP.chmod(directory, 0o700);
           const created = await NodeFSP.lstat(directory);

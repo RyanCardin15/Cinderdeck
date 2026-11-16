@@ -14,10 +14,19 @@ import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-import { createMuseSdkHost, createMuseSdkHostEffect, type MuseSdkHost } from "./sdk.ts";
+import {
+  createMuseSdkHost,
+  createMuseSdkHostEffect,
+  MuseSdkError,
+  type MuseSdkHost,
+} from "./sdk.ts";
 import { museModelCapabilities, resolveMuseReasoningEffort } from "./modelCatalog.ts";
 import type { ProviderTextGeneration } from "@cinderdeck/provider-core/server/textGeneration";
-import { investigationUnsupported } from "@cinderdeck/provider-core/server/textGenerationOperations";
+import {
+  generatedThreadTitle,
+  investigationUnsupported,
+  TranscriptionPostProcessingOutput,
+} from "@cinderdeck/provider-core/server/textGenerationOperations";
 import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
@@ -27,7 +36,6 @@ import {
 import {
   sanitizeCommitSubject,
   sanitizePrTitle,
-  sanitizeThreadTitle,
   toJsonSchemaObject,
 } from "@cinderdeck/provider-core/server/textGenerationUtils";
 
@@ -112,7 +120,7 @@ async function generateMuseText(
       await host.connection.command("userInput/cancel", {
         sessionId,
         userInputId: request.userInputId,
-        reason: "T3 Code text generation cannot request user input.",
+        reason: "Cinderdeck text generation cannot request user input.",
       });
     }
   };
@@ -156,7 +164,7 @@ async function generateMuseText(
   });
   host.connection.onProtocolError(rejectCompletion);
   host.connection.onServerRequest(async () => {
-    const error = new Error("T3 Code text generation cannot approve interactive requests.");
+    const error = new Error("Cinderdeck text generation cannot approve interactive requests.");
     rejectCompletion(error);
     throw error;
   });
@@ -234,7 +242,7 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
     );
     const response = yield* Effect.gen(function* () {
       // Metadata requests already include their context and do not need checkout configuration.
-      const cwd = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3code-muse-text-" });
+      const cwd = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-muse-text-" });
       const host = yield* Effect.acquireRelease(
         createMuseSdkHostEffect(
           {
@@ -250,16 +258,18 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
         (host: MuseSdkHost) => Effect.promise(() => host.close()),
         { interruptible: true },
       );
-      return yield* Effect.tryPromise((signal) =>
-        generateMuseText(
-          host,
-          cwd,
-          `${input.prompt}\n\nReturn only a JSON object matching this schema, with no markdown fences. Do not use tools or ask questions.\n${jsonSchema}`,
-          modelId,
-          reasoningEffort,
-          signal,
-        ),
-      );
+      return yield* Effect.tryPromise({
+        try: (signal) =>
+          generateMuseText(
+            host,
+            cwd,
+            `${input.prompt}\n\nReturn only a JSON object matching this schema, with no markdown fences. Do not use tools or ask questions.\n${jsonSchema}`,
+            modelId,
+            reasoningEffort,
+            signal,
+          ),
+        catch: (cause) => new MuseSdkError({ operation: "generate text", cause }),
+      });
     }).pipe(
       Effect.scoped,
       Effect.mapError(
@@ -267,7 +277,7 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
           new TextGenerationError({
             operation,
             detail:
-              "Muse Code text generation failed. Check Muse login and availability on this T3 server host.",
+              "Muse Code text generation failed. Check Muse login and availability on this Cinderdeck server host.",
             cause,
           }),
       ),
@@ -338,8 +348,17 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
       ...buildThreadTitlePrompt(input),
       modelSelection: input.modelSelection,
     });
-    return { title: sanitizeThreadTitle(generated.title) };
+    return { title: yield* generatedThreadTitle(generated.title) };
   });
+  const generateTranscriptionPostProcessing: ProviderTextGeneration["generateTranscriptionPostProcessing"] =
+    Effect.fn("MuseTextGeneration.generateTranscriptionPostProcessing")(function* (input) {
+      return yield* runMuseJson({
+        operation: "generateTranscriptionPostProcessing",
+        prompt: input.prompt,
+        outputSchema: TranscriptionPostProcessingOutput,
+        modelSelection: input.modelSelection,
+      });
+    });
   const generateReviewGuide: ProviderTextGeneration["generateReviewGuide"] = () =>
     Effect.fail(investigationUnsupported("generateReviewGuide", "Muse Code"));
   return {
@@ -348,5 +367,6 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
     generateBranchName,
     generateThreadTitle,
     generateReviewGuide,
+    generateTranscriptionPostProcessing,
   } satisfies ProviderTextGeneration;
 });

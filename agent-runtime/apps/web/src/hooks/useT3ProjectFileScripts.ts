@@ -1,25 +1,25 @@
 import {
   T3_PROJECT_FILE_NAME,
   type EnvironmentId,
-  type T3ProjectFile,
-  type T3ProjectFileScript,
+  type CinderdeckProjectFile,
+  type CinderdeckProjectFileScript,
 } from "@cinderdeck/contracts";
-import { parseT3ProjectFile } from "@cinderdeck/shared/t3ProjectFile";
+import { parseT3ProjectFile } from "@cinderdeck/shared/cinderdeckProjectFile";
 
 import { useProjectFileQuery } from "~/components/files/projectFilesQueryState";
 
-const NO_SCRIPTS: ReadonlyArray<T3ProjectFileScript> = [];
+const NO_SCRIPTS: ReadonlyArray<CinderdeckProjectFileScript> = [];
 
-export interface T3ProjectFileState {
+export interface CinderdeckProjectFileState {
   status: "loading" | "missing" | "invalid" | "valid";
-  file: T3ProjectFile | null;
-  scripts: ReadonlyArray<T3ProjectFileScript>;
+  file: CinderdeckProjectFile | null;
+  scripts: ReadonlyArray<CinderdeckProjectFileScript>;
 }
 
 export function useT3ProjectFileState(
   environmentId: EnvironmentId,
   cwd: string | null,
-): T3ProjectFileState {
+): CinderdeckProjectFileState {
   const query = useProjectFileQuery(environmentId, cwd ?? "", T3_PROJECT_FILE_NAME, cwd !== null);
   const contents = query.data && !query.data.truncated ? query.data.contents : null;
   const isPending = query.isPending;
@@ -40,6 +40,6 @@ export function useT3ProjectFileState(
 export function useT3ProjectFileScripts(
   environmentId: EnvironmentId,
   cwd: string | null,
-): ReadonlyArray<T3ProjectFileScript> {
+): ReadonlyArray<CinderdeckProjectFileScript> {
   return useT3ProjectFileState(environmentId, cwd).scripts;
 }

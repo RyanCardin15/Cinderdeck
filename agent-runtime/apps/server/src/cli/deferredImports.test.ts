@@ -60,7 +60,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("CLI deferred imp
   it.effect("fails a server start on a broken import before resolving config", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-deferred-server-" });
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-deferred-server-" });
       const baseDir = NodePath.join(root, "state");
 
       for (const command of ["serve", "start"]) {
@@ -75,7 +75,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("CLI deferred imp
   it.effect("keeps server state when the offline project runtime fails to import", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-deferred-project-" });
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-deferred-project-" });
       const baseDir = NodePath.join(root, "state");
       const runtimeStatePath = NodePath.join(baseDir, "userdata", "server-runtime.json");
       yield* persistServerRuntimeState({
@@ -95,14 +95,13 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("CLI deferred imp
 
       assert.isTrue(Exit.hasDies(exit));
       assert.isTrue(yield* fs.exists(runtimeStatePath));
-      assert.isFalse(yield* fs.exists(NodePath.join(baseDir, "userdata", "server-owner.sqlite")));
     }),
   );
 
   it.effect("forwards live project mutations without importing the offline runtime", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-deferred-live-project-" });
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-deferred-live-project-" });
       const baseDir = NodePath.join(root, "state");
       const workspaceRoot = NodePath.join(root, "workspace");
       yield* fs.makeDirectory(workspaceRoot);

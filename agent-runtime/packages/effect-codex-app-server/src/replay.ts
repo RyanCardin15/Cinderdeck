@@ -187,10 +187,14 @@ function normalizeReplayFrame(value: unknown): unknown {
   ) {
     const params = normalized.params as Record<string, unknown>;
     if (typeof params.clientInfo === "object" && params.clientInfo !== null) {
+      const clientInfo = params.clientInfo as Record<string, unknown>;
+      // Preserve immutable recordings made before the native host owned the client identity.
+      const legacyClient = clientInfo.name === "T3 Code" && clientInfo.title === "T3 Code";
       normalized.params = {
         ...params,
         clientInfo: {
-          ...(params.clientInfo as Record<string, unknown>),
+          ...clientInfo,
+          ...(legacyClient ? { name: "Cinderdeck", title: "Cinderdeck" } : {}),
           version: "<ignored>",
         },
       };
@@ -203,7 +207,20 @@ function normalizeReplayFrame(value: unknown): unknown {
     normalized.params !== null
   ) {
     const params = { ...(normalized.params as Record<string, unknown>) };
-    if (params.approvalPolicy === "never") {
+    // Older recordings used `never` for full access, before MCP prompts were kept interactive.
+    if (
+      params.approvalPolicy === "never" ||
+      stableStringify(params.approvalPolicy) ===
+        stableStringify({
+          granular: {
+            mcp_elicitations: true,
+            request_permissions: false,
+            rules: false,
+            sandbox_approval: false,
+            skill_approval: false,
+          },
+        })
+    ) {
       delete params.approvalPolicy;
     }
     if (
@@ -238,7 +255,7 @@ function recorderThreadConfigKeys(transcript: CodexAppServerReplayTranscript): R
 
 /**
  * `cwd`, `model`, host-supplied MCP servers (machine-local URLs, short-lived
- * authorization headers) and the T3 thread id vary per machine or run, and
+ * authorization headers) and the Cinderdeck thread id vary per machine or run, and
  * recorder-only keys are not the client's.
  */
 function normalizeThreadRequest(frame: unknown, ignoredConfigKeys: ReadonlySet<string>): unknown {

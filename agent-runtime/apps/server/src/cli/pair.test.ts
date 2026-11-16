@@ -34,7 +34,13 @@ import {
   persistServerRuntimeState,
   type PersistedServerRuntimeState,
 } from "../serverRuntimeState.ts";
-import { DevServerNotProxiableError, resolveTailscaleLocalTarget } from "./pair.ts";
+import { resolveHostCliCommand } from "./invocation.ts";
+import {
+  DevServerNotProxiableError,
+  resolveTailscaleLocalTarget,
+  ServePortOccupiedError,
+  TailscaleServeTargetRefusedError,
+} from "./pair.ts";
 
 import packageJson from "../../package.json" with { type: "json" };
 import { buildPairingAppLink } from "@cinderdeck/shared/remote";
@@ -124,7 +130,7 @@ const withDescriptorServer = <A, E, R>(
     (server) => Effect.sync(() => server.close()),
   );
 
-describe("t3 pair", () => {
+describe("cinderdeck pair", () => {
   it.effect("publishes an IPv6-only server through Tailscale Serve when pairing", () =>
     withDescriptorServer(
       (origin) =>
@@ -135,7 +141,7 @@ describe("t3 pair", () => {
             Effect.gen(function* () {
               if (!ChildProcess.isStandardCommand(command))
                 return yield* Effect.die("Unexpected pipeline");
-              if (command.args[0] === "serve") {
+              if (command.args[0] === "serve" && command.args[1] === "--bg") {
                 const target = String(command.args.at(-1));
                 const descriptor = yield* Effect.promise(async () =>
                   (await fetch(new URL("/.well-known/t3/environment", target))).json(),
@@ -161,7 +167,7 @@ describe("t3 pair", () => {
             }),
           );
 
-          const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-ipv6-test-"));
+          const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-pair-ipv6-test-"));
           yield* persistServerRuntimeState({
             path: NodePath.join(baseDir, "userdata", "server-runtime.json"),
             state: yield* makePersistedServerRuntimeState({
@@ -193,10 +199,91 @@ describe("t3 pair", () => {
     ).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
 
+  // The MagicDNS probe fails whenever the host cannot reach its own *.ts.net name,
+  // so it cannot be what decides that the port is free.
+  it.effect(
+    "leaves another app's Serve route alone when the host cannot reach its MagicDNS URL",
+    () =>
+      withDescriptorServer((origin) =>
+        // Another live app on loopback; a dead port's route may be taken back.
+        withDescriptorServer((otherAppOrigin) =>
+          Effect.gen(function* () {
+            const fetch = yield* FetchHttpClient.Fetch;
+            const tailscaleCalls: Array<ReadonlyArray<string>> = [];
+            const spawner = ChildProcessSpawner.make((command) => {
+              const { args } = command as unknown as { readonly args: ReadonlyArray<string> };
+              tailscaleCalls.push(args);
+              const stdout =
+                args[0] === "status"
+                  ? '{"BackendState":"Running","Self":{"DNSName":"host-a.tail.ts.net.","TailscaleIPs":["100.64.0.1"],"CapMap":{"https":null}}}'
+                  : args[0] === "serve" && args[1] === "status"
+                    ? JSON.stringify({
+                        TCP: { "443": { HTTPS: true } },
+                        Web: {
+                          "host-a.tail.ts.net:443": {
+                            Handlers: { "/": { Proxy: otherAppOrigin } },
+                          },
+                        },
+                      })
+                    : "";
+              return Effect.succeed(
+                ChildProcessSpawner.makeHandle({
+                  pid: ChildProcessSpawner.ProcessId(1),
+                  // A recorded takeover fails fast instead of waiting out the HTTPS retries.
+                  exitCode: Effect.succeed(
+                    ChildProcessSpawner.ExitCode(
+                      args[0] === "serve" && args[1] !== "status" ? 1 : 0,
+                    ),
+                  ),
+                  isRunning: Effect.succeed(false),
+                  kill: () => Effect.void,
+                  unref: Effect.succeed(Effect.void),
+                  stdin: Sink.drain,
+                  stdout: Stream.make(new TextEncoder().encode(stdout)),
+                  stderr: Stream.empty,
+                  all: Stream.empty,
+                  getInputFd: () => Sink.drain,
+                  getOutputFd: () => Stream.empty,
+                }),
+              );
+            });
+
+            const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-pair-ts-held-"));
+            yield* persistServerRuntimeState({
+              path: NodePath.join(baseDir, "userdata", "server-runtime.json"),
+              state: yield* makePersistedServerRuntimeState({
+                config: { host: "127.0.0.1", devUrl: undefined },
+                port: Number(new URL(origin).port),
+              }),
+            });
+
+            const exit = yield* runCli(["pair", "--base-dir", baseDir, "--tailscale"]).pipe(
+              Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+              Effect.provideService(HostProcess.Platform, "linux"),
+              Effect.provideService(FetchHttpClient.Fetch, async (input, init) => {
+                if (String(input).startsWith(origin)) return fetch(input, init);
+                throw new TypeError("getaddrinfo ENOTFOUND host-a.tail.ts.net");
+              }),
+              Effect.exit,
+            );
+
+            assert.deepEqual(
+              tailscaleCalls.filter((args) => args[0] === "serve" && args[1] !== "status"),
+              [],
+            );
+            assert.isTrue(Exit.isFailure(exit));
+            if (Exit.isFailure(exit)) {
+              assert.instanceOf(Cause.squash(exit.cause), ServePortOccupiedError);
+            }
+          }),
+        ),
+      ).pipe(Effect.provide(layerCliRuntime)),
+  );
+
   it.effect("mints a token and prints a QR pairing URL for a live server", () =>
     withDescriptorServer((origin) =>
       Effect.gen(function* () {
-        const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-test-"));
+        const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-pair-test-"));
         const port = Number(new URL(origin).port);
         const statePath = NodePath.join(baseDir, "userdata", "server-runtime.json");
         yield* persistServerRuntimeState({
@@ -226,7 +313,7 @@ describe("t3 pair", () => {
           readonly scopes: ReadonlyArray<string>;
         }>;
         assert.equal(credentials.length, 1);
-        assert.equal(credentials[0]?.label, "t3 pair");
+        assert.equal(credentials[0]?.label, "cinderdeck pair");
         assert.deepEqual(credentials[0]?.scopes, AuthStandardClientScopes);
       }),
     ).pipe(
@@ -250,7 +337,7 @@ describe("t3 pair", () => {
   it.effect("pairs through the recorded dev web URL for dev servers", () =>
     withDescriptorServer((origin) =>
       Effect.gen(function* () {
-        const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-dev-test-"));
+        const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-pair-dev-test-"));
         const port = Number(new URL(origin).port);
         const statePath = NodePath.join(baseDir, "dev", "server-runtime.json");
         yield* persistServerRuntimeState({
@@ -271,7 +358,7 @@ describe("t3 pair", () => {
   it.effect("refuses --tailscale before turning on Serve when the policy keeps clients local", () =>
     withDescriptorServer((origin) =>
       Effect.gen(function* () {
-        const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-policy-test-"));
+        const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-pair-policy-test-"));
         const policyPath = NodePath.join(baseDir, "policy.json");
         NodeFS.writeFileSync(
           policyPath,
@@ -315,7 +402,7 @@ describe("t3 pair", () => {
   it.effect("ignores runtime state whose recorded pid is no longer alive", () =>
     withDescriptorServer((origin) =>
       Effect.gen(function* () {
-        const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-pid-test-"));
+        const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck pair pid test-"));
         const statePath = NodePath.join(baseDir, "userdata", "server-runtime.json");
         const state = yield* makePersistedServerRuntimeState({
           config: { host: "127.0.0.1", devUrl: undefined },
@@ -333,7 +420,11 @@ describe("t3 pair", () => {
         const rendered = String(
           typeof error === "object" && error !== null && "cause" in error ? error.cause : error,
         );
-        assert.include(rendered, "No running T3 Code server found.");
+        assert.include(rendered, "No running Cinderdeck server found.");
+        for (const subcommand of ["serve", "connect"]) {
+          const { command } = yield* resolveHostCliCommand(subcommand, ["--base-dir", baseDir]);
+          assert.include(rendered, `\`${command}\``);
+        }
       }),
     ).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
@@ -343,7 +434,7 @@ describe("t3 pair", () => {
   it.effect("does not fall back to the shared home from a linked worktree", () =>
     withDescriptorServer((origin) =>
       Effect.gen(function* () {
-        const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-worktree-test-"));
+        const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-pair-worktree-test-"));
         const worktree = NodePath.join(root, "worktree");
         NodeFS.mkdirSync(worktree);
         NodeFS.writeFileSync(
@@ -369,7 +460,7 @@ describe("t3 pair", () => {
           ),
         );
 
-        assert.include(String(error), "No running T3 Code server found.");
+        assert.include(String(error), "No running Cinderdeck server found.");
         assert.notInclude(String(error), sharedHome);
         assert.deepEqual(NodeFS.readdirSync(NodePath.join(sharedHome, "userdata")), [
           "server-runtime.json",
@@ -385,7 +476,7 @@ describe("t3 pair", () => {
       (origin) =>
         Effect.gen(function* () {
           const baseDir = NodeFS.mkdtempSync(
-            NodePath.join(NodeOS.tmpdir(), "t3-pair-protocol-test-"),
+            NodePath.join(NodeOS.tmpdir(), "cinderdeck-pair-protocol-test-"),
           );
           yield* persistServerRuntimeState({
             path: NodePath.join(baseDir, "userdata", "server-runtime.json"),
@@ -404,7 +495,10 @@ describe("t3 pair", () => {
           ]);
           assert.isTrue(Exit.isFailure(exit));
           if (Exit.isFailure(exit)) {
-            assert.include(String(Cause.squash(exit.cause)), "t3@0.0.45 pair");
+            assert.include(
+              String(Cause.squash(exit.cause)),
+              `cinderdeck@0.0.45 pair --base-dir ${baseDir}`,
+            );
           }
         }),
       "127.0.0.1",
@@ -417,7 +511,7 @@ describe("t3 pair", () => {
   it.effect("explains a tailnet without HTTPS serve instead of running tailscale serve", () =>
     withDescriptorServer((origin) =>
       Effect.gen(function* () {
-        const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-ts-test-"));
+        const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-pair-ts-test-"));
         yield* persistServerRuntimeState({
           path: NodePath.join(baseDir, "userdata", "server-runtime.json"),
           state: yield* makePersistedServerRuntimeState({
@@ -463,6 +557,138 @@ describe("t3 pair", () => {
       }),
     ).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
+
+  // regression: #35517 - the macOS Tailscale apps refuse Serve targets other than
+  // localhost, 127.0.0.1 and ::1, so a specific bind needs an explanation.
+  it.effect("names the bind address when Tailscale refuses it as a Serve target", () =>
+    Effect.gen(function* () {
+      const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-pair-remote-"));
+      yield* persistServerRuntimeState({
+        path: NodePath.join(baseDir, "userdata", "server-runtime.json"),
+        state: yield* makePersistedServerRuntimeState({
+          config: { host: "127.0.0.2", devUrl: undefined },
+          port: 3773,
+        }),
+      });
+      const spawner = ChildProcessSpawner.make((command) => {
+        const { args } = command as unknown as { readonly args: ReadonlyArray<string> };
+        const serve = args[0] === "serve" && args[1] !== "status";
+        return Effect.succeed(
+          ChildProcessSpawner.makeHandle({
+            pid: ChildProcessSpawner.ProcessId(1),
+            exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(serve ? 1 : 0)),
+            isRunning: Effect.succeed(false),
+            kill: () => Effect.void,
+            unref: Effect.succeed(Effect.void),
+            stdin: Sink.drain,
+            stdout: Stream.make(
+              new TextEncoder().encode(
+                serve
+                  ? ""
+                  : args[0] === "status"
+                    ? '{"Self":{"DNSName":"pair-test.tail.ts.net."}}'
+                    : "{}",
+              ),
+            ),
+            stderr: Stream.make(
+              new TextEncoder().encode(
+                serve
+                  ? "Warning: the MacOS extension doesn't support connecting to remote destinations from non-default route\n"
+                  : "",
+              ),
+            ),
+            all: Stream.empty,
+            getInputFd: () => Sink.drain,
+            getOutputFd: () => Stream.empty,
+          }),
+        );
+      });
+
+      const error = yield* provideCliTestLayers(
+        runCli(["pair", "--base-dir", baseDir, "--tailscale"]).pipe(
+          Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+          Effect.provideService(HostProcess.Platform, "darwin"),
+          Effect.provideService(FetchHttpClient.Fetch, async (input) => {
+            if (String(input) === "http://127.0.0.2:3773/.well-known/t3/environment") {
+              return Response.json(testDescriptor);
+            }
+            assert.equal(String(input), "https://pair-test.tail.ts.net/.well-known/t3/environment");
+            return new Response(null, { status: 503 });
+          }),
+          Effect.flip,
+        ),
+      );
+
+      assert.instanceOf(error, TailscaleServeTargetRefusedError);
+      assert.include(String(error), "127.0.0.2");
+    }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+  );
+
+  // regression: #37459 - on Linux without an operator, tailscaled refuses Serve config
+  // from a normal user, and the CLI must say how to fix it.
+  it.effect("explains the operator fix when Tailscale denies the Serve config", () =>
+    Effect.gen(function* () {
+      const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-pair-remote-"));
+      yield* persistServerRuntimeState({
+        path: NodePath.join(baseDir, "userdata", "server-runtime.json"),
+        state: yield* makePersistedServerRuntimeState({
+          config: { host: "127.0.0.1", devUrl: undefined },
+          port: 3773,
+        }),
+      });
+      const spawner = ChildProcessSpawner.make((command) => {
+        const { args } = command as unknown as { readonly args: ReadonlyArray<string> };
+        const serve = args[0] === "serve" && args[1] !== "status";
+        return Effect.succeed(
+          ChildProcessSpawner.makeHandle({
+            pid: ChildProcessSpawner.ProcessId(1),
+            exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(serve ? 1 : 0)),
+            isRunning: Effect.succeed(false),
+            kill: () => Effect.void,
+            unref: Effect.succeed(Effect.void),
+            stdin: Sink.drain,
+            stdout: Stream.make(
+              new TextEncoder().encode(
+                serve
+                  ? ""
+                  : args[0] === "status"
+                    ? '{"Self":{"DNSName":"pair-test.tail.ts.net."}}'
+                    : "{}",
+              ),
+            ),
+            stderr: Stream.make(
+              new TextEncoder().encode(
+                serve
+                  ? "sending serve config: Access denied: serve config denied\n\nUse 'sudo tailscale serve --https=443 --bg http://127.0.0.1:3773'.\nTo not require root, use 'sudo tailscale set --operator=$USER' once.\n"
+                  : "",
+              ),
+            ),
+            all: Stream.empty,
+            getInputFd: () => Sink.drain,
+            getOutputFd: () => Stream.empty,
+          }),
+        );
+      });
+
+      const error = yield* provideCliTestLayers(
+        runCli(["pair", "--base-dir", baseDir, "--tailscale"]).pipe(
+          Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+          Effect.provideService(HostProcess.Platform, "linux"),
+          Effect.provideService(FetchHttpClient.Fetch, async (input) => {
+            if (String(input) === "http://127.0.0.1:3773/.well-known/t3/environment") {
+              return Response.json(testDescriptor);
+            }
+            assert.equal(String(input), "https://pair-test.tail.ts.net/.well-known/t3/environment");
+            return new Response(null, { status: 503 });
+          }),
+          Effect.flip,
+        ),
+      );
+
+      assert.include(String(error), "sudo tailscale set --operator=$USER");
+      assert.notInclude(String(error), "by hand to see why");
+    }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+  );
 });
 
 describe("auth scope options", () => {
@@ -474,7 +700,7 @@ describe("auth scope options", () => {
     ({ group, action }) =>
       Effect.gen(function* () {
         const baseDir = NodeFS.mkdtempSync(
-          NodePath.join(NodeOS.tmpdir(), "t3-cli-auth-scopes-test-"),
+          NodePath.join(NodeOS.tmpdir(), "cinderdeck-cli-auth-scopes-test-"),
         );
         const output = yield* captureStdout(
           runCli([
@@ -524,7 +750,7 @@ describe("auth scope options", () => {
       if (!CliError.isCliError(error) || error._tag !== "ShowHelp") {
         assert.fail(`Expected ShowHelp, got ${String(error)}`);
       }
-      assert.deepEqual(error.commandPath, ["t3", ...command]);
+      assert.deepEqual(error.commandPath, ["cinderdeck", ...command]);
       const scopeError = error.errors[0];
       if (scopeError?._tag !== "InvalidValue") {
         assert.fail(`Expected InvalidValue, got ${String(scopeError?._tag)}`);
@@ -540,7 +766,7 @@ describe("auth pairing create --base-url", () => {
     "rejects %s before issuing a token",
     (baseUrl) =>
       Effect.gen(function* () {
-        const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-cli-base-url-test-"));
+        const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-cli-base-url-test-"));
         const error = yield* runCli([
           "auth",
           "pairing",
@@ -572,7 +798,7 @@ describe("auth pairing create --base-url", () => {
     "prints a pair URL for %s",
     (baseUrl) =>
       Effect.gen(function* () {
-        const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-cli-base-url-test-"));
+        const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-cli-base-url-test-"));
         const output = yield* captureStdout(
           runCli([
             "auth",
@@ -604,7 +830,7 @@ describe("scripted auth output", () => {
     ].map((command) => ({ command, label: command.join(" ") })),
   )("prints only the result for $label after removing an abandoned upload", ({ command }) =>
     Effect.gen(function* () {
-      const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-cli-quiet-test-"));
+      const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-cli-quiet-test-"));
       const attachmentsDir = NodePath.join(baseDir, "userdata", "attachments");
       NodeFS.mkdirSync(attachmentsDir, { recursive: true });
       // An abandoned upload makes config resolution log that it removed it.

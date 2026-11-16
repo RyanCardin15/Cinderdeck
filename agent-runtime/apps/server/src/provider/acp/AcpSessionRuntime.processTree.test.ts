@@ -1,6 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
+import * as NodeModule from "node:module";
 import * as NodePath from "node:path";
 
 import { describe, expect, it, vi } from "@effect/vitest";
@@ -96,10 +97,10 @@ describe("terminatePosixOwnedProcessTree", () => {
       };
       const deadPid = 2_147_483_646;
       const liveForeignPid = 2_147_483_645;
-      const staleEmpty = writeSibling(`t3-acp-${deadPid}-aaaa`, "0");
-      const currentPidSibling = writeSibling(`t3-acp-${process.pid}-bbbb`, "0");
-      const liveForeignSibling = writeSibling(`t3-acp-${liveForeignPid}-cccc`, "0");
-      const stalePopulated = writeSibling(`t3-acp-${deadPid}-dddd`, "1");
+      const staleEmpty = writeSibling(`cinderdeck-acp-${deadPid}-aaaa`, "0");
+      const currentPidSibling = writeSibling(`cinderdeck-acp-${process.pid}-bbbb`, "0");
+      const liveForeignSibling = writeSibling(`cinderdeck-acp-${liveForeignPid}-cccc`, "0");
+      const stalePopulated = writeSibling(`cinderdeck-acp-${deadPid}-dddd`, "1");
       const unrelated = writeSibling("other-lease", "0");
       const isProcessAlive = (pid: number) => pid === process.pid || pid === liveForeignPid;
       try {
@@ -116,7 +117,7 @@ describe("terminatePosixOwnedProcessTree", () => {
         expect(NodeFS.existsSync(liveForeignSibling)).toBe(true);
         expect(NodeFS.existsSync(stalePopulated)).toBe(true);
         expect(NodeFS.existsSync(unrelated)).toBe(true);
-        writeSibling(`t3-acp-${deadPid}-eeee`, null);
+        writeSibling(`cinderdeck-acp-${deadPid}-eeee`, null);
         AcpSessionRuntime.sweepStaleLinuxCgroupSiblings(parent, {
           isProcessAlive,
           readPopulated: (path) => populatedByPath.get(path),
@@ -125,7 +126,7 @@ describe("terminatePosixOwnedProcessTree", () => {
             NodeFS.rmdirSync(path);
           },
         });
-        expect(NodeFS.existsSync(NodePath.join(parent, `t3-acp-${deadPid}-eeee`))).toBe(true);
+        expect(NodeFS.existsSync(NodePath.join(parent, `cinderdeck-acp-${deadPid}-eeee`))).toBe(true);
         expect(NodeFS.existsSync(currentPidSibling)).toBe(true);
       } finally {
         NodeFS.rmSync(parent, { recursive: true, force: true });
@@ -141,7 +142,7 @@ describe("terminatePosixOwnedProcessTree", () => {
       const scratchRoot = NodePath.join(process.cwd(), "tmp");
       NodeFS.mkdirSync(scratchRoot, { recursive: true });
       const scratch = NodeFS.mkdtempSync(NodePath.join(scratchRoot, "acp-cgroup-wrapper-"));
-      const linkedNode = NodePath.join(scratch, "T3 Code AppImage 'quoted'");
+      const linkedNode = NodePath.join(scratch, "Cinderdeck AppImage 'quoted'");
       const bareGrok = NodePath.join(scratch, "grok");
       const relativeBin = NodePath.join(scratch, "relative-bin");
       const directoryBin = NodePath.join(scratch, "directory-bin");
@@ -575,7 +576,7 @@ describe("terminatePosixOwnedProcessTree", () => {
     }),
   );
 
-  it.live("re-admits a still-owned child after PID reuse and never signals the T3 session", () =>
+  it.live("re-admits a still-owned child after PID reuse and never signals the Cinderdeck session", () =>
     Effect.gen(function* () {
       const reused = identity(110, 100, 110, 110, "reused");
       const fixture = makeController({
@@ -811,6 +812,33 @@ describe("terminatePosixOwnedProcessTree", () => {
       expect(fixture.processes.has(111)).toBe(false);
       expect(fixture.processes.has(112)).toBe(false);
     }),
+  );
+
+  it.skipIf(HostProcess.Platform.defaultValue() !== "linux")(
+    "snapshots /proc when a process exits while its entry is being typed",
+    () => {
+      const fs = NodeModule.createRequire(import.meta.url)("node:fs") as typeof NodeFS;
+      const realReaddirSync = fs.readdirSync;
+      // Node lstat()s a dirent of unknown type; a process that exits meanwhile makes it throw.
+      fs.readdirSync = ((path: NodeFS.PathLike, options?: unknown) => {
+        if (path === "/proc" && typeof options === "object" && options !== null) {
+          throw Object.assign(new Error("ENOENT: no such file or directory, lstat '/proc/4563'"), {
+            code: "ENOENT",
+            syscall: "lstat",
+            path: "/proc/4563",
+          });
+        }
+        return Reflect.apply(realReaddirSync, fs, [path, options]);
+      }) as typeof NodeFS.readdirSync;
+      NodeModule.syncBuiltinESMExports();
+      try {
+        const snapshot = AcpSessionRuntime.makePosixProcessTreeController("linux").snapshot();
+        expect(snapshot.some((entry) => entry.pid === process.pid)).toBe(true);
+      } finally {
+        fs.readdirSync = realReaddirSync;
+        NodeModule.syncBuiltinESMExports();
+      }
+    },
   );
 
   it("fails closed where a stable POSIX identity provider is unavailable", () => {

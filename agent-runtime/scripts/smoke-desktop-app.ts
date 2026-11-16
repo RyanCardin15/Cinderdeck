@@ -1,5 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off globalConsole:off
-// Launches a packaged desktop app against a seeded T3 home, opens a thread, and checks its
+// Launches a packaged desktop app against a seeded Cinderdeck home, opens a thread, and checks its
 // messages render. Release jobs run it so a build whose backend or bundle cannot start fails
 // before it is published.
 import * as NodeFS from "node:fs";
@@ -19,16 +19,20 @@ const STEP_TIMEOUT_MS = 60_000;
 const { values } = NodeUtil.parseArgs({
   options: {
     executable: { type: "string" },
+    // An unpackaged app directory for a plain Electron executable, as PR CI runs it.
+    app: { type: "string" },
     "artifacts-dir": { type: "string" },
   },
 });
 const executable = values.executable;
 if (!executable)
-  throw new Error("Usage: smoke-desktop-app.ts --executable <app> [--artifacts-dir <dir>]");
+  throw new Error(
+    "Usage: smoke-desktop-app.ts --executable <app> [--app <dir>] [--artifacts-dir <dir>]",
+  );
 const artifactsDir = NodePath.resolve(values["artifacts-dir"] ?? "desktop-launch-check");
 
-const home = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-desktop-launch-"));
-const t3Home = NodePath.join(home, "t3");
+const home = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-desktop-launch-"));
+const t3Home = NodePath.join(home, "cinderdeck");
 NodeFS.mkdirSync(NodePath.join(t3Home, "userdata"), { recursive: true });
 NodeFS.copyFileSync(FIXTURE_DB, NodePath.join(t3Home, "userdata/statev2.sqlite"));
 
@@ -38,7 +42,7 @@ try {
   app = await _electron.launch({
     executablePath: executable,
     // Linux CI runners do not allow the Chromium sandbox's user namespaces.
-    args: ["--no-sandbox"],
+    args: [...(values.app ? [NodePath.resolve(values.app)] : []), "--no-sandbox"],
     // HOME stays real: on macOS a fake HOME has no login keychain, and safeStorage blocks the
     // main process on a keychain dialog. macOS keeps its Electron profile in the runner's HOME.
     env: {

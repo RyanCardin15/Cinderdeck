@@ -21,7 +21,7 @@ const layer = Layer.mergeAll(
 const setup = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const { process } = yield* SourceControlHost.SourceControlHost;
-  const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-cascade-test-" });
+  const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-cascade-test-" });
   const remote = `${root}/remote.git`;
   const work = `${root}/work`;
   const git = (cwd: string, ...args: string[]) =>
@@ -89,7 +89,7 @@ it.layer(layer)("cascadeRebaseStack", (it) => {
       expect(yield* repo.git("log", "--format=%s", `${bottom}..${top}`)).toBe(
         "B: document the answer",
       );
-    }).pipe(Effect.scoped),
+    }),
   );
 
   it.effect("drops a squash-merged lower layer's commits from the layer above it", () =>
@@ -97,7 +97,7 @@ it.layer(layer)("cascadeRebaseStack", (it) => {
       const repo = yield* setup;
       const fs = yield* FileSystem.FileSystem;
       const { process } = yield* SourceControlHost.SourceControlHost;
-      const scratch = yield* fs.makeTempDirectoryScoped({ prefix: "t3-cascade-squash-" });
+      const scratch = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-cascade-squash-" });
       const run = (...args: string[]) =>
         process
           .run({
@@ -142,7 +142,7 @@ it.layer(layer)("cascadeRebaseStack", (it) => {
       const top = yield* repo.head("feat/on-top");
       expect(yield* repo.git("rev-parse", `${top}~1`)).toBe(yield* repo.head("main"));
       expect(yield* repo.git("log", "--format=%s", `main..${top}`)).toBe("B");
-    }).pipe(Effect.scoped),
+    }),
   );
 
   it.effect("refuses to overwrite a layer pushed after it was reviewed", () =>
@@ -160,7 +160,7 @@ it.layer(layer)("cascadeRebaseStack", (it) => {
       );
       expect(error).toMatchObject({ _tag: "GitHubStackRebaseGitError", number: 2, completed: 1 });
       expect(yield* repo.head("feat/answer-doc")).toBe(repo.layers[1]!.headSha);
-    }).pipe(Effect.scoped),
+    }),
   );
 
   it.effect("stops at a conflicting layer and leaves it untouched", () =>
@@ -168,7 +168,7 @@ it.layer(layer)("cascadeRebaseStack", (it) => {
       const repo = yield* setup;
       const fs = yield* FileSystem.FileSystem;
       const { process } = yield* SourceControlHost.SourceControlHost;
-      const scratch = yield* fs.makeTempDirectoryScoped({ prefix: "t3-cascade-conflict-" });
+      const scratch = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-cascade-conflict-" });
       const run = (...args: string[]) =>
         process.run({
           operation: "test",
@@ -202,6 +202,6 @@ it.layer(layer)("cascadeRebaseStack", (it) => {
         completed: 0,
       });
       expect(yield* repo.head("feat/answer-42")).toBe(repo.layers[0]!.headSha);
-    }).pipe(Effect.scoped),
+    }),
   );
 });

@@ -5,8 +5,10 @@ import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
+import { vi } from "vite-plus/test";
 
 import * as ProcessRunner from "../processRunner.ts";
+import { sourceControlDefinitions } from "../sourceControl/sourceControlDefinitions.ts";
 import * as RepositoryIdentityResolver from "./RepositoryIdentityResolver.ts";
 
 const normalizePathSeparators = (value: string) => value.replaceAll("\\", "/");
@@ -27,11 +29,11 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const cwd = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-repository-identity-test-",
+        prefix: "cinderdeck-repository-identity-test-",
       });
 
       yield* git(cwd, ["init"]);
-      yield* git(cwd, ["remote", "add", "origin", "git@github.com:T3Tools/t3code.git"]);
+      yield* git(cwd, ["remote", "add", "origin", "git@github.com:CinderdeckTools/cinderdeck.git"]);
 
       const resolver = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
       const identity = yield* resolver.resolve(cwd);
@@ -41,12 +43,12 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
       const resolvedCwd = NodeFS.realpathSync.native(cwd);
 
       expect(identity).not.toBeNull();
-      expect(identity?.canonicalKey).toBe("github.com/t3tools/t3code");
+      expect(identity?.canonicalKey).toBe("github.com/t3tools/cinderdeck");
       expect(normalizeResolvedPath(resolvedIdentityRoot)).toBe(normalizeResolvedPath(resolvedCwd));
-      expect(identity?.displayName).toBe("T3Tools/t3code");
+      expect(identity?.displayName).toBe("CinderdeckTools/cinderdeck");
       expect(identity?.provider).toBe("github");
-      expect(identity?.owner).toBe("T3Tools");
-      expect(identity?.name).toBe("t3code");
+      expect(identity?.owner).toBe("CinderdeckTools");
+      expect(identity?.name).toBe("cinderdeck");
       expect(yield* resolver.resolve(path.join(cwd, ".git"))).toBeNull();
     }).pipe(Effect.provide(RepositoryIdentityResolver.layer)),
   );
@@ -55,18 +57,42 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const cwd = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-repository-identity-userless-remote-test-",
+        prefix: "cinderdeck-repository-identity-userless-remote-test-",
       });
 
       yield* git(cwd, ["init"]);
-      yield* git(cwd, ["remote", "add", "origin", "github.com:T3Tools/t3code.git"]);
+      yield* git(cwd, ["remote", "add", "origin", "github.com:CinderdeckTools/cinderdeck.git"]);
 
       const resolver = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
       const identity = yield* resolver.resolve(cwd);
 
-      expect(identity?.canonicalKey).toBe("github.com/t3tools/t3code");
+      expect(identity?.canonicalKey).toBe("github.com/t3tools/cinderdeck");
       expect(identity?.provider).toBe("github");
-      expect(identity?.displayName).toBe("T3Tools/t3code");
+      expect(identity?.displayName).toBe("CinderdeckTools/cinderdeck");
+    }).pipe(Effect.provide(RepositoryIdentityResolver.layer)),
+  );
+
+  it.effect("keeps a literal .git in an Azure DevOps repository name", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const cwd = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "cinderdeck-repository-identity-azure-git-suffix-test-",
+      });
+
+      yield* git(cwd, ["init"]);
+      yield* git(cwd, [
+        "remote",
+        "add",
+        "origin",
+        "https://dev.azure.com/Acme/Platform/_git/Tool.git",
+      ]);
+
+      const resolver = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
+      const identity = yield* resolver.resolve(cwd);
+
+      expect(identity?.displayName).toBe("Acme/Platform/_git/Tool.git");
+      expect(identity?.name).toBe("Tool.git");
+      expect(sourceControlDefinitions.repositorySelector(identity)).toBe("Tool.git");
     }).pipe(Effect.provide(RepositoryIdentityResolver.layer)),
   );
 
@@ -74,12 +100,12 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const cwd = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-repository-identity-partial-clone-test-",
+        prefix: "cinderdeck-repository-identity-partial-clone-test-",
       });
 
       yield* git(cwd, ["init"]);
-      yield* git(cwd, ["remote", "add", "origin", "git@github.com:T3Tools/t3code.git"]);
-      yield* git(cwd, ["remote", "set-url", "--push", "origin", "git@github.com:T3Tools/push.git"]);
+      yield* git(cwd, ["remote", "add", "origin", "git@github.com:CinderdeckTools/cinderdeck.git"]);
+      yield* git(cwd, ["remote", "set-url", "--push", "origin", "git@github.com:CinderdeckTools/push.git"]);
       yield* git(cwd, ["config", "remote.origin.promisor", "true"]);
       yield* git(cwd, ["config", "remote.origin.partialclonefilter", "blob:none"]);
 
@@ -88,37 +114,57 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
 
       const resolver = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
       const identity = yield* resolver.resolve(cwd);
-      expect(identity?.canonicalKey).toBe("github.com/t3tools/t3code");
-      expect(identity?.locator.remoteUrl).toBe("git@github.com:T3Tools/t3code.git");
+      expect(identity?.canonicalKey).toBe("github.com/t3tools/cinderdeck");
+      expect(identity?.locator.remoteUrl).toBe("git@github.com:CinderdeckTools/cinderdeck.git");
       expect(identity?.locator.remoteName).toBe("origin");
     }).pipe(Effect.provide(RepositoryIdentityResolver.layer)),
   );
 
-  it.effect("returns the git top-level root path when resolving from a nested workspace", () =>
+  it.effect("resolves a remote whose URL contains a space", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const repoRoot = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-repository-identity-nested-root-test-",
+      const cwd = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "cinderdeck-repository-identity-spaced-url-test-",
       });
-      const nestedWorkspace = path.join(repoRoot, "packages", "web");
 
-      yield* fileSystem.makeDirectory(nestedWorkspace, { recursive: true });
-      yield* git(repoRoot, ["init"]);
-      yield* git(repoRoot, ["remote", "add", "origin", "git@github.com:T3Tools/t3code.git"]);
+      yield* git(cwd, ["init"]);
+      yield* git(cwd, ["remote", "add", "origin", "ssh://git@git.example.test/team repos/app.git"]);
 
       const resolver = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
-      const identity = yield* resolver.resolve(nestedWorkspace);
-      const resolvedIdentityRoot =
-        identity?.rootPath === undefined ? "" : NodeFS.realpathSync.native(identity.rootPath);
-      const resolvedRepoRoot = NodeFS.realpathSync.native(repoRoot);
-
-      expect(identity).not.toBeNull();
-      expect(identity?.canonicalKey).toBe("github.com/t3tools/t3code");
-      expect(normalizeResolvedPath(resolvedIdentityRoot)).toBe(
-        normalizeResolvedPath(resolvedRepoRoot),
-      );
+      const identity = yield* resolver.resolve(cwd);
+      expect(identity?.locator.remoteUrl).toBe("ssh://git@git.example.test/team repos/app.git");
+      expect(identity?.locator.remoteName).toBe("origin");
     }).pipe(Effect.provide(RepositoryIdentityResolver.layer)),
+  );
+
+  it.effect.each(["repo", "repo "] as const)(
+    "returns the git top-level root path when resolving from a nested workspace in %j",
+    (rootName) =>
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const tempDir = yield* fileSystem.makeTempDirectoryScoped({
+          prefix: "cinderdeck-repository-identity-nested-root-test-",
+        });
+        const repoRoot = path.join(tempDir, rootName);
+        const nestedWorkspace = path.join(repoRoot, "packages", "web");
+
+        yield* fileSystem.makeDirectory(nestedWorkspace, { recursive: true });
+        yield* git(repoRoot, ["init"]);
+        yield* git(repoRoot, ["remote", "add", "origin", "git@github.com:CinderdeckTools/cinderdeck.git"]);
+
+        const resolver = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
+        const identity = yield* resolver.resolve(nestedWorkspace);
+        const resolvedIdentityRoot =
+          identity?.rootPath === undefined ? "" : NodeFS.realpathSync.native(identity.rootPath);
+        const resolvedRepoRoot = NodeFS.realpathSync.native(repoRoot);
+
+        expect(identity).not.toBeNull();
+        expect(identity?.canonicalKey).toBe("github.com/t3tools/cinderdeck");
+        expect(normalizeResolvedPath(resolvedIdentityRoot)).toBe(
+          normalizeResolvedPath(resolvedRepoRoot),
+        );
+      }).pipe(Effect.provide(RepositoryIdentityResolver.layer)),
   );
 
   it.effect.each(["bare clone", "dot-bare"] as const)(
@@ -128,15 +174,15 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const checkout = yield* fileSystem.makeTempDirectoryScoped({
-          prefix: "t3-repository-identity-checkout-",
+          prefix: "cinderdeck-repository-identity-checkout-",
         });
         const root = yield* fileSystem.makeTempDirectoryScoped({
-          prefix: "t3-repository-identity-bare-",
+          prefix: "cinderdeck-repository-identity-bare-",
         });
         const bareGitDir = layout === "dot-bare" ? path.join(root, ".bare") : root;
 
         yield* git(checkout, ["init"]);
-        yield* git(checkout, ["remote", "add", "origin", "git@github.com:T3Tools/t3code.git"]);
+        yield* git(checkout, ["remote", "add", "origin", "git@github.com:CinderdeckTools/cinderdeck.git"]);
         yield* git(root, ["init", "--bare", bareGitDir]);
         if (layout === "dot-bare") {
           yield* fileSystem.writeFileString(path.join(root, ".git"), "gitdir: ./.bare\n");
@@ -147,12 +193,12 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
           "remote",
           "add",
           "origin",
-          "https://github.com/T3Tools/t3code.git",
+          "https://github.com/CinderdeckTools/cinderdeck.git",
         ]);
 
         const resolver = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
         const checkoutIdentity = yield* resolver.resolve(checkout);
-        expect(checkoutIdentity?.canonicalKey).toBe("github.com/t3tools/t3code");
+        expect(checkoutIdentity?.canonicalKey).toBe("github.com/t3tools/cinderdeck");
         const resolvedBareGitDir = NodeFS.realpathSync.native(bareGitDir);
         const projectRoots = layout === "dot-bare" ? [root, bareGitDir] : [root];
 
@@ -182,10 +228,10 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const nonGitDir = yield* fileSystem.makeTempDirectoryScoped({
-          prefix: "t3-repository-identity-non-git-",
+          prefix: "cinderdeck-repository-identity-non-git-",
         });
         const gitDir = yield* fileSystem.makeTempDirectoryScoped({
-          prefix: "t3-repository-identity-no-remote-",
+          prefix: "cinderdeck-repository-identity-no-remote-",
         });
 
         yield* git(gitDir, ["init"]);
@@ -218,10 +264,10 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const localOnlyDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-repository-identity-local-remote-",
+        prefix: "cinderdeck-repository-identity-local-remote-",
       });
       const mixedDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-repository-identity-mixed-remote-",
+        prefix: "cinderdeck-repository-identity-mixed-remote-",
       });
 
       yield* git(localOnlyDir, ["init"]);
@@ -230,14 +276,14 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
       yield* git(localOnlyDir, ["remote", "add", "archive", "file:///srv/git/repo.git"]);
       yield* git(mixedDir, ["init"]);
       yield* git(mixedDir, ["remote", "add", "gb-local", "."]);
-      yield* git(mixedDir, ["remote", "add", "mirror", "git@github.com:T3Tools/t3code.git"]);
+      yield* git(mixedDir, ["remote", "add", "mirror", "git@github.com:CinderdeckTools/cinderdeck.git"]);
 
       const resolver = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
       expect(yield* resolver.resolve(localOnlyDir)).toBeNull();
 
       const mixedIdentity = yield* resolver.resolve(mixedDir);
       expect(mixedIdentity?.locator.remoteName).toBe("mirror");
-      expect(mixedIdentity?.canonicalKey).toBe("github.com/t3tools/t3code");
+      expect(mixedIdentity?.canonicalKey).toBe("github.com/t3tools/cinderdeck");
     }).pipe(Effect.provide(RepositoryIdentityResolver.layer)),
   );
 
@@ -247,34 +293,34 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         const cwd = yield* fileSystem.makeTempDirectoryScoped({
-          prefix: "t3-repository-identity-upstream-test-",
+          prefix: "cinderdeck-repository-identity-upstream-test-",
         });
 
         yield* git(cwd, ["init"]);
-        yield* git(cwd, ["remote", "add", "origin", "git@github.com:julius/t3code.git"]);
+        yield* git(cwd, ["remote", "add", "origin", "git@github.com:julius/cinderdeck.git"]);
         if (change === "replace") {
-          yield* git(cwd, ["remote", "add", "upstream", "git@github.com:T3Tools/previous.git"]);
+          yield* git(cwd, ["remote", "add", "upstream", "git@github.com:CinderdeckTools/previous.git"]);
         }
 
         const resolver = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
         const initialIdentity = yield* resolver.resolve(cwd);
         expect(initialIdentity?.canonicalKey).toBe(
-          change === "add" ? "github.com/julius/t3code" : "github.com/t3tools/previous",
+          change === "add" ? "github.com/julius/cinderdeck" : "github.com/t3tools/previous",
         );
 
         yield* git(cwd, [
           "remote",
           change === "add" ? "add" : "set-url",
           "upstream",
-          "git@github.com:T3Tools/t3code.git",
+          "git@github.com:CinderdeckTools/cinderdeck.git",
         ]);
         expect(yield* resolver.resolve(cwd)).toEqual(initialIdentity);
         const identity = yield* resolver.resolve(cwd, { refresh: true });
 
         expect(identity).not.toBeNull();
         expect(identity?.locator.remoteName).toBe("upstream");
-        expect(identity?.canonicalKey).toBe("github.com/t3tools/t3code");
-        expect(identity?.displayName).toBe("T3Tools/t3code");
+        expect(identity?.canonicalKey).toBe("github.com/t3tools/cinderdeck");
+        expect(identity?.displayName).toBe("CinderdeckTools/cinderdeck");
         expect(yield* resolver.resolve(cwd)).toEqual(identity);
       }).pipe(Effect.provide(RepositoryIdentityResolver.layer)),
   );
@@ -283,23 +329,112 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const cwd = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-repository-identity-fork-test-",
+        prefix: "cinderdeck-repository-identity-fork-test-",
       });
 
       yield* git(cwd, ["init"]);
-      yield* git(cwd, ["remote", "add", "origin", "git@github.com:julius/t3code-fork.git"]);
-      yield* git(cwd, ["remote", "add", "upstream", "git@github.com:T3Tools/t3code.git"]);
+      yield* git(cwd, ["remote", "add", "origin", "git@github.com:julius/cinderdeck-fork.git"]);
+      yield* git(cwd, ["remote", "add", "upstream", "git@github.com:CinderdeckTools/cinderdeck.git"]);
 
       const resolver = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
       const identity = yield* resolver.resolve(cwd);
 
-      expect(identity?.canonicalKey).toBe("github.com/t3tools/t3code");
-      expect(identity?.displayName).toBe("T3Tools/t3code");
+      expect(identity?.canonicalKey).toBe("github.com/t3tools/cinderdeck");
+      expect(identity?.displayName).toBe("CinderdeckTools/cinderdeck");
       expect(identity?.origin).toEqual({
-        canonicalKey: "github.com/julius/t3code-fork",
-        remoteUrl: "git@github.com:julius/t3code-fork.git",
-        displayName: "julius/t3code-fork",
+        canonicalKey: "github.com/julius/cinderdeck-fork",
+        remoteUrl: "git@github.com:julius/cinderdeck-fork.git",
+        displayName: "julius/cinderdeck-fork",
       });
+    }).pipe(Effect.provide(RepositoryIdentityResolver.layer)),
+  );
+
+  it.effect("uses the fork as the identity when gh repo set-default points at it", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const cwd = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "cinderdeck-repository-identity-gh-default-test-",
+      });
+
+      yield* git(cwd, ["init"]);
+      yield* git(cwd, ["remote", "add", "origin", "git@github.com:julius/cinderdeck-fork.git"]);
+      yield* git(cwd, ["remote", "add", "upstream", "git@github.com:CinderdeckTools/cinderdeck.git"]);
+      yield* git(cwd, ["config", "remote.origin.gh-resolved", "base"]);
+
+      const resolver = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
+      const identity = yield* resolver.resolve(cwd);
+
+      expect(identity?.canonicalKey).toBe("github.com/julius/cinderdeck-fork");
+      expect(identity?.locator.remoteName).toBe("origin");
+    }).pipe(Effect.provide(RepositoryIdentityResolver.layer)),
+  );
+
+  it.effect("follows an OWNER/REPO mark only to a remote that fetches that repository", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const cwd = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "cinderdeck-repository-identity-gh-parent-test-",
+      });
+      const resolver = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
+      const resolveFresh = () => resolver.resolve(cwd, { refresh: true });
+
+      yield* git(cwd, ["init"]);
+      yield* git(cwd, ["remote", "add", "fork", "https://github.com/julius/cinderdeck-fork.git"]);
+      yield* git(cwd, ["remote", "add", "main", "https://github.com/CinderdeckTools/cinderdeck.git"]);
+      yield* git(cwd, ["remote", "add", "upstream", "https://github.com/other/cinderdeck.git"]);
+      yield* git(cwd, ["config", "remote.fork.gh-resolved", "t3tools/cinderdeck"]);
+      const parent = yield* resolveFresh();
+      expect(parent?.canonicalKey).toBe("github.com/t3tools/cinderdeck");
+      expect(parent?.locator).toEqual({
+        source: "git-remote",
+        remoteName: "main",
+        remoteUrl: "https://github.com/CinderdeckTools/cinderdeck.git",
+      });
+
+      // No remote fetches the marked repository, and several marks leave gh's choice unknown.
+      yield* git(cwd, ["config", "remote.fork.gh-resolved", "someone/else"]);
+      expect((yield* resolveFresh())?.locator.remoteName).toBe("upstream");
+      yield* git(cwd, ["config", "remote.fork.gh-resolved", "base"]);
+      yield* git(cwd, ["config", "remote.main.gh-resolved", "base"]);
+      expect((yield* resolveFresh())?.locator.remoteName).toBe("upstream");
+
+      // The same path on another HTTPS port is a different server.
+      yield* git(cwd, ["config", "--unset", "remote.fork.gh-resolved"]);
+      yield* git(cwd, ["config", "--unset", "remote.main.gh-resolved"]);
+      yield* git(cwd, ["remote", "add", "backup", "https://ghe.example.com:9443/acme/web.git"]);
+      yield* git(cwd, ["remote", "add", "ghe-fork", "https://ghe.example.com:8443/me/web.git"]);
+      yield* git(cwd, ["remote", "add", "ghe-parent", "https://ghe.example.com:8443/acme/web.git"]);
+      yield* git(cwd, ["config", "remote.ghe-fork.gh-resolved", "acme/web"]);
+      expect((yield* resolveFresh())?.locator.remoteName).toBe("ghe-parent");
+    }).pipe(Effect.provide(RepositoryIdentityResolver.layer)),
+  );
+
+  it.effect("reads the project's gh default when the server inherited GIT_DIR", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const cwd = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "cinderdeck-repository-identity-gh-default-git-dir-",
+      });
+      const other = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "cinderdeck-repository-identity-inherited-git-dir-",
+      });
+
+      yield* git(cwd, ["init"]);
+      yield* git(cwd, ["remote", "add", "origin", "git@github.com:julius/cinderdeck-fork.git"]);
+      yield* git(cwd, ["remote", "add", "upstream", "git@github.com:CinderdeckTools/cinderdeck.git"]);
+      yield* git(cwd, ["config", "remote.origin.gh-resolved", "base"]);
+      yield* git(other, ["init"]);
+      yield* git(other, ["config", "remote.upstream.gh-resolved", "base"]);
+
+      vi.stubEnv("GIT_DIR", path.join(other, ".git"));
+      yield* Effect.addFinalizer(() => Effect.sync(() => vi.unstubAllEnvs()));
+
+      const resolver = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
+      const identity = yield* resolver.resolve(cwd);
+
+      expect(identity?.canonicalKey).toBe("github.com/julius/cinderdeck-fork");
+      expect(identity?.locator.remoteName).toBe("origin");
     }).pipe(Effect.provide(RepositoryIdentityResolver.layer)),
   );
 
@@ -307,20 +442,20 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const cwd = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-repository-identity-nested-group-test-",
+        prefix: "cinderdeck-repository-identity-nested-group-test-",
       });
 
       yield* git(cwd, ["init"]);
-      yield* git(cwd, ["remote", "add", "origin", "git@gitlab.com:T3Tools/platform/t3code.git"]);
+      yield* git(cwd, ["remote", "add", "origin", "git@gitlab.com:CinderdeckTools/platform/cinderdeck.git"]);
 
       const resolver = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
       const identity = yield* resolver.resolve(cwd);
 
       expect(identity).not.toBeNull();
-      expect(identity?.canonicalKey).toBe("gitlab.com/t3tools/platform/t3code");
-      expect(identity?.displayName).toBe("T3Tools/platform/t3code");
-      expect(identity?.owner).toBe("T3Tools");
-      expect(identity?.name).toBe("t3code");
+      expect(identity?.canonicalKey).toBe("gitlab.com/t3tools/platform/cinderdeck");
+      expect(identity?.displayName).toBe("CinderdeckTools/platform/cinderdeck");
+      expect(identity?.owner).toBe("CinderdeckTools");
+      expect(identity?.name).toBe("cinderdeck");
     }).pipe(Effect.provide(RepositoryIdentityResolver.layer)),
   );
 });

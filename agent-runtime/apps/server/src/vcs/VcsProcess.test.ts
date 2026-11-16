@@ -57,7 +57,7 @@ describe("VcsProcess.run", () => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "t3-index-lock-" });
+      const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-index-lock-" });
       const git = (args: readonly string[]) =>
         run({ operation: "test.checkpoint.restore", command: "git", cwd, args });
       yield* git(["init"]);
@@ -92,7 +92,7 @@ describe("VcsProcess.run", () => {
       yield* fs.remove(lock);
       yield* git(restore);
       expect(yield* fs.readFileString(file)).toBe("before\n");
-    }).pipe(provideLive, Effect.provide(NodeServices.layer), Effect.scoped),
+    }).pipe(provideLive, Effect.provide(NodeServices.layer)),
   );
 
   it.effect.each([
@@ -147,6 +147,55 @@ describe("VcsProcess.run", () => {
         const encoded = yield* encodeExitError(error);
         expect(encoded).not.toContain("private");
       }),
+  );
+
+  // Without LANG, macOS Git follows the system language, as in an app launched from Finder.
+  it.effect("reads Git failures in English when Git would follow the system language", () =>
+    Effect.gen(function* () {
+      let attempts = 0;
+      const service = yield* VcsProcess.make.pipe(
+        Effect.provideService(
+          ProcessRunner.ProcessRunner,
+          ProcessRunner.ProcessRunner.of({
+            run: (input) =>
+              Effect.sync(() => {
+                attempts += 1;
+                return {
+                  stdout: "",
+                  stderr:
+                    attempts % 2 === 0
+                      ? ""
+                      : input.env?.LANGUAGE === "C"
+                        ? "fatal: Unable to create '/private/repo/.git/index.lock': File exists.\n"
+                        : "致命錯誤: 無法建立「/private/repo/.git/index.lock」：File exists。\n",
+                  code: ChildProcessSpawner.ExitCode(attempts % 2 === 0 ? 0 : 128),
+                  timedOut: false,
+                  stdoutTruncated: false,
+                  stderrTruncated: false,
+                  stdoutInvalidUtf8: false,
+                  stderrInvalidUtf8: false,
+                };
+              }),
+          }),
+        ),
+      );
+
+      const capture = yield* service
+        .run({
+          ...baseInput,
+          operation: VcsProcess.CHECKPOINT_CAPTURE_OPERATION,
+          args: ["add", "--all"],
+        })
+        .pipe(Effect.exit, Effect.forkChild({ startImmediately: true }));
+      yield* TestClock.adjust("1 second");
+      expect(Exit.isSuccess(yield* Fiber.join(capture))).toBe(true);
+      expect(attempts).toBe(2);
+
+      attempts = 0;
+      const error = yield* Effect.flip(service.run(baseInput));
+      assert.instanceOf(error, VcsProcessExitError);
+      expect(error.detail).toBe(VcsProcess.GIT_INDEX_LOCKED_DETAIL);
+    }),
   );
 
   it.effect.each([
@@ -376,7 +425,7 @@ describe("VcsProcess.run", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const cwd = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-vcs-bare-" });
+      const cwd = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-vcs-bare-" });
       yield* fileSystem.makeDirectory(path.join(cwd, "objects", "info"), { recursive: true });
       yield* fileSystem.makeDirectory(path.join(cwd, "refs", "heads"), { recursive: true });
       yield* fileSystem.writeFileString(path.join(cwd, "HEAD"), "ref: refs/heads/main\n");
@@ -477,7 +526,7 @@ describe("VcsProcess.run", () => {
       const secretArgument = "--token=super-secret-token";
       const error = yield* run({
         operation: "test.spawn",
-        command: "definitely-not-a-t3code-executable",
+        command: "definitely-not-a-cinderdeck-executable",
         args: [secretArgument],
         cwd: process.cwd(),
       }).pipe(Effect.flip);
@@ -485,7 +534,7 @@ describe("VcsProcess.run", () => {
       expect(error).toBeInstanceOf(VcsProcessSpawnError);
       expect(error).toMatchObject({
         operation: "test.spawn",
-        command: "definitely-not-a-t3code-executable",
+        command: "definitely-not-a-cinderdeck-executable",
         argumentCount: 1,
       });
       expect(error).toHaveProperty("cause");

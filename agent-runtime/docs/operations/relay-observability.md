@@ -1,6 +1,6 @@
 # Relay observability
 
-> For maintainers. Using T3 Code? See [docs/user](../user/).
+> For maintainers. Using Cinderdeck? See [docs/user](../user/).
 
 The relay Alchemy stack owns a shared Axiom trace setup:
 
@@ -75,7 +75,7 @@ managed endpoint, and with it the environment. On a forward, `relay.hook.upstrea
 `x-t3-hook-outcome` response header. A held request's delivery records the same on its
 `relay.inbox.deliver` span. The relay sends its own `traceparent` with each forward and drops any a
 sender supplied, and signs each forward (`x-t3-relay-delivery`) so the environment trusts the
-relay's delivery id, receive time and trace context only from the relay, so on environments that export to T3 Connect, the environment's
+relay's delivery id, receive time and trace context only from the relay, so on environments that export to Cinderdeck Connect, the environment's
 `ScheduledTaskService.triggerWebhook` span lands in the same trace. `relay.hook.rate_limit` says which
 budget ran out: `endpoint` or `hook`. `relay.hook.rate_limiter_failed_open` is set when the
 Cloudflare rate limiter was unavailable and the request went through unlimited.
@@ -151,7 +151,7 @@ account limit, which Cloudflare raised to 20,000 calls per 5 minutes in October 
 was about 2,100).
 
 **Traffic dropped.** The Worker is down, a deploy broke it, or spans stopped reaching Axiom. Check
-`https://relay.t3.codes/health` first.
+`https://relay.cinderdeck.codes/health` first.
 
 **Tunnel cleanup stopped / tunnel deletions failing.** Warnings for the five-minute reaper that deletes
 idle Cloudflare tunnels. "Stopped" counts sweeps that finished, so it also fires when every sweep
@@ -203,12 +203,12 @@ request, as they do on the next launch. Leave it out to count real native crashe
 ```
 
 Native crash stacks (`expo.error.source == 'nativeCrash'`) are not symbolicated. On iOS, app frames
-read like `main (T3Code + 19476)`: the offset into the app binary. The build hook uploads that
+read like `main (Cinderdeck + 19476)`: the offset into the app binary. The build hook uploads that
 build's dSYMs to `ios/dsym/<easBuildId>.zip`; download it with an account R2 token, then:
 
 ```sh
 unzip <easBuildId>.zip
-atos -arch arm64 -o T3Code.app.dSYM/Contents/Resources/DWARF/T3Code -l 0x100000000 \
+atos -arch arm64 -o Cinderdeck.app.dSYM/Contents/Resources/DWARF/Cinderdeck -l 0x100000000 \
   $(printf '0x%x' $((0x100000000 + 19476)))
 ```
 
@@ -222,7 +222,7 @@ token needs **Account API Tokens: Edit** on the deploy token. Deploy output show
 it from state, where it is under `__redacted__`:
 
 ```sh
-cd infra/relay && vp exec alchemy state read T3CodeRelay/prod/output
+cd infra/relay && vp exec alchemy state read CinderdeckRelay/prod/output
 ```
 
 Set it as a GitHub Actions secret, for OTA updates, and as an EAS environment variable with

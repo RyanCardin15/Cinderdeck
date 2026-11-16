@@ -35,11 +35,11 @@ const LIST_RESULT: PullRequestListResult = {
       provider: SourceControlProviderKind.make("github"),
       host: "github.com",
       projectId: "project-1" as PullRequestListResult["entries"][number]["projectId"],
-      projectTitle: "t3code",
-      repository: "pingdotgg/t3code",
+      projectTitle: "cinderdeck",
+      repository: "pingdotgg/cinderdeck",
       number: 1,
       title: "Add a pull requests page",
-      url: "https://github.com/pingdotgg/t3code/pull/1",
+      url: "https://github.com/RyanCardin15/Cinderdeck/pull/1",
       author: { login: "octocat", name: null, avatarUrl: null },
       headBranch: "feat/page",
       baseBranch: "main",
@@ -56,7 +56,7 @@ const LIST_RESULT: PullRequestListResult = {
   ],
   errors: [],
   truncated: false,
-  nextCursors: { "github.com pingdotgg/t3code": "2026-07-02T00:00:00Z|1|1" },
+  nextCursors: { "github.com pingdotgg/cinderdeck": "2026-07-02T00:00:00Z|1|1" },
 };
 
 describe("PullRequestListResult", () => {
@@ -93,7 +93,7 @@ describe("PullRequestCapabilities", () => {
     };
     const detail = {
       ...LIST_RESULT.entries[0],
-      workspaceRoot: "/workspace/t3code",
+      workspaceRoot: "/workspace/cinderdeck",
       body: "",
       changedFiles: 1,
       mergedAt: null,
@@ -104,7 +104,7 @@ describe("PullRequestCapabilities", () => {
       capabilities: {
         ...base,
         actions: options.actions,
-        mergeMethods: ["squash", "fast-forward", "merge"],
+        mergeMethods: ["squash", "semi-linear", "merge"],
         updateMethods: options.updateMethods,
         review: { ...base.review, verdicts: options.verdicts },
       },

@@ -1,3 +1,4 @@
+import * as PlatformNodeCrypto from "@effect/platform-node/NodeCrypto";
 import { describe, expect, it } from "@effect/vitest";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- Effect's Crypto has no generateKeyPairSync.
 import * as NodeCrypto from "node:crypto";
@@ -56,7 +57,7 @@ const relayProof = Effect.fn("relayProof")(function* (claims: {
     typ: RELAY_HOOK_DELIVERY_TYP,
     payload: {
       iss: relayIssuer,
-      aud: `t3-env:${environmentId}`,
+      aud: `cinderdeck-env:${environmentId}`,
       sub: environmentId,
       jti: `proof:${claims.deliveryId}`,
       iat: now,
@@ -66,7 +67,7 @@ const relayProof = Effect.fn("relayProof")(function* (claims: {
       receivedAt: claims.receivedAt,
       hookId: claims.hookId,
     },
-  });
+  }).pipe(Effect.provide(PlatformNodeCrypto.layerSignature));
 });
 
 const handlerFor = (
@@ -101,7 +102,7 @@ const handlerFor = (
           Layer.provideMerge(Etag.layerWeak),
         ),
       ),
-      Layer.provide(NodeServices.layer),
+      Layer.provide([NodeServices.layer, PlatformNodeCrypto.layerSignature]),
     ),
     { disableLogger: true },
   );
@@ -164,7 +165,7 @@ describe("webhook route", () => {
     }),
   );
 
-  it.live("trusts no relay headers on an environment not linked to T3 Connect", () =>
+  it.live("trusts no relay headers on an environment not linked to Cinderdeck Connect", () =>
     Effect.gen(function* () {
       const received: Array<WebhookTriggerRequest> = [];
       const { handler, dispose } = handlerFor((request) => {

@@ -111,6 +111,16 @@ function clientRequestId(frame: unknown): number | undefined {
 }
 
 function withRequestId(expected: unknown, actual: unknown): unknown {
+  // Match the original recording without changing its pre-native-host display identity.
+  if (isRecord(expected) && expected.method === "initialize" && isRecord(expected.params)) {
+    const clientInfo = expected.params.clientInfo;
+    if (isRecord(clientInfo) && clientInfo.name === "t3_code" && clientInfo.title === "T3 Code") {
+      expected = {
+        ...expected,
+        params: { ...expected.params, clientInfo: { ...clientInfo, title: "Cinderdeck" } },
+      };
+    }
+  }
   const actualId = clientRequestId(actual);
   return isRecord(expected) && clientRequestId(expected) !== undefined && actualId !== undefined
     ? { ...expected, id: actualId }
@@ -337,7 +347,7 @@ class MuseReplayController {
       if (host === undefined) return emitted;
       this.cursor += 1;
       emitted = true;
-      // Output a host wrote after T3 released it was never observed.
+      // Output a host wrote after Cinderdeck released it was never observed.
       if (!host.open) continue;
       const frame = entry.frame;
       // Responses carry the client's request id; server requests carry their own.

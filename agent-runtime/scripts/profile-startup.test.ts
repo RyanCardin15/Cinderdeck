@@ -35,7 +35,7 @@ const decodeRunner = Schema.decodeUnknownSync(
 );
 
 it("attributes ESM and CommonJS imports without changing module execution", () => {
-  const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-startup-profile-"));
+  const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-startup-profile-"));
   try {
     NodeFS.writeFileSync(NodePath.join(directory, "package.json"), '{"type":"module"}');
     const fixtures = {
@@ -107,7 +107,7 @@ it("attributes ESM and CommonJS imports without changing module execution", () =
 });
 
 it("captures only the dev runner and preserves its exit status", () => {
-  const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-startup-launcher-"));
+  const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-startup-launcher-"));
   try {
     NodeFS.mkdirSync(NodePath.join(directory, "scripts"));
     NodeFS.writeFileSync(

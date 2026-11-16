@@ -42,6 +42,7 @@ function report(
   terminal?: {
     readonly outcome: DesktopUpdateStatusReport["outcome"];
     readonly reason?: string;
+    readonly preparedRequestId?: string;
   },
 ): DesktopUpdateStatusReport {
   return {
@@ -50,6 +51,9 @@ function report(
     requestId,
     ...(terminal?.outcome === undefined ? {} : { outcome: terminal.outcome }),
     ...(terminal?.reason === undefined ? {} : { reason: terminal.reason }),
+    ...(terminal?.preparedRequestId === undefined
+      ? {}
+      : { preparedRequestId: terminal.preparedRequestId }),
     state,
   };
 }
@@ -65,7 +69,7 @@ const makeHarness = Effect.fn("test.make_desktop_app_update_harness")(function* 
   options: HarnessOptions = {},
 ) {
   const fs = yield* FileSystem.FileSystem;
-  const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-desktop-app-update-test-" });
+  const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-desktop-app-update-test-" });
   const requestIdDeferred = yield* Deferred.make<string>();
   const baseConfig = yield* ServerConfig.ServerConfig.pipe(
     Effect.provide(ServerConfig.layerTest(process.cwd(), baseDir)),
@@ -130,6 +134,28 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("desktop app upda
 
       const retry = yield* service.run(() => Effect.void).pipe(Effect.flip);
       expect(retry.reason).not.toBe("A desktop app update is already in progress.");
+    }),
+  );
+
+  it.effect("commits the original preparation when a retry joins its downloaded update", () =>
+    Effect.gen(function* () {
+      const { service } = yield* makeHarness({
+        reports: (requestId) => [
+          report(requestId, makeState({ status: "downloaded", downloadedVersion: "1.2.4" }), {
+            outcome: "ready-to-install",
+            preparedRequestId: "original-preparation",
+          }),
+          report("original-preparation", makeState({ status: "downloaded" }), {
+            outcome: "failed",
+            reason: "installer refused",
+          }),
+        ],
+      });
+      const prepared = yield* service.run(() => Effect.void);
+      expect(prepared.desktopUpdateToken).toBe("original-preparation");
+      expect(
+        (yield* service.commit(prepared.desktopUpdateToken ?? "missing").pipe(Effect.flip)).reason,
+      ).toBe("installer refused");
     }),
   );
 

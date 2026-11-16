@@ -16,15 +16,16 @@ import * as TestClock from "effect/testing/TestClock";
 
 import * as SourceControlRepositoryService from "../sourceControl/SourceControlRepositoryService.ts";
 import * as ProjectCloneTracker from "./ProjectCloneTracker.ts";
+import { ProjectConflictError } from "./ProjectService.ts";
 import { parseGitCloneProgressLine } from "./gitCloneProgress.ts";
 
 const projectId = ProjectId.make("project-1");
 const startInput = {
   projectId,
-  title: "t3code",
+  title: "cinderdeck",
   createdAt: "2026-01-01T00:00:00.000Z",
-  remoteUrl: "git@github.com:octocat/t3code.git",
-  destinationPath: "/workspace/t3code",
+  remoteUrl: "git@github.com:octocat/cinderdeck.git",
+  destinationPath: "/workspace/cinderdeck",
 };
 
 function makeHarness(options?: {
@@ -89,8 +90,8 @@ describe("ProjectCloneTracker", () => {
       yield* Effect.yieldNow;
 
       const result = yield* tracker.start(startInput, harness.hooks);
-      expect(result.cwd).toBe("/workspace/t3code");
-      expect(harness.created).toEqual([{ projectId, workspaceRoot: "/workspace/t3code" }]);
+      expect(result.cwd).toBe("/workspace/cinderdeck");
+      expect(harness.created).toEqual([{ projectId, workspaceRoot: "/workspace/cinderdeck" }]);
 
       yield* Effect.yieldNow;
       const running = yield* tracker.get(projectId);
@@ -175,7 +176,7 @@ describe("ProjectCloneTracker", () => {
       expect(failed).toMatchObject({ phase: "failed", error: "fatal: repository not found" });
 
       expect(yield* tracker.retry(projectId)).toBe(true);
-      expect(harness.discarded).toEqual(["/workspace/t3code"]);
+      expect(harness.discarded).toEqual(["/workspace/cinderdeck"]);
       yield* Effect.yieldNow;
       expect((yield* tracker.get(projectId))?.phase).toBe("done");
       expect(protocols).toEqual(["ssh", "ssh"]);
@@ -191,7 +192,7 @@ describe("ProjectCloneTracker", () => {
 
       expect(yield* tracker.cancel(projectId)).toBe(true);
       expect((yield* tracker.get(projectId))?.phase).toBe("cancelled");
-      expect(harness.discarded).toEqual(["/workspace/t3code"]);
+      expect(harness.discarded).toEqual(["/workspace/cinderdeck"]);
       expect(yield* tracker.cancel(projectId)).toBe(false);
       expect(yield* tracker.retry(projectId)).toBe(true);
     }).pipe(Effect.provide(harness.layer));
@@ -230,8 +231,8 @@ describe("ProjectCloneTracker", () => {
           prepareClone: (input) =>
             Effect.succeed({
               destinationPath: input.destinationPath,
-              remoteUrl: "https://github.com/octocat/t3code.git",
-              cloneUrl: "https://user:s3cret@github.com/octocat/t3code.git",
+              remoteUrl: "https://github.com/octocat/cinderdeck.git",
+              cloneUrl: "https://user:s3cret@github.com/octocat/cinderdeck.git",
               repository: null,
             }),
           cloneRepository: (input) =>
@@ -247,8 +248,8 @@ describe("ProjectCloneTracker", () => {
       const tracker = yield* ProjectCloneTracker.ProjectCloneTracker;
       const result = yield* tracker.start(startInput, harness.hooks);
       yield* Effect.yieldNow;
-      expect(result.remoteUrl).toBe("https://github.com/octocat/t3code.git");
-      expect(cloneUrls).toEqual(["https://user:s3cret@github.com/octocat/t3code.git"]);
+      expect(result.remoteUrl).toBe("https://github.com/octocat/cinderdeck.git");
+      expect(cloneUrls).toEqual(["https://user:s3cret@github.com/octocat/cinderdeck.git"]);
     }).pipe(Effect.provide(layer));
   });
 
@@ -260,7 +261,7 @@ describe("ProjectCloneTracker", () => {
       yield* Effect.yieldNow;
       yield* tracker.discard(projectId);
       expect(yield* tracker.get(projectId)).toBeNull();
-      expect(harness.discarded).toEqual(["/workspace/t3code"]);
+      expect(harness.discarded).toEqual(["/workspace/cinderdeck"]);
     }).pipe(Effect.provide(harness.layer));
   });
 
@@ -279,6 +280,35 @@ describe("ProjectCloneTracker", () => {
       yield* tracker.start(startInput, harness.hooks);
       yield* Effect.yieldNow;
       expect((yield* tracker.get(projectId))?.phase).toBe("done");
+    }).pipe(Effect.provide(harness.layer));
+  });
+
+  it.effect("clones for the project that already owns the empty destination", () => {
+    const owner = ProjectId.make("project-stranded");
+    const harness = makeHarness();
+    const hooks: ProjectCloneTracker.ProjectCloneHooks = {
+      ...harness.hooks,
+      createProject: (input) =>
+        Effect.fail(
+          new ProjectConflictError({
+            projectId: input.projectId,
+            workspaceRoot: input.workspaceRoot,
+            conflictingProjectId: owner,
+          }),
+        ),
+    };
+    return Effect.gen(function* () {
+      const tracker = yield* ProjectCloneTracker.ProjectCloneTracker;
+      const result = yield* tracker.start(startInput, hooks);
+      expect(result.projectId).toBe(owner);
+      yield* Effect.yieldNow;
+      expect(yield* tracker.get(owner)).toMatchObject({
+        projectId: owner,
+        destinationPath: "/workspace/cinderdeck",
+        phase: "done",
+      });
+      expect(harness.cloned).toEqual([owner]);
+      expect(yield* tracker.get(projectId)).toBeNull();
     }).pipe(Effect.provide(harness.layer));
   });
 
@@ -313,6 +343,9 @@ describe("parseGitCloneProgressLine", () => {
     expect(
       parseGitCloneProgressLine("Receiving objects:  45% (4500/10000), 12.30 MiB | 5.00 MiB/s"),
     ).toEqual({ stage: "receiving", percent: 45, detail: "12.30 MiB | 5.00 MiB/s" });
+    expect(
+      parseGitCloneProgressLine("Receiving objects: 100% (5/5), 40.00 MiB | 1.40 MiB/s, done."),
+    ).toEqual({ stage: "receiving", percent: 100, detail: "40.00 MiB | 1.40 MiB/s" });
     expect(parseGitCloneProgressLine("Resolving deltas: 100% (700/700), done.")).toEqual({
       stage: "resolving",
       percent: 100,
@@ -333,7 +366,7 @@ describe("parseGitCloneProgressLine", () => {
       percent: null,
       detail: null,
     });
-    expect(parseGitCloneProgressLine("Cloning into 't3code'...")).toBeNull();
+    expect(parseGitCloneProgressLine("Cloning into 'cinderdeck'...")).toBeNull();
     expect(parseGitCloneProgressLine("fatal: repository not found")).toBeNull();
   });
 });

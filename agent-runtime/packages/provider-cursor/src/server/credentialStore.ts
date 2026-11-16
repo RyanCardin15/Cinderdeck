@@ -58,8 +58,7 @@ export const makeCursorCredentialStore = Effect.fn("makeCursorCredentialStore")(
         credentials.get.pipe(
           Effect.flatMap(
             Option.match({
-              // @effect-diagnostics-next-line effectSucceedWithVoid:off - The SDK credential API requires undefined, not void.
-              onNone: () => Effect.succeed(undefined),
+              onNone: () => Effect.undefined,
               onSome: (bytes) =>
                 decodeCredentials(new TextDecoder().decode(bytes)).pipe(
                   Effect.orElseSucceed(() => undefined),
@@ -92,7 +91,7 @@ export const makeCursorCredentialStore = Effect.fn("makeCursorCredentialStore")(
   return { store, binding: credentials.binding };
 });
 
-/** The unexpired API key from this instance's T3 sign-in, read without loading the SDK. */
+/** The unexpired API key from this instance's Cinderdeck sign-in, read without loading the SDK. */
 export const readStoredCursorApiKey = Effect.fn("readStoredCursorApiKey")(function* (
   instanceId: ProviderInstanceId,
 ) {

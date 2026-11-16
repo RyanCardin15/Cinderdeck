@@ -16,9 +16,9 @@ export function createDeviceEnvironmentAtoms<R, E>(
     mode: "serial" as const,
     key: ({ environmentId }: { environmentId: string }) => environmentId,
   };
-  // An EAS Simulator start can take minutes; it must not hold up powering off
+  // Starting an Expo Simulator can take minutes; it must not hold up powering off
   // another device or turning device support off, so each device opens in its
-  // own lane. Every EAS start opens the same catalog device, so the thread is
+  // own lane. Every Expo start opens the same catalog device, so the thread is
   // part of the lane too.
   const openConcurrency = {
     mode: "serial" as const,
@@ -117,4 +117,4 @@ export function deviceToolUpdatePolicy(tools: DeviceToolVersions | undefined) {
     : "Required tools are installed automatically when needed. Checking versions does not install or start anything.";
 }
 export const deviceToolUpdateOwnership =
-  "This environment's T3 server chooses device tool versions for itself and its SSH hosts. Update that server to receive newer tool versions; updating only your browser or mobile app does not update a remote server.";
+  "This environment's Cinderdeck server chooses device tool versions for itself and its SSH hosts. Update that server to receive newer tool versions; updating only your browser or mobile app does not update a remote server.";

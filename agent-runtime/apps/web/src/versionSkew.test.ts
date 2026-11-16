@@ -17,16 +17,30 @@ import {
 } from "./versionSkew";
 
 const MISMATCH_HINT =
-  "Version mismatch. Try syncing the client and server to the same T3 Code version.";
+  "Version mismatch. Try syncing the client and server to the same Cinderdeck version.";
 
 describe("versionSkew", () => {
-  it("updates only the proven npm prefix and safely quotes its path", () => {
+  it("updates only the proven install and safely quotes its paths", () => {
     expect(manualServerUpdateCommand("0.0.45", { kind: "npm-global", prefix: "/opt/node" })).toBe(
-      "npm install --global --prefix '/opt/node' t3@0.0.45",
+      "npm install --global --prefix '/opt/node' cinderdeck@0.0.45",
     );
     expect(
       manualServerUpdateCommand("0.0.45", { kind: "npm-global", prefix: "/opt/maria's node" }),
-    ).toBe("npm install --global --prefix '/opt/maria'\\''s node' t3@0.0.45");
+    ).toBe("npm install --global --prefix '/opt/maria'\\''s node' cinderdeck@0.0.45");
+    expect(
+      manualServerUpdateCommand("0.0.45", {
+        kind: "t3-launcher",
+        launcher: "cinderdeck",
+        baseDir: "/home/u/.t3",
+      }),
+    ).toBe("'cinderdeck' update --base-dir '/home/u/.t3' 0.0.45");
+    expect(
+      manualServerUpdateCommand("0.0.45", {
+        kind: "t3-launcher",
+        launcher: "/opt/maria's bin/cinderdeck",
+        baseDir: "/data/cinderdeck home",
+      }),
+    ).toBe("'/opt/maria'\\''s bin/cinderdeck' update --base-dir '/data/cinderdeck home' 0.0.45");
   });
   beforeEach(() => {
     branding.APP_VERSION = "0.0.34";

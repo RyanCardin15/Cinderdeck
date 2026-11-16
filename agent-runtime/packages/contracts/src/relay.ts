@@ -330,7 +330,7 @@ export const RelayEnvironmentLinkRequest = Schema.Struct({
   notificationsEnabled: Schema.Boolean,
   liveActivitiesEnabled: Schema.Boolean,
   managedTunnelsEnabled: Schema.Boolean,
-}).annotate({ description: "Links an authenticated cloud user to a T3 environment." });
+}).annotate({ description: "Links an authenticated cloud user to a Cinderdeck environment." });
 export type RelayEnvironmentLinkRequest = typeof RelayEnvironmentLinkRequest.Type;
 
 export const RelayEnvironmentLinkResponse = Schema.Struct({
@@ -381,7 +381,7 @@ export type RelayEnvironmentEndpointUnavailableReason =
 /**
  * Which part of the path from the relay to the environment failed. `tunnel_down`
  * means Cloudflare has no live connector for the tunnel; `origin_unreachable`
- * means the tunnel answered but T3 Code behind it did not. Optional on the wire
+ * means the tunnel answered but Cinderdeck behind it did not. Optional on the wire
  * so old relays and old clients keep working.
  */
 export const RelayEnvironmentEndpointFailure = Schema.Literals([
@@ -670,7 +670,7 @@ export class RelayEnvironmentPrincipal extends Context.Service<
 const RelayClientBearerAuthorization = HttpApiSecurity.http({ scheme: "bearer" }).pipe(
   HttpApiSecurity.annotate(
     OpenApi.Description,
-    "Clerk session or OAuth bearer token for the signed-in T3 Connect user.",
+    "Clerk session or OAuth bearer token for the signed-in Cinderdeck Connect user.",
   ),
 );
 
@@ -968,7 +968,7 @@ export type RelayT3ChatPlan = typeof RelayT3ChatPlan.Type;
 
 export const DEFAULT_MANAGED_TUNNEL_LIMIT = 3;
 
-// A linked paid T3 Chat plan raises the default managed tunnel cap.
+// A linked paid Cinderdeck Chat plan raises the default managed tunnel cap.
 export const T3CHAT_PLAN_TUNNEL_LIMITS = { pro: 10, premier: 100 } as const;
 
 export const RelayT3ChatLink = Schema.Struct({
@@ -978,10 +978,10 @@ export const RelayT3ChatLink = Schema.Struct({
 export type RelayT3ChatLink = typeof RelayT3ChatLink.Type;
 
 export const RelayT3ChatLinkResponse = Schema.Struct({
-  // False when this relay has no T3 Chat secret, so clients hide the feature.
+  // False when this relay has no Cinderdeck Chat secret, so clients hide the feature.
   available: Schema.Boolean,
   link: Schema.NullOr(RelayT3ChatLink),
-  // A manual cap that replaces the plan's; T3 Chat upgrades do not raise it.
+  // A manual cap that replaces the plan's; Cinderdeck Chat upgrades do not raise it.
   maxTunnelsOverride: Schema.optionalKey(Schema.Number),
 });
 export type RelayT3ChatLinkResponse = typeof RelayT3ChatLinkResponse.Type;
@@ -1139,17 +1139,17 @@ const RelayClientGroup = HttpApiGroup.make("client")
       headers: RelayBearerRequestHeaders,
       success: RelayT3ChatLinkResponse,
       error: RelayAuthAndInternalErrors,
-    }).annotate(OpenApi.Summary, "Get the linked T3 Chat account"),
+    }).annotate(OpenApi.Summary, "Get the linked Cinderdeck Chat account"),
     HttpApiEndpoint.post("createT3ChatLinkRequest", "/v1/client/t3chat-link-requests", {
       headers: RelayBearerRequestHeaders,
       success: RelayT3ChatLinkRequestResponse,
       error: RelayAuthAndInternalErrors,
-    }).annotate(OpenApi.Summary, "Start linking a T3 Chat account"),
+    }).annotate(OpenApi.Summary, "Start linking a Cinderdeck Chat account"),
     HttpApiEndpoint.delete("unlinkT3Chat", "/v1/client/t3chat-link", {
       headers: RelayBearerRequestHeaders,
       success: RelayOkResponse,
       error: RelayAuthAndInternalErrors,
-    }).annotate(OpenApi.Summary, "Unlink the T3 Chat account"),
+    }).annotate(OpenApi.Summary, "Unlink the Cinderdeck Chat account"),
   )
   .annotate(OpenApi.Description, "Cloud-user environment links and registered devices.")
   .middleware(RelayClientAuth);
@@ -1320,10 +1320,10 @@ export const RelayApi = HttpApi.make("RelayApi")
     RelayHooksGroup,
     RelayMobileTelemetryGroup,
   )
-  .annotate(OpenApi.Title, "T3 Code Relay API")
+  .annotate(OpenApi.Title, "Cinderdeck Relay API")
   .annotate(OpenApi.Version, "1.0.0")
   .annotate(
     OpenApi.Description,
-    "Control-plane API for linking T3 environments, connecting authorized clients, and publishing agent activity.",
+    "Control-plane API for linking Cinderdeck environments, connecting authorized clients, and publishing agent activity.",
   );
 export type RelayApi = typeof RelayApi;

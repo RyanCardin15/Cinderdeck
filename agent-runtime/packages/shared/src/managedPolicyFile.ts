@@ -28,7 +28,7 @@ export class ManagedPolicyFileError extends Schema.TaggedError<ManagedPolicyFile
   override readonly [Runtime.errorExitCode] = SERVER_EXIT_CODE_MANAGED_POLICY;
 
   override get message(): string {
-    return `T3 Code cannot use the managed policy at ${this.path}: ${this.reason}. It will not start until an administrator fixes this.`;
+    return `Cinderdeck cannot use the managed policy at ${this.path}: ${this.reason}. It will not start until an administrator fixes this.`;
   }
 }
 
@@ -36,13 +36,13 @@ export class ManagedPolicyFileError extends Schema.TaggedError<ManagedPolicyFile
 export function managedPolicyPath(platform: NodeJS.Platform): string {
   switch (platform) {
     case "darwin":
-      return "/Library/Application Support/T3Code/policy.json";
+      return "/Library/Application Support/Cinderdeck/policy.json";
     case "win32":
       // Not ProgramData, where a user can create the folder first and own it; and not
       // %ProgramFiles%, which a user can point somewhere they write.
-      return "C:\\Program Files\\T3Code\\policy.json";
+      return "C:\\Program Files\\Cinderdeck\\policy.json";
     default:
-      return "/etc/t3code/policy.json";
+      return "/etc/cinderdeck/policy.json";
   }
 }
 
@@ -96,8 +96,8 @@ export const readManagedPolicyFile = Effect.fn("readManagedPolicyFile")(function
 
 /** Where a configuration profile's managed preferences land on macOS. */
 export const MACOS_MANAGED_PREFERENCES_PATH =
-  "/Library/Managed Preferences/com.t3tools.t3code.plist";
-const WINDOWS_POLICY_SUBKEY = "SOFTWARE\\Policies\\T3Tools\\T3Code";
+  "/Library/Managed Preferences/com.ryancardin.cinderdeck.plist";
+const WINDOWS_POLICY_SUBKEY = "SOFTWARE\\Policies\\CinderdeckTools\\Cinderdeck";
 /**
  * The registry key Group Policy and Intune write to on Windows. It holds either the Group Policy
  * template's values, one per control, or a `Policy` string with the whole policy as JSON.
@@ -186,13 +186,15 @@ const ERROR_NO_MORE_ITEMS = 259;
 // Value and key names are at most 16,383 characters.
 const MAX_NAME_CHARS = 16_384;
 
-class Win32Failure extends Error {
-  readonly code: number;
-  constructor(code: number) {
-    super(`Windows error ${code}`);
-    this.code = code;
+class Win32Failure extends Schema.TaggedError<Win32Failure>()("Win32Failure", {
+  code: Schema.Number,
+}) {
+  override get message(): string {
+    return `Windows error ${this.code}`;
   }
 }
+
+const isWin32Failure = Schema.is(Win32Failure);
 
 /**
  * Each app passes how it loads ffi-rs: a server single-executable resolves packages on disk only
@@ -263,7 +265,7 @@ export const layerWindowsRegistry = (loadFfi: () => Promise<typeof import("ffi-r
         const handle = Buffer.alloc(8);
         const opened = api.open(subkey, handle);
         if (opened === ERROR_FILE_NOT_FOUND) return undefined;
-        if (opened !== 0) throw new Win32Failure(opened);
+        if (opened !== 0) throw new Win32Failure({ code: opened });
         const key = handle.readBigInt64LE();
         try {
           const name = Buffer.alloc(MAX_NAME_CHARS * 2);
@@ -285,7 +287,7 @@ export const layerWindowsRegistry = (loadFfi: () => Promise<typeof import("ffi-r
               code = attempt();
             }
             if (code === ERROR_NO_MORE_ITEMS) break;
-            if (code !== 0) throw new Win32Failure(code);
+            if (code !== 0) throw new Win32Failure({ code: code });
             const valueName = name.subarray(0, chars.readUInt32LE() * 2).toString("utf16le");
             const stored = data.subarray(0, bytes.readUInt32LE());
             const valueType = type.readUInt32LE();
@@ -306,7 +308,7 @@ export const layerWindowsRegistry = (loadFfi: () => Promise<typeof import("ffi-r
             chars.writeUInt32LE(MAX_NAME_CHARS);
             const code = api.enumKey(key, index, name, chars);
             if (code === ERROR_NO_MORE_ITEMS) break;
-            if (code !== 0) throw new Win32Failure(code);
+            if (code !== 0) throw new Win32Failure({ code: code });
             subkeys.push(name.subarray(0, chars.readUInt32LE() * 2).toString("utf16le"));
           }
           return { values, subkeys };
@@ -322,7 +324,7 @@ export const layerWindowsRegistry = (loadFfi: () => Promise<typeof import("ffi-r
             try: () => readKey(api, subkey),
             catch: (cause) =>
               new WindowsRegistryError(
-                cause instanceof Win32Failure ? { code: cause.code, cause } : { cause },
+                isWin32Failure(cause) ? { code: cause.code, cause } : { cause },
               ),
           });
         }),
@@ -425,7 +427,7 @@ function windowsPolicyDocument(
     }
     if (Object.hasOwn(WINDOWS_POLICY_GROUPS, value.name)) continue;
     if (!Object.hasOwn(WINDOWS_POLICY_VALUES, value.name)) {
-      return { error: `${value.name} is not a T3 Code policy value` };
+      return { error: `${value.name} is not a Cinderdeck policy value` };
     }
     const field = WINDOWS_POLICY_VALUES[value.name as keyof typeof WINDOWS_POLICY_VALUES];
     if (field.type === "boolean") {
@@ -452,7 +454,7 @@ function windowsPolicyDocument(
   if (Object.keys(document).length === 1) return { document: undefined };
   // The schema would name `["organization"]`, which an admin cannot map to a Group Policy setting.
   if (document.organization === undefined) {
-    return { error: "set the Organization policy whenever another T3 Code policy is set" };
+    return { error: "set the Organization policy whenever another Cinderdeck policy is set" };
   }
   return { document };
 }
@@ -526,7 +528,7 @@ const readPlatformPolicy = Effect.fnUntraced(function* (
               path,
               reason:
                 cause.code === undefined
-                  ? "this T3 Code install cannot load its registry reader; reinstall T3 Code"
+                  ? "this Cinderdeck install cannot load its registry reader; reinstall Cinderdeck"
                   : `the registry cannot be read (${cause.message})`,
               cause,
             }),
@@ -559,11 +561,11 @@ const readPlatformPolicy = Effect.fnUntraced(function* (
       const list = Object.keys(WINDOWS_POLICY_LISTS).find(
         (name) => name.toLowerCase() === subkey.toLowerCase(),
       );
-      if (list === undefined) return yield* refuse(`${subkey} is not a T3 Code policy key`);
+      if (list === undefined) return yield* refuse(`${subkey} is not a Cinderdeck policy key`);
       const checkboxes = yield* readKey(`${WINDOWS_POLICY_SUBKEY}\\${subkey}`);
       if (checkboxes === undefined) continue;
       if (checkboxes.subkeys.length > 0) {
-        return yield* refuse(`${subkey}\\${checkboxes.subkeys[0]} is not a T3 Code policy key`);
+        return yield* refuse(`${subkey}\\${checkboxes.subkeys[0]} is not a Cinderdeck policy key`);
       }
       values.push(...checkboxes.values.map((value) => ({ ...value, key: list })));
     }

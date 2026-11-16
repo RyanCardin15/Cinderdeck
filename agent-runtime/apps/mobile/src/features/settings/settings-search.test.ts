@@ -7,7 +7,7 @@ const SECTIONS = [
   {
     title: "Connections",
     rows: [
-      { id: "account", label: "T3 Account" },
+      { id: "account", label: "Cinderdeck Account" },
       { id: "SettingsEnvironments", label: "Environments" },
     ],
   },
@@ -16,6 +16,7 @@ const SECTIONS = [
     rows: [
       { id: "SettingsAppearance", label: "Appearance" },
       { id: "SettingsKeyboard", label: "Keyboard" },
+      { id: "SettingsVoice", label: "Voice" },
     ],
   },
   {
@@ -47,6 +48,7 @@ describe("filterSettingsSections", () => {
     { query: "appear", expected: [["Interface", ["Appearance"]]] },
     { query: "KEYBOARD", expected: [["Interface", ["Keyboard"]]] },
     { query: "dark mode", expected: [["Interface", ["Appearance"]]] },
+    { query: "microphone", expected: [["Interface", ["Voice"]]] },
     { query: "agent credits", expected: [["Server settings", ["Source control"]]] },
     {
       query: "server settings",

@@ -105,12 +105,12 @@ const FONT_PACKAGES = ["fontconfig", "fonts-liberation"];
 
 const browserSetupCommand = Command.make("setup", { baseDir: baseDirFlag }).pipe(
   Command.withDescription(
-    "Set up this Linux host for T3's browser: allow Chrome's sandbox and install its libraries and fonts.",
+    "Set up this Linux host for Cinderdeck's browser: allow Chrome's sandbox and install its libraries and fonts.",
   ),
   Command.withHandler(({ baseDir }) =>
     Effect.gen(function* () {
       if ((yield* HostProcess.Platform) !== "linux") {
-        return yield* Console.log("Nothing to set up: T3's browser runs as is on this system.");
+        return yield* Console.log("Nothing to set up: Cinderdeck's browser runs as is on this system.");
       }
       const fs = yield* FileSystem.FileSystem;
       const isRoot = (yield* HostProcess.UserId) === 0;
@@ -127,7 +127,14 @@ const browserSetupCommand = Command.make("setup", { baseDir: baseDirFlag }).pipe
           ? new PreviewBrowserHost.PreviewBrowserRootError().message
           : undefined;
 
-      const needsProfile = yield* PreviewBrowserHost.sandboxBlocked;
+      const restricted = yield* PreviewBrowserHost.usernsRestricted;
+      // The kernel can lack a profile that is on disk, as on a host restored from an image,
+      // and only root can read the loaded list, so root reloads it on every run.
+      const needsProfile = isRoot ? restricted : yield* PreviewBrowserHost.sandboxBlocked;
+      const reloadHint =
+        restricted && !isRoot
+          ? `\nIf the browser still reports a blocked sandbox, the AppArmor profile at ${PreviewBrowserHost.APPARMOR_PROFILE_PATH} is not loaded. To load it, run:\n\n  ${setupCommand}\n`
+          : "";
       const browser = yield* installedBrowser(baseDirPath);
       const missing = Option.isSome(browser)
         ? yield* PreviewBrowserHost.missingLibraries(browser.value)
@@ -139,59 +146,70 @@ const browserSetupCommand = Command.make("setup", { baseDir: baseDirFlag }).pipe
         return yield* Console.log(
           rootWarning ??
             (Option.isSome(browser)
-              ? "This host is ready for T3's browser."
-              : "Chrome's sandbox is allowed here. T3's browser installs on first use; if it then reports missing libraries, run this again."),
+              ? "This host is ready for Cinderdeck's browser."
+              : "Chrome's sandbox is allowed here. Cinderdeck's browser installs on first use; if it then reports missing libraries, run this again.") +
+              reloadHint,
         );
       }
 
       if (!isRoot) {
         if (needsProfile) {
           yield* Console.log(
-            `This host blocks the sandbox T3's browser runs in. Setup installs an AppArmor profile at ${PreviewBrowserHost.APPARMOR_PROFILE_PATH} that allows it.`,
+            `This host blocks the sandbox Cinderdeck's browser runs in. Setup installs an AppArmor profile at ${PreviewBrowserHost.APPARMOR_PROFILE_PATH} that allows it.`,
           );
         }
         if (missing.length > 0) {
-          yield* Console.log(`T3's browser is missing ${missing.join(", ")}; setup installs them.`);
+          yield* Console.log(`Cinderdeck's browser is missing ${missing.join(", ")}; setup installs them.`);
         }
         if (needsFonts) {
           yield* Console.log(
-            "T3's browser needs fontconfig and system fonts; setup installs them.",
+            "Cinderdeck's browser needs fontconfig and system fonts; setup installs them.",
           );
         }
         return yield* Console.log(`\nThis needs root. Run:\n\n  ${setupCommand}\n`);
       }
 
       if (needsProfile) {
-        yield* fs
-          .writeFileString(
-            PreviewBrowserHost.APPARMOR_PROFILE_PATH,
-            PreviewBrowserHost.APPARMOR_PROFILE,
-          )
-          .pipe(
-            Effect.mapError(
-              (cause) =>
-                new BrowserSetupStepError({
-                  step: `write ${PreviewBrowserHost.APPARMOR_PROFILE_PATH}`,
-                  detail: cause.message,
-                }),
-            ),
-          );
+        // An existing profile may carry an administrator's edits, so it is reloaded as is.
+        const profileOnDisk = yield* fs
+          .exists(PreviewBrowserHost.APPARMOR_PROFILE_PATH)
+          .pipe(Effect.orElseSucceed(() => false));
+        if (!profileOnDisk) {
+          yield* fs
+            .writeFileString(
+              PreviewBrowserHost.APPARMOR_PROFILE_PATH,
+              PreviewBrowserHost.APPARMOR_PROFILE,
+            )
+            .pipe(
+              Effect.mapError(
+                (cause) =>
+                  new BrowserSetupStepError({
+                    step: `write ${PreviewBrowserHost.APPARMOR_PROFILE_PATH}`,
+                    detail: cause.message,
+                  }),
+              ),
+            );
+        }
         yield* runStep("load the AppArmor profile", "apparmor_parser", [
           "-r",
           PreviewBrowserHost.APPARMOR_PROFILE_PATH,
         ]);
-        yield* Console.log("Allowed Chrome's sandbox for T3's browser.");
+        yield* Console.log(
+          profileOnDisk
+            ? `Reloaded the AppArmor profile at ${PreviewBrowserHost.APPARMOR_PROFILE_PATH} that allows Chrome's sandbox for Cinderdeck's browser.`
+            : `Wrote and loaded the AppArmor profile at ${PreviewBrowserHost.APPARMOR_PROFILE_PATH} that allows Chrome's sandbox for Cinderdeck's browser.`,
+        );
       }
 
       if ((missing.length > 0 || needsFonts) && !hasApt) {
         if (missing.length > 0) {
           yield* Console.log(
-            `T3's browser is missing ${missing.join(", ")}. Install them with your package manager, then run this again.`,
+            `Cinderdeck's browser is missing ${missing.join(", ")}. Install them with your package manager, then run this again.`,
           );
         }
         if (needsFonts) {
           yield* Console.log(
-            "T3's browser needs fontconfig and system fonts. Install them with your package manager, then run this again.",
+            "Cinderdeck's browser needs fontconfig and system fonts. Install them with your package manager, then run this again.",
           );
         }
         return;
@@ -226,16 +244,16 @@ const browserSetupCommand = Command.make("setup", { baseDir: baseDirFlag }).pipe
           );
         }
         yield* Console.log(
-          "Installed the browser's fonts. Restart the T3 server if browser tabs were already open.",
+          "Installed the browser's fonts. Restart the Cinderdeck server if browser tabs were already open.",
         );
       }
 
-      yield* Console.log(rootWarning ?? "This host is ready for T3's browser.");
+      yield* Console.log(rootWarning ?? "This host is ready for Cinderdeck's browser.");
     }),
   ),
 );
 
 export const browserCommand = Command.make("browser").pipe(
-  Command.withDescription("Manage T3's headless browser on this host."),
+  Command.withDescription("Manage Cinderdeck's headless browser on this host."),
   Command.withSubcommands([browserSetupCommand]),
 );

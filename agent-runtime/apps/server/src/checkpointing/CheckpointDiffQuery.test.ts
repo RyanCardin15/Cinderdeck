@@ -206,7 +206,7 @@ it.effect("shares the turn and full-thread diff budget across real Git batches",
     const path = yield* Path.Path;
     const process = yield* VcsProcess.VcsProcess;
     const store = yield* CheckpointStore.CheckpointStore;
-    const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "t3-diff-aggregate-" });
+    const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-diff-aggregate-" });
     const git = (args: ReadonlyArray<string>, env?: NodeJS.ProcessEnv) =>
       process.run({
         operation: "CheckpointDiffQuery.test.git",
@@ -300,7 +300,7 @@ it.effect("shares the turn and full-thread diff budget across real Git batches",
       turnPatchSizes.reduce((sum, size) => sum + size, 0),
       10_000_001,
     );
-  }).pipe(Effect.provide(layerTest), Effect.scoped),
+  }).pipe(Effect.provide(layerTest)),
 );
 
 it.effect("truncates a storage-cut UTF-8 character without replacement text", () => {

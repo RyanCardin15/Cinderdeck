@@ -114,7 +114,7 @@ const withRepository = <A, E>(
   Effect.gen(function* () {
     const host = yield* SourceControlHost.SourceControlHost;
     const cwd = yield* Effect.acquireRelease(
-      Effect.sync(() => NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-gitlab-template-"))),
+      Effect.sync(() => NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-gitlab-template-"))),
       (directory) => Effect.sync(() => NodeFS.rmSync(directory, { recursive: true, force: true })),
     );
     const git = (...args: string[]) =>

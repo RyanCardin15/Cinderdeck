@@ -1,12 +1,12 @@
 import ExpoModulesCore
 import UIKit
 
-enum T3ComposerClipboard {
+enum CinderdeckComposerClipboard {
   static let fragmentType = "app.t3.context-fragment"
 
   // Pasted thread links become chips in JS; packages/shared/src/threadLinks.ts parses them.
   static func hasThreadLink(_ text: String) -> Bool {
-    text.contains("t3-thread://v2/") || text.contains("https://app.t3.codes/threads/")
+    text.contains("t3-thread://v2/") || text.contains("https://app.cinderdeck.codes/threads/")
   }
 
   static func write(text: String, fragment: String) {
@@ -47,7 +47,7 @@ public class T3ComposerEditorModule: Module {
   @JS
   @MainActor
   func writeContextClipboard(text: String, fragment: String) async {
-    T3ComposerClipboard.write(text: text, fragment: fragment)
+    CinderdeckComposerClipboard.write(text: text, fragment: fragment)
   }
 
   public func definition() -> ModuleDefinition {
@@ -131,6 +131,9 @@ public class T3ComposerEditorModule: Module {
       }
       AsyncFunction("setSelection") { (view: T3ComposerEditorView, start: Int, end: Int) in
         view.setSelection(start: start, end: end)
+      }
+      AsyncFunction("readState") { (view: T3ComposerEditorView) -> [String: Any] in
+        view.readState()
       }
     }
   }

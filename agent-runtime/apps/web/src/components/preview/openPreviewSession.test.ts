@@ -39,7 +39,7 @@ const snapshot: PreviewSessionSnapshot = {
   tabId: "tab-1",
   navStatus: {
     _tag: "Loading",
-    url: "https://t3.chat/",
+    url: "https://cinderdeck.chat/",
     title: "",
   },
   canGoBack: false,
@@ -71,7 +71,7 @@ describe("openPreviewSession", () => {
         browserProfiles: [{ id: "work", name: "Work", kind: "persistent" }],
       });
       const openPreview = vi.fn(async () => AsyncResult.success(snapshot));
-      const input = { openPreview, threadRef, url: "https://t3.chat/" };
+      const input = { openPreview, threadRef, url: "https://cinderdeck.chat/" };
       const open = entryPoint === "session" ? openPreviewSession : openUrlInPreview;
 
       const result = await open(input);
@@ -97,6 +97,30 @@ describe("openPreviewSession", () => {
       });
     },
   );
+
+  it.each(["new tab", "link"] as const)(
+    "opens a server tab from a %s with the default zoom and appearance",
+    async (entryPoint) => {
+      __setClientSettingsForTests({
+        ...DEFAULT_CLIENT_SETTINGS,
+        browserDefaultZoomFactor: 0.8,
+        browserDefaultAppearance: "dark",
+      });
+      const openPreview = vi.fn(async () => AsyncResult.success(snapshot));
+
+      if (entryPoint === "link") {
+        vi.spyOn(previewRuntime, "previewRuntimeFor").mockReturnValue("server");
+        await openUrlInPreview({ openPreview, threadRef, url: "https://cinderdeck.chat/" });
+      } else {
+        await openPreviewSession({ openPreview, threadRef, runtime: "server" });
+      }
+
+      expect(openPreview).toHaveBeenCalledExactlyOnceWith({
+        environmentId: threadRef.environmentId,
+        input: expect.objectContaining({ runtime: "server", zoomFactor: 0.8, colorScheme: "dark" }),
+      });
+    },
+  );
 });
 
 describe("openUrlInPreview from a link", () => {
@@ -113,7 +137,7 @@ describe("openUrlInPreview from a link", () => {
       });
 
       if (entryPoint === "link") {
-        await openUrlInPreview({ openPreview, threadRef: sideChatRef, url: "https://t3.chat/" });
+        await openUrlInPreview({ openPreview, threadRef: sideChatRef, url: "https://cinderdeck.chat/" });
       } else {
         await openFileInPreview({
           threadRef: sideChatRef,
@@ -148,7 +172,7 @@ describe("openUrlInPreview from a link", () => {
     await openUrlInPreview({
       openPreview: async () => AsyncResult.success(snapshot),
       threadRef,
-      url: "https://t3.chat/",
+      url: "https://cinderdeck.chat/",
       background: true,
     });
 
@@ -169,7 +193,7 @@ describe("openUrlInPreview from a link", () => {
         return AsyncResult.success(snapshot);
       },
       threadRef,
-      url: "https://t3.chat/",
+      url: "https://cinderdeck.chat/",
       background: true,
     });
 

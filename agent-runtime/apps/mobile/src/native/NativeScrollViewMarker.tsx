@@ -14,9 +14,9 @@ export const NativeScrollEdgeEffectsContext = createContext<ScrollEdgeEffects>(u
 function resolveScrollEdgeBleed() {
   try {
     const module = requireOptionalNativeModule<{
-      readonly ViewPrototypes?: { readonly T3NativeControls_ScrollEdgeBleed?: unknown };
+      readonly ViewPrototypes?: { readonly CinderdeckNativeControls_ScrollEdgeBleed?: unknown };
     }>("T3NativeControls");
-    if (!module?.ViewPrototypes?.T3NativeControls_ScrollEdgeBleed) return null;
+    if (!module?.ViewPrototypes?.CinderdeckNativeControls_ScrollEdgeBleed) return null;
     return requireNativeView<ViewProps>("T3NativeControls", "ScrollEdgeBleed");
   } catch {
     return null;

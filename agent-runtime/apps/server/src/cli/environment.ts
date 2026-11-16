@@ -38,7 +38,7 @@ const runWithPeerLinks = Effect.fn("environment.runWithPeerLinks")(function* <A,
         Layer.provide(
           Layer.mergeAll(
             ServerSecretStore.layer,
-            SqlitePersistence.layerConfig,
+            SqlitePersistence.layerCliConfig,
             FetchHttpClient.layer,
           ),
         ),
@@ -48,7 +48,7 @@ const runWithPeerLinks = Effect.fn("environment.runWithPeerLinks")(function* <A,
             Layer.provide(
               Layer.mergeAll(
                 ServerSecretStore.layer,
-                SqlitePersistence.layerConfig,
+                SqlitePersistence.layerCliConfig,
                 ManagedPolicy.layer,
               ),
             ),
@@ -86,7 +86,7 @@ const environmentLinkCommand = Command.make("link", {
   ...authLocationFlags,
   url: Argument.String("url").pipe(
     Argument.withDescription(
-      "Where the other environment answers: its T3 Connect, Tailscale, LAN or loopback address.",
+      "Where the other environment answers: its Cinderdeck Connect, Tailscale, LAN or loopback address.",
     ),
   ),
   alternateUrl: Flag.String("url").pipe(
@@ -94,7 +94,7 @@ const environmentLinkCommand = Command.make("link", {
     Flag.atLeast(0),
   ),
   pairingCode: Flag.String("pairing-code").pipe(
-    Flag.withDescription("A pairing code from the other environment (`t3 pair` there)."),
+    Flag.withDescription("A pairing code from the other environment (`cinderdeck pair` there)."),
   ),
   access: Flag.Literals("access", AuthMcpClientAccess.literals).pipe(
     Flag.withDescription(
@@ -104,7 +104,7 @@ const environmentLinkCommand = Command.make("link", {
   ),
 }).pipe(
   Command.withDescription(
-    "Link another T3 Code environment, so agents here can work there. It shows up there under Settings → Connections, where it can be revoked.",
+    "Link another Cinderdeck environment, so agents here can work there. It shows up there under Authorized clients in Settings → Sharing & access, where it can be revoked.",
   ),
   Command.withHandler((flags) =>
     runWithPeerLinks(flags, (links) =>
@@ -141,11 +141,11 @@ const environmentListCommand = Command.make("list", { ...authLocationFlags, json
 const environmentUnlinkCommand = Command.make("unlink", {
   ...authLocationFlags,
   environmentId: Argument.String("environment-id").pipe(
-    Argument.withDescription("The linked environment's id, from `t3 environment list`."),
+    Argument.withDescription("The linked environment's id, from `cinderdeck environment list`."),
   ),
 }).pipe(
   Command.withDescription(
-    "Forget a linked environment here. Revoke it in that environment's Connections to end its session there too.",
+    "Forget a linked environment here. Revoke it in that environment's Sharing & access to end its session there too.",
   ),
   Command.withHandler((flags) =>
     runWithPeerLinks(flags, (links) =>
@@ -153,7 +153,7 @@ const environmentUnlinkCommand = Command.make("unlink", {
         const removed = yield* links.unlink(EnvironmentId.make(flags.environmentId));
         yield* Console.log(
           removed
-            ? `Forgot ${flags.environmentId}. Revoke it in that environment's Connections to end its session there.\n`
+            ? `Forgot ${flags.environmentId}. Revoke it in that environment's Sharing & access to end its session there.\n`
             : `No linked environment ${flags.environmentId}.\n`,
         );
       }),
@@ -162,7 +162,7 @@ const environmentUnlinkCommand = Command.make("unlink", {
 );
 
 export const environmentCommand = Command.make("environment").pipe(
-  Command.withDescription("Link other T3 Code environments, so agents here can work there."),
+  Command.withDescription("Link other Cinderdeck environments, so agents here can work there."),
   Command.withSubcommands([
     environmentLinkCommand,
     environmentListCommand,

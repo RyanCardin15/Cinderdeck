@@ -9,19 +9,21 @@ import {
 import { isElectron } from "../../env";
 import { StandalonePage, StandalonePageHeader } from "../ui/standalone-page";
 import { resolveClerkSignInProps } from "../clerk/authRedirect";
+import { retryClerkLoad, useClerkLoadFailed } from "../clerk/clerkLoadFailure";
 import { Button } from "../ui/button";
 
 const invalidLinkMessage = {
   context: "Authorization request",
   title: "This connect link is incomplete",
   description:
-    "The link is missing its authorization request. Re-run `t3 connect` in your terminal and open the freshly printed URL.",
+    "The link is missing its authorization request. Re-run `cinderdeck connect` in your terminal and open the freshly printed URL.",
 } as const;
 
 export function ConnectCliAuthorizeSurface() {
   const [request] = useState(() => readConnectAuthorizeRequest(new URL(window.location.href)));
   const clerk = useClerk();
   const { isLoaded, isSignedIn } = useAuth();
+  const loadFailed = useClerkLoadFailed();
   const signInOpened = useRef(false);
   const redirecting = useRef(false);
 
@@ -73,11 +75,17 @@ export function ConnectCliAuthorizeSurface() {
         title="Connecting your terminal"
         description={
           isSignedIn
-            ? "Redirecting to authorize T3 Connect for your CLI…"
-            : "Sign in to continue authorizing T3 Connect for your CLI."
+            ? "Redirecting to authorize Cinderdeck Connect for your CLI…"
+            : "Sign in to continue authorizing Cinderdeck Connect for your CLI."
         }
       />
-      {isLoaded && !isSignedIn ? (
+      {loadFailed ? (
+        <div className="mt-6">
+          <Button type="button" onClick={retryClerkLoad}>
+            Retry sign-in
+          </Button>
+        </div>
+      ) : isLoaded && !isSignedIn ? (
         <div className="mt-6">
           <Button type="button" onClick={openSignIn}>
             Sign in

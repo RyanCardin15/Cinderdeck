@@ -123,7 +123,7 @@ const layerRuntime = (dbPath: string) => {
     }),
   );
   const layerServerConfig = ServerConfig.layerTest(process.cwd(), {
-    prefix: "t3-project-upgrade-",
+    prefix: "cinderdeck-project-upgrade-",
   });
   const layerCheckpointStore = CheckpointStore.layer.pipe(
     Layer.provide(
@@ -158,8 +158,7 @@ const layerRuntime = (dbPath: string) => {
     Layer.provide(ServerSettings.layerTest()),
     Layer.provide(
       Layer.succeed(ProviderInstanceRegistry.ProviderInstanceRegistry, {
-        // @effect-diagnostics-next-line effectSucceedWithVoid:off - This optional result requires undefined, not the wider void type.
-        getInstance: () => Effect.succeed(undefined),
+        getInstance: () => Effect.undefined,
         listInstances: Effect.succeed([]),
         listUnavailable: Effect.succeed([]),
         streamChanges: Stream.empty,
@@ -180,7 +179,7 @@ it.live("keeps project settings through the V2 migrations and the first V2 boot"
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const stateDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-project-upgrade-" });
+      const stateDir = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-project-upgrade-" });
       const dbPath = path.join(stateDir, "statev2.sqlite");
 
       yield* seedV1Database.pipe(Effect.provide(NodeSqliteClient.layer({ filename: dbPath })));

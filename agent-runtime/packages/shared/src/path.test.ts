@@ -29,6 +29,8 @@ describe("path helpers", () => {
   it("names a new project's folder from any typed name", () => {
     expect(newProjectFolderName("Pinball Stats")).toBe("pinball-stats");
     expect(newProjectFolderName("  Café & Crème!  ")).toBe("cafe-creme");
+    expect(newProjectFolderName("Đặt tên dự án")).toBe("dat-ten-du-an");
+    expect(newProjectFolderName("Straßenbahn GROẞ")).toBe("strassenbahn-gross");
     expect(newProjectFolderName("../../etc")).toBe("etc");
     expect(newProjectFolderName("🎱🎱")).toBe("project");
     expect(newProjectFolderName(`${"a".repeat(63)} b`)).toBe("a".repeat(63));
@@ -100,7 +102,7 @@ describe("workspaceRelativeFilePath", () => {
   // regression: #9309 POSIX paths compare case-sensitively, Windows paths do not
   it.each([
     ["/Repo/Project/src/main.ts", "/repo/project", null],
-    ["C:/USERS/mike/t3code/main.ts", "c:/users/MIKE/t3code", "main.ts"],
+    ["C:/USERS/mike/cinderdeck/main.ts", "c:/users/MIKE/cinderdeck", "main.ts"],
     ["/repo/project-two/a.ts", "/repo/project", null],
     // regression: #16354 a `..` that leaves the root is a host path, not a workspace path
     ["/repo/project/../other/notes.md", "/repo/project", null],

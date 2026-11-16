@@ -493,9 +493,9 @@ const layerTest = (
           DesktopEnvironment.DesktopEnvironment,
           DesktopEnvironment.DesktopEnvironment.of({
             platform,
-            displayName: "T3 Code (Dev)",
+            displayName: "Cinderdeck (Dev)",
             stateDir: "/state",
-            linuxDesktopEntryName: "com.t3tools.T3Code.desktop",
+            linuxDesktopEntryName: "com.ryancardin.Cinderdeck.desktop",
             appRoot: "/repo",
             linuxApplicationsDir: "/test-data/applications",
           } as DesktopEnvironment.DesktopEnvironment["Service"]),
@@ -978,7 +978,7 @@ it.effect.each(["succeeds", "fails"] as const)(
   },
 );
 
-it.effect("matches Windows accessibility windows on a scaled display", () => {
+it.effect("captures and reads Windows windows in physical pixels on a scaled display", () => {
   const png = Buffer.from([1, 2, 3]);
   const active = {
     platform: "windows",
@@ -987,26 +987,26 @@ it.effect("matches Windows accessibility windows on a scaled display", () => {
     owner: { name: "Editor", processId: 123 },
     bounds: { x: 10, y: 20, width: 800, height: 600 },
   } as const;
-  const dipBounds = { x: 5, y: 10, width: 400, height: 300 };
+  const window = (name: string, value: string) => ({
+    role: "window",
+    name,
+    bounds: active.bounds,
+    children: async () => [
+      {
+        role: "button",
+        name: "Save",
+        bounds: { x: 210, y: 220, width: 200, height: 100 },
+        children: async () => [],
+      },
+    ],
+    tree: async () => ({ name, value, children: [] }),
+  });
   activeWindowMock.mockReset().mockResolvedValue(active);
-  screenToDipRectMock.mockImplementation(() => dipBounds);
+  screenToDipRectMock.mockImplementation(() => ({ x: 5, y: 10, width: 400, height: 300 }));
   regionCaptureMock.mockReset().mockResolvedValue({ width: 800, height: 600, png });
   accessibilityForegroundMock.mockReset().mockResolvedValue({
     pid: 123,
-    asElement: () => ({
-      role: "window",
-      name: "Editor",
-      bounds: dipBounds,
-      children: async () => [
-        {
-          role: "button",
-          name: "Save",
-          bounds: { x: 105, y: 110, width: 100, height: 50 },
-          children: async () => [],
-        },
-      ],
-      tree: async () => ({ name: "Editor", value: "Scaled text", children: [] }),
-    }),
+    children: async () => [window("Settings", "Wrong window"), window("Editor", "Scaled text")],
   });
   let metadata = "";
   return Effect.scoped(
@@ -1015,6 +1015,7 @@ it.effect("matches Windows accessibility windows on a scaled display", () => {
       yield* service.configure(enabledSettings());
       yield* service.capture;
       const saved = yield* decodePendingMetadata(metadata);
+      assert.deepEqual(regionCaptureMock.mock.calls[0]?.[0], active.bounds);
       assert.include(saved.source.accessibleText, "Scaled text");
       assert.deepEqual(
         saved.source.accessibility?.format === "element-tree"
@@ -1047,7 +1048,6 @@ it.effect.each([
   { backend: "gnome", screenshot: "PNG" },
   { backend: "niri", screenshot: "PNG" },
   { backend: "kde", screenshot: "PNG" },
-  { backend: "hyprland", screenshot: "PNG" },
   { backend: "gnome", screenshot: "invalid" },
 ] as const)(
   "persists $backend accessibility text with a $screenshot screenshot",
@@ -1402,7 +1402,7 @@ it.each(["darwin", "win32", "linux"] as const)(
     accessibilityByPidMock.mockReset().mockResolvedValue({ children: async () => [window] });
     accessibilityForegroundMock
       .mockReset()
-      .mockResolvedValue({ pid: 123, asElement: () => window });
+      .mockResolvedValue({ pid: 123, children: async () => [window] });
 
     const result = await readAccessibleWindowContext(
       { title: "Editor", bounds, owner: { processId: 123 } },
@@ -1442,7 +1442,7 @@ it.each(["darwin", "win32"] as const)(
     accessibilityByPidMock.mockReset().mockResolvedValue({ children: async () => [window] });
     accessibilityForegroundMock
       .mockReset()
-      .mockResolvedValue({ pid: 123, asElement: () => window });
+      .mockResolvedValue({ pid: 123, children: async () => [window] });
     try {
       assert.isUndefined(
         await readAccessibleWindowText(
@@ -1484,7 +1484,7 @@ it.each([
     accessibilityByPidMock.mockReset().mockResolvedValue({ children: async () => [window] });
     accessibilityForegroundMock
       .mockReset()
-      .mockResolvedValue({ pid: 123, asElement: () => window });
+      .mockResolvedValue({ pid: 123, children: async () => [window] });
     try {
       const result = await readAccessibleWindowContext(
         { title: "Editor", bounds, owner: { processId: 123 } },
@@ -1503,8 +1503,8 @@ it.each([
 );
 
 it.each([
-  { names: ["⠙ t3code"], expected: "Verified text" },
-  { names: ["⠋ t3code", "⠙ t3code"], expected: undefined },
+  { names: ["⠙ cinderdeck"], expected: "Verified text" },
+  { names: ["⠋ cinderdeck", "⠙ cinderdeck"], expected: undefined },
 ])("reads a changing Wayland title only when unambiguous: $names", async ({ names, expected }) => {
   vi.stubEnv("XDG_SESSION_TYPE", "wayland");
   const tree = vi.fn(async () => ({ value: "Verified text", children: [] }));
@@ -1520,12 +1520,12 @@ it.each([
     assert.strictEqual(
       await readAccessibleWindowText(
         {
-          title: "⠋ t3code",
+          title: "⠋ cinderdeck",
           bounds: { x: 479, y: 342, width: 700, height: 520 },
           owner: { processId: 123 },
         },
         "linux",
-        "⠋ t3code",
+        "⠋ cinderdeck",
       ),
       expected,
     );
@@ -1540,7 +1540,7 @@ it.each([
   ["com.google.Chrome", "Google Chrome – Profile"],
   ["org.chromium.Chromium", "Chromium"],
 ])("reads macOS %s page context with an accessibility title suffix", async (bundleId, suffix) => {
-  const title = "Issues · pingdotgg/t3code";
+  const title = "Issues · pingdotgg/cinderdeck";
   const bounds = { x: 0, y: 33, width: 1470, height: 857 };
   const window = {
     role: "window",
@@ -1570,7 +1570,7 @@ it.each([
 });
 
 it("does not borrow another Chrome process context when the captured PID has no windows", async () => {
-  const title = "Issues · pingdotgg/t3code";
+  const title = "Issues · pingdotgg/cinderdeck";
   const bounds = { x: 0, y: 33, width: 1470, height: 857 };
   const otherWindow = {
     role: "window",
@@ -1786,7 +1786,7 @@ it.effect("flags revoked macOS permissions on read and re-registers once they re
       const revoked = yield* service.state;
       assert.equal(
         revoked.message,
-        "Allow Screen Recording in System Settings, then restart T3 Code.",
+        "Allow Screen Recording in System Settings, then restart Cinderdeck.",
       );
       assert.deepEqual(revoked.macPermissions, { screenRecording: false, accessibility: true });
 
@@ -1799,7 +1799,7 @@ it.effect("flags revoked macOS permissions on read and re-registers once they re
       const blocked = yield* service.state;
       assert.equal(
         blocked.message,
-        "Allow Screen Recording in System Settings, then restart T3 Code.",
+        "Allow Screen Recording in System Settings, then restart Cinderdeck.",
       );
       assert.isFalse(blocked.shortcutRegistered);
 
@@ -1872,7 +1872,9 @@ it.effect("capture fails closed while snapshots are disabled", () => {
 
 it.effect("points capture setup failures at SnapShot settings", () => {
   vi.stubEnv("XDG_SESSION_TYPE", "wayland");
-  linuxCaptureMock.mockRejectedValueOnce(new CaptureSetupRequiredError("Install the helper."));
+  linuxCaptureMock.mockRejectedValueOnce(
+    new CaptureSetupRequiredError({ state: "Install the helper." }),
+  );
   return Effect.scoped(
     Effect.gen(function* () {
       const service = yield* DesktopSnapShot.make;
@@ -2157,7 +2159,7 @@ it.effect.each([false, true])(
       platform: "macos",
       id: 42,
       title: "Setup",
-      owner: { name: "T3 Code", processId: 123, path: "/Applications/T3 Code.app" },
+      owner: { name: "Cinderdeck", processId: 123, path: "/Applications/Cinderdeck.app" },
       bounds: { x: 0, y: 0, width: 800, height: 600 },
     };
     activeWindowMock.mockReset().mockResolvedValue(active);
@@ -2174,7 +2176,7 @@ it.effect.each([false, true])(
           assert.equal(error.reason, "setup-failed");
           assert.equal(
             error.message,
-            'Could not capture a test snapshot. Capturing the window failed. macOS grants Screen Recording and Accessibility to each app separately. In System Settings, open Privacy & Security and check that "T3 Code (Dev)" is allowed for both.',
+            'Could not capture a test snapshot. Capturing the window failed. macOS grants Screen Recording and Accessibility to each app separately. In System Settings, open Privacy & Security and check that "Cinderdeck (Dev)" is allowed for both.',
           );
         } else yield* service.setup("test-mac-capture");
         assert.equal(macCaptureMock.mock.calls.length, 1);

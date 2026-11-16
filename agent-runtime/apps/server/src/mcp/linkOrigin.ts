@@ -11,7 +11,7 @@ import type { Caller } from "./threadAccess.ts";
 /**
  * Below full access, work a link starts here (all of it carries that session in `linkOrigin`)
  * may change only work from the same link: not the user's threads, projects or settings, nor
- * this environment's links. Reads are not fenced. It is a routing rule for T3's tools; agents
+ * this environment's links. Reads are not fenced. It is a routing rule for Cinderdeck's tools; agents
  * still run as this environment's user, so a full-access link is not fenced at all.
  */
 
@@ -29,7 +29,7 @@ export const callerLinkOrigin = (
     : undefined);
 
 /** The link that fences a caller, if any: one paired below full access. */
-const fencingLinkOrigin = (caller: Pick<Caller, "scope" | "caller">) => {
+export const fencingLinkOrigin = (caller: Pick<Caller, "scope" | "caller">) => {
   const origin = callerLinkOrigin(caller);
   return origin !== undefined && linkOriginIsFenced(origin) ? origin : undefined;
 };

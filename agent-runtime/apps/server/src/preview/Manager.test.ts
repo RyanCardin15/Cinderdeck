@@ -31,7 +31,7 @@ const collectEvents = Effect.gen(function* () {
 }).pipe(Effect.withSpan("preview.test.collectEvents"));
 
 const layer = PreviewManager.layer.pipe(
-  Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-preview-manager-" })),
+  Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "cinderdeck-preview-manager-" })),
   Layer.provide(NodeCrypto.layer),
   Layer.provide(NodeServices.layer),
 );
@@ -76,6 +76,18 @@ it.layer(layer)("PreviewManager", (it) => {
       });
       const listed = yield* manager.list({ threadId });
       expect(listed.sessions.find((s) => s.tabId === opened.tabId)?.profileId).toBe("work");
+    }),
+  );
+
+  it.effect("opens a server tab with the requested zoom and appearance", () =>
+    Effect.gen(function* () {
+      const threadId = freshThreadId();
+      const manager = yield* PreviewManager.PreviewManager;
+      const rendering = { zoomFactor: 0.8, colorScheme: "dark" } as const;
+
+      const opened = yield* manager.open({ threadId, runtime: "server", ...rendering });
+
+      expect(opened).toMatchObject(rendering);
     }),
   );
 

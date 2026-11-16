@@ -9,12 +9,13 @@
     }
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "effect-tsgo tsrs --noEmit"
   },
   "dependencies": {
     "@cinderdeck/source-control-azure-devops": "workspace:*",
     "@cinderdeck/source-control-bitbucket": "workspace:*",
     "@cinderdeck/source-control-core": "workspace:*",
+    "@cinderdeck/source-control-cursor-origin": "workspace:*",
     "@cinderdeck/source-control-forgejo": "workspace:*",
     "@cinderdeck/source-control-gitcafe": "workspace:*",
     "@cinderdeck/source-control-github": "workspace:*",

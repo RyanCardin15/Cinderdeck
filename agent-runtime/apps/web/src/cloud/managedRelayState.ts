@@ -72,7 +72,7 @@ export const createManagedRelayT3ChatLinkRequestCommand = createRuntimeCommand(
 );
 
 export const unlinkManagedRelayT3ChatCommand = createRuntimeCommand(managedRelayAtomRuntime, {
-  label: "web:managed-relay:unlink-t3chat",
+  label: "web:managed-relay:unlink-linked-account",
   scheduler: managedRelayMutationScheduler,
   concurrency: accountSerial,
   execute: (input: { readonly accountId: string }, registry) =>
@@ -87,7 +87,7 @@ export function useManagedRelayT3ChatLink() {
   const session = useAtomValue(managedRelaySessionAtom);
   const accountId = session?.accountId ?? null;
   const atom = accountId
-    ? managedRelayQueryManager.t3ChatLinkAtom(accountId)
+    ? managedRelayQueryManager.cinderdeckChatLinkAtom(accountId)
     : EMPTY_T3CHAT_LINK_ATOM;
   const snapshot = readManagedRelaySnapshotState(useAtomValue(atom));
   const refresh = () => {
@@ -147,19 +147,19 @@ export function useManagedRelayDevices() {
   };
 }
 
-/** How this account can raise its tunnel cap: link T3 Chat, or upgrade the linked plan. */
+/** How this account can raise its tunnel cap: link Cinderdeck Chat, or upgrade the linked plan. */
 export type ManagedTunnelUpgrade = "link" | "pro" | "premier" | null;
 
-// Mirrors the relay's cap: a manual override is exact, otherwise the T3 Chat plan raises the default.
-function managedTunnelCap(t3Chat: RelayT3ChatLinkResponse): {
+// Mirrors the relay's cap: a manual override is exact, otherwise the Cinderdeck Chat plan raises the default.
+function managedTunnelCap(cinderdeckChat: RelayT3ChatLinkResponse): {
   readonly limit: number;
   readonly upgrade: ManagedTunnelUpgrade;
 } {
-  if (t3Chat.maxTunnelsOverride !== undefined) {
-    return { limit: t3Chat.maxTunnelsOverride, upgrade: null };
+  if (cinderdeckChat.maxTunnelsOverride !== undefined) {
+    return { limit: cinderdeckChat.maxTunnelsOverride, upgrade: null };
   }
-  if (!t3Chat.available) return { limit: DEFAULT_MANAGED_TUNNEL_LIMIT, upgrade: null };
-  switch (t3Chat.link?.plan) {
+  if (!cinderdeckChat.available) return { limit: DEFAULT_MANAGED_TUNNEL_LIMIT, upgrade: null };
+  switch (cinderdeckChat.link?.plan) {
     case "premier":
       return { limit: T3CHAT_PLAN_TUNNEL_LIMITS.premier, upgrade: null };
     case "pro":
@@ -171,7 +171,7 @@ function managedTunnelCap(t3Chat: RelayT3ChatLinkResponse): {
   }
 }
 
-/** Refetches the account's environments and T3 Chat plan after a tunnel changes. */
+/** Refetches the account's environments and Cinderdeck Chat plan after a tunnel changes. */
 export function refreshManagedTunnelUsage() {
   const accountId = appAtomRegistry.get(managedRelaySessionAtom)?.accountId;
   if (!accountId) return;
@@ -182,14 +182,14 @@ export function refreshManagedTunnelUsage() {
 /** Managed tunnels on this account and its cap. Null fields are still loading or failed. */
 export function useManagedTunnelUsage() {
   const environments = useManagedRelayEnvironments();
-  const t3Chat = useManagedRelayT3ChatLink();
+  const cinderdeckChat = useManagedRelayT3ChatLink();
   const used =
     environments.accountId === null
       ? null
       : (environments.data?.filter(
           (environment) => environment.endpoint.providerKind === "cloudflare_tunnel",
         ).length ?? null);
-  const cap = t3Chat.accountId !== null && t3Chat.data ? managedTunnelCap(t3Chat.data) : null;
+  const cap = cinderdeckChat.accountId !== null && cinderdeckChat.data ? managedTunnelCap(cinderdeckChat.data) : null;
   return {
     used,
     limit: cap?.limit ?? null,

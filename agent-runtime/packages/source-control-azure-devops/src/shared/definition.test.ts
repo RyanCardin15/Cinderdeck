@@ -12,17 +12,17 @@ const parse = (url: string) => definition.parseChangeRequestUrl(new URL(url));
 
 describe("Azure DevOps change request URLs", () => {
   it("reads both hosted URL forms", () => {
-    expect(parse("https://dev.azure.com/acme/platform/_git/t3code/pullrequest/17")).toEqual({
+    expect(parse("https://dev.azure.com/acme/platform/_git/cinderdeck/pullrequest/17")).toEqual({
       host: "dev.azure.com",
-      repository: "acme/platform/_git/t3code",
+      repository: "acme/platform/_git/cinderdeck",
       number: 17,
-      repositoryUrl: "https://dev.azure.com/acme/platform/_git/t3code",
+      repositoryUrl: "https://dev.azure.com/acme/platform/_git/cinderdeck",
     });
     expect(
-      parse("https://acme.visualstudio.com/platform/_git/t3code/pullrequest/17"),
+      parse("https://acme.visualstudio.com/platform/_git/cinderdeck/pullrequest/17"),
     ).toMatchObject({
       host: "acme.visualstudio.com",
-      repository: "platform/_git/t3code",
+      repository: "platform/_git/cinderdeck",
       number: 17,
     });
   });
@@ -127,23 +127,82 @@ describe("Azure DevOps repository keys", () => {
 
   it("gives a repository the same key over SSH as over HTTPS", () => {
     for (const remote of [
-      "git@ssh.dev.azure.com:v3/T3Tools/Platform/T3Code",
-      "ssh://git@ssh.dev.azure.com:22/v3/T3Tools/Platform/T3Code",
-      "https://T3Tools@dev.azure.com/T3Tools/Platform/_git/T3Code",
+      "git@ssh.dev.azure.com:v3/CinderdeckTools/Platform/Cinderdeck",
+      "ssh://git@ssh.dev.azure.com:22/v3/CinderdeckTools/Platform/Cinderdeck",
+      "https://CinderdeckTools@dev.azure.com/CinderdeckTools/Platform/_git/Cinderdeck",
     ]) {
       expect(registry.repositoryKeyFromRemote(remote), remote).toBe(
-        "dev.azure.com/t3tools/platform/_git/t3code",
+        "dev.azure.com/t3tools/platform/_git/cinderdeck",
       );
     }
   });
 
+  it.each([
+    "git@ssh.dev.azure.com:v3/acme/platform/tool.git",
+    "https://dev.azure.com/acme/platform/_git/tool.git",
+  ])("preserves a literal .git in an Azure repository name: %s", (remoteUrl) => {
+    const canonicalKey = registry.repositoryKeyFromRemote(remoteUrl);
+    expect(canonicalKey).toBe("dev.azure.com/acme/platform/_git/tool.git");
+    const identity: ChangeRequestProjectIdentity = {
+      canonicalKey,
+      locator: { source: "git-remote", remoteName: "origin", remoteUrl },
+    };
+    const link = parse("https://dev.azure.com/acme/platform/_git/tool.git/pullrequest/7")!;
+    expect(definition.isChangeRequestInRepository(identity, link)).toBe(true);
+    expect(
+      definition.isChangeRequestInRepository(identity, {
+        ...link,
+        repository: "acme/platform/_git/tool",
+      }),
+    ).toBe(false);
+  });
+
+  it("matches a repository however its name is percent-encoded", () => {
+    const remoteUrl = "https://example@dev.azure.com/example/Sample%20(Beta)/_git/Sample%20(Beta)";
+    const canonicalKey = registry.repositoryKeyFromRemote(remoteUrl);
+    const identity: ChangeRequestProjectIdentity = {
+      canonicalKey,
+      locator: { source: "git-remote", remoteName: "origin", remoteUrl },
+    };
+    for (const url of [
+      "https://dev.azure.com/example/Sample%20%28Beta%29/_git/Sample%20%28Beta%29/pullrequest/7",
+      "https://dev.azure.com/example/Sample (Beta)/_git/Sample (Beta)/pullrequest/7",
+    ]) {
+      const link = parse(url)!;
+      expect(link.repository, url).toBe("example/sample%20(beta)/_git/sample%20(beta)");
+      expect(definition.isChangeRequestInRepository(identity, link), url).toBe(true);
+      expect(
+        definition.isChangeRequestInRepository(
+          {
+            ...identity,
+            canonicalKey: "dev.azure.com/example/sample%20%28beta%29/_git/sample%20%28beta%29",
+          },
+          link,
+        ),
+        url,
+      ).toBe(true);
+    }
+    // Links stored before keys had one spelling still resolve to their project.
+    expect(
+      registry.canonicalRepositoryKey(
+        "dev.azure.com/example/sample%20%28beta%29/_git/sample%20%28beta%29",
+      ),
+    ).toBe(canonicalKey);
+  });
+
+  it("still drops .git from other hosts' repository keys", () => {
+    expect(registry.repositoryKeyFromRemote("git@github.com:acme/tool.git")).toBe(
+      "github.com/acme/tool",
+    );
+  });
+
   it("keeps the organization in the host for the legacy visualstudio.com remotes", () => {
     for (const remote of [
-      "T3Tools@vs-ssh.visualstudio.com:v3/T3Tools/Platform/T3Code",
-      "https://T3Tools.visualstudio.com/Platform/_git/T3Code",
+      "CinderdeckTools@vs-ssh.visualstudio.com:v3/CinderdeckTools/Platform/Cinderdeck",
+      "https://CinderdeckTools.visualstudio.com/Platform/_git/Cinderdeck",
     ]) {
       expect(registry.repositoryKeyFromRemote(remote), remote).toBe(
-        "t3tools.visualstudio.com/platform/_git/t3code",
+        "t3tools.visualstudio.com/platform/_git/cinderdeck",
       );
     }
   });

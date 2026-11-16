@@ -25,15 +25,18 @@ import * as TestClock from "effect/testing/TestClock";
 import { HttpClientRequest, HttpClientResponse, HttpServerResponse } from "effect/http";
 import { vi } from "vite-plus/test";
 
+import * as AssetSigner from "./AssetSigner.ts";
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as ServerConfig from "../config.ts";
+import { makeFakeWslHost } from "../testUtils/fakeWsl.ts";
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import * as ProjectFaviconResolver from "../project/ProjectFaviconResolver.ts";
-import * as T3ProjectFileLoader from "../project/T3ProjectFileLoader.ts";
+import * as CinderdeckProjectFileLoader from "../project/CinderdeckProjectFileLoader.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 import { assetFileResponse } from "../http.ts";
 import { ASSET_ROUTE_PREFIX, issueAssetUrl, readMcpAppHtml, resolveAsset } from "./AssetAccess.ts";
 import * as NativeAppIconResolver from "./NativeAppIconResolver.ts";
+import * as RepositoryIdentityResolver from "../project/RepositoryIdentityResolver.ts";
 import { symlinksSupported } from "@cinderdeck/shared/testing/symlinks";
 import { fakeSourceControlDriverInstance } from "@cinderdeck/source-control-testing/fakeSourceControlDriver";
 import * as BuiltInDrivers from "../sourceControl/builtInDrivers.ts";
@@ -47,7 +50,7 @@ vi.mock("node:fs/promises", async (importOriginal) => {
 });
 
 const layerConfig = ServerConfig.ServerConfig.layerTest(process.cwd(), {
-  prefix: "t3-asset-access-test-",
+  prefix: "cinderdeck-asset-access-test-",
 });
 const screenshotPng = new Uint8Array(24);
 screenshotPng.set([
@@ -116,10 +119,12 @@ const layerTest = Layer.mergeAll(
   WorkspacePaths.layer,
   ProjectFaviconResolver.layer.pipe(
     Layer.provide(WorkspacePaths.layer),
-    Layer.provide(T3ProjectFileLoader.layer),
+    Layer.provide(CinderdeckProjectFileLoader.layer),
   ),
   NativeAppIconResolver.layer.pipe(Layer.provide(layerConfig)),
-  ServerSecretStore.layer.pipe(Layer.provide(layerConfig)),
+  AssetSigner.layer.pipe(
+    Layer.provideMerge(ServerSecretStore.layer.pipe(Layer.provide(layerConfig))),
+  ),
 ).pipe(Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)));
 
 describe("AssetAccess", () => {
@@ -128,7 +133,7 @@ describe("AssetAccess", () => {
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-mcp-html-" });
+        const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-mcp-html-" });
         const file = path.join(directory, "app.html");
         const limit = MCP_APP_MAX_HTML_BYTES + 128 * 1024;
         yield* fileSystem.writeFile(file, new Uint8Array(limit).fill(120));
@@ -143,7 +148,7 @@ describe("AssetAccess", () => {
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-mcp-html-" });
+        const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-mcp-html-" });
         const file = path.join(directory, "app.html");
         const limit = MCP_APP_MAX_HTML_BYTES + 128 * 1024;
         for (const size of [limit + 1, limit * 2]) {
@@ -157,7 +162,7 @@ describe("AssetAccess", () => {
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-mcp-html-" });
+        const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-mcp-html-" });
         const file = path.join(directory, "app.html");
         for (const html of ["", "<body>" + "☃".repeat(100_000) + "</body>"]) {
           const expected = new TextEncoder().encode(html);
@@ -174,7 +179,7 @@ describe("AssetAccess", () => {
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-mcp-html-" });
+        const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-mcp-html-" });
         const error = yield* readMcpAppHtml(path.join(directory, "missing.html")).pipe(Effect.flip);
         expect(error._tag).toBe("PlatformError");
         expect(error.reason._tag).toBe("NotFound");
@@ -214,8 +219,8 @@ describe("AssetAccess", () => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-media-root-" });
-      const outside = yield* fs.makeTempDirectoryScoped({ prefix: "t3-media-outside-" });
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-media-root-" });
+      const outside = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-media-outside-" });
       for (const [name, mimeType] of [
         ["screenshot.png", "image/png"],
         ["recording.mp4", "video/mp4"],
@@ -266,8 +271,8 @@ describe("AssetAccess", () => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-download-root-" });
-      const outside = yield* fs.makeTempDirectoryScoped({ prefix: "t3-download-outside-" });
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-download-root-" });
+      const outside = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-download-outside-" });
       for (const name of [
         "data.csv",
         "report.docx",
@@ -325,7 +330,7 @@ describe("AssetAccess", () => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-media-relative-" });
+      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-media-relative-" });
       const root = path.join(directory, "workspace");
       yield* fs.makeDirectory(root);
       for (const relativePath of ["screenshot.png", "../recording.mp4"]) {
@@ -351,7 +356,7 @@ describe("AssetAccess", () => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-draft-media-" });
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-draft-media-" });
       for (const [name, mimeType] of [
         ["video.mp4", "video/mp4"],
         ["audio.wav", "audio/wav"],
@@ -399,7 +404,7 @@ describe("AssetAccess", () => {
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const directory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-draft-boundary-" });
+        const directory = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-draft-boundary-" });
         const root = path.join(directory, "workspace");
         yield* fs.makeDirectory(root);
         for (const name of ["video.mp4", "audio.wav", "secret.txt"]) {
@@ -433,7 +438,7 @@ describe("AssetAccess", () => {
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const directory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-draft-symlink-" });
+        const directory = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-draft-symlink-" });
         const root = path.join(directory, "workspace");
         yield* fs.makeDirectory(root);
         const outside = path.join(directory, "outside.mp4");
@@ -462,7 +467,7 @@ describe("AssetAccess", () => {
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-draft-absolute-" });
+        const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-draft-absolute-" });
         for (const extension of ["png", "mp4", "wav"]) {
           const target = path.join(root, `target.${extension}`);
           const alias = path.join(root, `alias.${extension}`);
@@ -487,7 +492,7 @@ describe("AssetAccess", () => {
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const directory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-draft-swap-" });
+        const directory = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-draft-swap-" });
         const root = path.join(directory, "workspace");
         yield* fs.makeDirectory(root);
         const filePath = path.join(root, "video.mp4");
@@ -520,50 +525,82 @@ describe("AssetAccess", () => {
       }).pipe(Effect.provide(layerTest)),
   );
 
-  it.effect("resolves home-relative media paths independently of the workspace", () =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-media-home-" });
-      const home = path.join(directory, "var", "home", "alice");
-      const filePath = path.join(home, "Downloads", "repro.mp4");
-      yield* fs.makeDirectory(path.dirname(filePath), { recursive: true });
-      yield* fs.writeFileString(filePath, "recording bytes");
-      const canonicalFile = yield* fs.realPath(filePath);
-      yield* Effect.gen(function* () {
-        for (const workspaceRoot of [
-          path.join(home, "project"),
-          path.join(directory, "srv", "project"),
-          undefined,
-        ]) {
-          if (workspaceRoot) yield* fs.makeDirectory(workspaceRoot, { recursive: true });
-          for (const requestedPath of ["~/Downloads/repro.mp4", "~\\Downloads/repro.mp4"]) {
-            const result = yield* issueAssetUrl({
-              resource: {
-                _tag: "media-file",
-                threadId: ThreadId.make("thread-1"),
-                path: requestedPath,
-              },
-              ...(workspaceRoot ? { workspaceRoot } : {}),
-            });
-            const suffix = result.relativeUrl.slice(`${ASSET_ROUTE_PREFIX}/`.length);
-            const separator = suffix.indexOf("/");
-            const asset = yield* resolveAsset(
-              suffix.slice(0, separator),
-              suffix.slice(separator + 1),
-            );
-            expect(asset).toMatchObject({
-              kind: "file",
-              path: canonicalFile,
-              mimeType: "video/mp4",
-            });
-            if (asset?.kind !== "file") throw new Error("Expected a resolved home media file");
-            const response = HttpServerResponse.toWeb(yield* assetFileResponse(asset));
-            expect(yield* Effect.promise(() => response.text())).toBe("recording bytes");
+  it.effect.each(["media-file", "draft-workspace-file"] as const)(
+    "resolves home-relative %s paths independently of the workspace",
+    (tag) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const directory = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-media-home-" });
+        const home = path.join(directory, "var", "home", "alice");
+        const filePath = path.join(home, "Downloads", "repro.mp4");
+        yield* fs.makeDirectory(path.dirname(filePath), { recursive: true });
+        yield* fs.writeFileString(filePath, "recording bytes");
+        const canonicalFile = yield* fs.realPath(filePath);
+        yield* Effect.gen(function* () {
+          for (const workspaceRoot of [
+            path.join(home, "project"),
+            path.join(directory, "srv", "project"),
+            undefined,
+          ]) {
+            if (workspaceRoot) yield* fs.makeDirectory(workspaceRoot, { recursive: true });
+            for (const requestedPath of ["~/Downloads/repro.mp4", "~\\Downloads/repro.mp4"]) {
+              const result = yield* issueAssetUrl({
+                resource: {
+                  ...(tag === "media-file"
+                    ? { _tag: tag, threadId: ThreadId.make("thread-1") }
+                    : { _tag: tag, cwd: workspaceRoot ?? directory }),
+                  path: requestedPath,
+                },
+                ...(workspaceRoot ? { workspaceRoot } : {}),
+              });
+              const suffix = result.relativeUrl.slice(`${ASSET_ROUTE_PREFIX}/`.length);
+              const separator = suffix.indexOf("/");
+              const asset = yield* resolveAsset(
+                suffix.slice(0, separator),
+                suffix.slice(separator + 1),
+              );
+              expect(asset).toMatchObject({
+                kind: "file",
+                path: canonicalFile,
+                mimeType: "video/mp4",
+              });
+              if (asset?.kind !== "file") throw new Error("Expected a resolved home media file");
+              const response = HttpServerResponse.toWeb(yield* assetFileResponse(asset));
+              expect(yield* Effect.promise(() => response.text())).toBe("recording bytes");
+            }
           }
+        }).pipe(Effect.provideService(HostProcess.HomeDirectory, home));
+      }).pipe(Effect.provide(layerTest)),
+  );
+
+  it.effect.skipIf(HostProcess.Platform.defaultValue() === "win32")(
+    "resolves a Windows drive media path under WSL to where wslpath mounts it",
+    () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const { mountRoot, underWsl } = yield* makeFakeWslHost;
+        const workspaceRoot = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-media-wsl-root-" });
+        const filePath = path.join(mountRoot, "c", "Users", "me", "Pictures", "shot.png");
+        yield* fs.makeDirectory(path.dirname(filePath), { recursive: true });
+        yield* fs.writeFile(filePath, screenshotPng);
+        const canonicalFile = yield* fs.realPath(filePath);
+        const drivePath = "C:\\Users\\me\\Pictures\\shot.png";
+
+        for (const resource of [
+          { _tag: "media-file", threadId: ThreadId.make("thread-1"), path: drivePath },
+          { _tag: "draft-workspace-file", cwd: workspaceRoot, path: drivePath },
+        ] as const) {
+          const result = yield* underWsl(issueAssetUrl({ resource, workspaceRoot }));
+          expect(result.imageDimensions).toEqual({ width: 390, height: 844 });
+          const suffix = result.relativeUrl.slice(`${ASSET_ROUTE_PREFIX}/`.length);
+          const separator = suffix.indexOf("/");
+          expect(
+            yield* resolveAsset(suffix.slice(0, separator), suffix.slice(separator + 1)),
+          ).toMatchObject({ kind: "file", path: canonicalFile, mimeType: "image/png" });
         }
-      }).pipe(Effect.provideService(HostProcess.HomeDirectory, home));
-    }).pipe(Effect.provide(layerTest)),
+      }).pipe(Effect.provide(layerTest)),
   );
 
   // Resolving `file://attacker.test/share/cat.jpg` from an agent's markdown sent the
@@ -613,7 +650,7 @@ describe("AssetAccess", () => {
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-media-validation-" });
+        const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-media-validation-" });
         for (const name of ["report.md", "secret.txt", "secret.%70ng", "secret.png#private.txt"]) {
           const filePath = path.join(root, name);
           yield* fs.writeFileString(filePath, "not media");
@@ -654,7 +691,7 @@ describe("AssetAccess", () => {
       yield* fs.makeDirectory(config.secretsDir, { recursive: true });
       yield* fs.writeFile(stateFile, new Uint8Array(32).fill(7));
       yield* fs.writeFileString(config.dbPath, "SQLite format 3");
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-media-state-" });
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-media-state-" });
       const alias = path.join(root, "alias");
       yield* fs.symlink(stateFile, alias);
       const threadId = ThreadId.make("thread-1");
@@ -696,7 +733,7 @@ describe("AssetAccess", () => {
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-media-symlink-" });
+        const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-media-symlink-" });
         const filePath = path.join(root, "actual.svg");
         const aliasPath = path.join(root, "alias.png");
         const replacementPath = path.join(root, "other.svg");
@@ -728,7 +765,7 @@ describe("AssetAccess", () => {
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-media-open-file-" });
+        const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-media-open-file-" });
         const filePath = path.join(root, "recording.mp4");
         const savedPath = path.join(root, "saved.mp4");
         const secretPath = path.join(root, "secret.txt");
@@ -767,7 +804,7 @@ describe("AssetAccess", () => {
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-media-open-race-" });
+        const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-media-open-race-" });
         const filePath = path.join(root, "recording.mp4");
         const secretPath = path.join(root, "secret.txt");
         yield* fs.writeFileString(filePath, "video");
@@ -803,7 +840,7 @@ describe("AssetAccess", () => {
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-media-parent-race-" });
+        const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-media-parent-race-" });
         const publicDirectory = path.join(root, "public");
         const privateDirectory = path.join(root, "private");
         yield* fs.makeDirectory(publicDirectory);
@@ -857,7 +894,7 @@ describe("AssetAccess", () => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-media-revision-" });
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-media-revision-" });
       const filePath = path.join(root, "recording.mp4");
       yield* fs.writeFileString(filePath, "original");
       yield* Effect.promise(() => NodeFSP.utimes(filePath, 1_000, 1_000));
@@ -894,7 +931,7 @@ describe("AssetAccess", () => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-media-replacement-" });
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-media-replacement-" });
       const filePath = path.join(root, "recording.mp4");
       yield* fs.writeFileString(filePath, "original");
       const input = {
@@ -945,7 +982,7 @@ describe("AssetAccess", () => {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-asset-workspace-",
+        prefix: "cinderdeck-asset-workspace-",
       });
       const htmlPath = path.join(root, "report.html");
       const cssPath = path.join(root, "report.css");
@@ -975,6 +1012,15 @@ describe("AssetAccess", () => {
         kind: "file",
         path: canonicalCssPath,
       });
+      yield* fileSystem.makeDirectory(path.join(root, "clips"));
+      for (const mediaName of ["clips/clip.mp4", "clips/clip.webm", "clips/clip.mp3"]) {
+        const mediaPath = path.join(root, mediaName);
+        yield* fileSystem.writeFileString(mediaPath, "media bytes");
+        expect(yield* resolveAsset(token, mediaName)).toMatchObject({
+          kind: "file",
+          path: yield* fileSystem.realPath(mediaPath),
+        });
+      }
       for (const extension of ["otf", "ttf", "woff", "woff2"]) {
         const fontName = `preview.${extension}`;
         const fontPath = path.join(root, fontName);
@@ -1040,10 +1086,10 @@ describe("AssetAccess", () => {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-asset-root-",
+        prefix: "cinderdeck-asset-root-",
       });
       const outside = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-asset-outside-",
+        prefix: "cinderdeck-asset-outside-",
       });
       const htmlPath = path.join(outside, "report.html");
       yield* fileSystem.writeFileString(htmlPath, "<p>outside</p>");
@@ -1074,7 +1120,7 @@ describe("AssetAccess", () => {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-asset-image-workspace-",
+        prefix: "cinderdeck-asset-image-workspace-",
       });
       const assetsDirectory = path.join(root, "assets");
       yield* fileSystem.makeDirectory(assetsDirectory, { recursive: true });
@@ -1144,7 +1190,7 @@ describe("AssetAccess", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const root = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-preview-literal-" });
+      const root = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-preview-literal-" });
       const directory = path.join(root, "assets#archive");
       yield* fileSystem.makeDirectory(directory);
 
@@ -1252,7 +1298,7 @@ describe("AssetAccess", () => {
         const config = yield* ServerConfig.ServerConfig;
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-attachments-link-" });
+        const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-attachments-link-" });
         const realAttachmentsDir = path.join(root, "real");
         const linkedAttachmentsDir = path.join(root, "linked");
         yield* fs.makeDirectory(realAttachmentsDir);
@@ -1356,7 +1402,7 @@ describe("AssetAccess", () => {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-asset-favicon-",
+        prefix: "cinderdeck-asset-favicon-",
       });
       const faviconPath = path.join(root, "favicon.svg");
       const initialFavicon = "<svg>a</svg>";
@@ -1414,10 +1460,10 @@ describe("AssetAccess", () => {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-asset-favicon-workspace-",
+        prefix: "cinderdeck-asset-favicon-workspace-",
       });
       const pictures = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-asset-favicon-pictures-",
+        prefix: "cinderdeck-asset-favicon-pictures-",
       });
       const externalPath = path.join(pictures, "custom.png");
       const siblingPath = path.join(pictures, "sibling.png");
@@ -1452,7 +1498,7 @@ describe("AssetAccess", () => {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-asset-favicon-hint-",
+        prefix: "cinderdeck-asset-favicon-hint-",
       });
       yield* fileSystem.makeDirectory(path.join(root, "brand"));
       yield* fileSystem.writeFileString(path.join(root, "brand", "hint.svg"), "<svg>hint</svg>");
@@ -1468,8 +1514,37 @@ describe("AssetAccess", () => {
     }).pipe(Effect.provide(layerTest)),
   );
 
+  it.effect("preserves the change request repository through RPC decoding and signed media", () =>
+    Effect.gen(function* () {
+      const decodeAssetCreateUrlInput = Schema.decodeEffect(AssetCreateUrlInput);
+      const resource = {
+        _tag: SOURCE_CONTROL_MEDIA_ASSET,
+        cwd: "/personal-fork",
+        url: "https://github.com/user-attachments/assets/1a1842fb-6383-492f-873c-57aa0033fa6c",
+        repository: "enterprise/private",
+      };
+      const input = yield* decodeAssetCreateUrlInput({ resource });
+      const issued = yield* issueAssetUrl(input);
+      const suffix = issued.relativeUrl.slice(`${ASSET_ROUTE_PREFIX}/`.length);
+      const separator = suffix.indexOf("/");
+      const resolved = yield* resolveAsset(suffix.slice(0, separator), suffix.slice(separator + 1));
+
+      expect(resolved).toEqual({
+        kind: "source-control-media",
+        url: resource.url,
+        cwd: resource.cwd,
+        repository: resource.repository,
+        expiresAt: issued.expiresAt,
+      });
+    }).pipe(Effect.provide(layerTest)),
+  );
+
   it.effect("serves a host's credentialed media through that host's driver", () => {
-    const fetched: Array<{ url: string; headers: Readonly<Record<string, string>> }> = [];
+    const fetched: Array<{
+      url: string;
+      headers: Readonly<Record<string, string>>;
+      repository?: string;
+    }> = [];
     const url = "https://github.com/owner/repo/blob/main/docs/shot.png";
     const media = sourceControlDefinitions.mediaUrl(url)!;
     const layerDrivers = Layer.succeed(BuiltInDrivers.SourceControlDrivers, [
@@ -1488,6 +1563,17 @@ describe("AssetAccess", () => {
         }),
       },
     ]);
+    // Clients that predate `repository` get the checkout's.
+    const layerIdentities = Layer.mock(RepositoryIdentityResolver.RepositoryIdentityResolver)({
+      resolve: () =>
+        Effect.succeed({
+          canonicalKey: "github.com/owner/repo",
+          locator: { source: "git-remote", remoteName: "origin", remoteUrl: "" },
+          provider: media.definition.kind,
+          owner: "owner",
+          name: "repo",
+        }),
+    });
     return Effect.gen(function* () {
       const decodeAssetCreateUrlInput = Schema.decodeEffect(AssetCreateUrlInput);
 
@@ -1511,12 +1597,18 @@ describe("AssetAccess", () => {
         range: "bytes=0-4",
         cookie: "session",
       });
-      expect(fetched).toEqual([{ url: media.fetchUrl, headers: { range: "bytes=0-4" } }]);
+      expect(fetched).toEqual([
+        { url: media.fetchUrl, headers: { range: "bytes=0-4" }, repository: "owner/repo" },
+      ]);
       expect(response.status).toBe(206);
       // The upstream sent no type, so it comes from the file name the host gave the media.
       expect(response.headers["content-type"]).toBe("image/png");
       expect(response.headers["content-length"]).toBe("5");
-    }).pipe(Effect.provide(Layer.merge(layerTest, layerDrivers)), Effect.scoped);
+
+      // A pull request's own repository wins over the checkout it is shown in.
+      yield* sourceControlMediaResponse({ ...asset, repository: "enterprise/private" }, {});
+      expect(fetched.at(-1)?.repository).toBe("enterprise/private");
+    }).pipe(Effect.provide(Layer.mergeAll(layerTest, layerDrivers, layerIdentities)));
   });
 
   it.effect("refuses media no host keeps behind a credential, without echoing the URL", () =>

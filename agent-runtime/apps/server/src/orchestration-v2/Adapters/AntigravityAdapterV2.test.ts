@@ -20,8 +20,10 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 import { ChildProcessSpawner } from "effect/process";
 import type * as EffectAcpSchema from "effect-acp/compat";
@@ -50,8 +52,7 @@ const flavor = makeAntigravityAcpAdapterFlavor({
   selfInvocation: undefined as never,
   makeRuntime: () => Effect.die("not spawned in this test"),
   withProcess: (_stop, task) => task,
-  // @effect-diagnostics-next-line effectSucceedWithVoid:off - This optional result requires undefined, not the wider void type.
-  defaultModel: Effect.succeed(undefined),
+  defaultModel: Effect.undefined,
 });
 
 function permissionRequest(
@@ -147,45 +148,73 @@ const layerSession = Layer.mergeAll(
 );
 
 describe("AntigravityAdapterV2 compaction", () => {
-  it.effect("does not expose unsupported manual compaction on the provider session", () =>
-    Effect.gen(function* () {
-      const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-      const path = yield* Path.Path;
-      const crypto = yield* SecureRandom.SecureRandom;
-      const mockAgentPath = yield* path.fromFileUrl(
-        new URL("../../../scripts/acp-mock-agent.ts", import.meta.url),
-      );
-      const instanceId = ProviderInstanceId.make("antigravity-compaction-test");
-      const adapter = yield* makeAntigravityAdapterV2({
-        instanceId,
-        selfInvocation: yield* resolveSelfInvocation(),
-        makeRuntime: (input) =>
-          makeAntigravityAcpRuntime({
-            ...input,
-            childProcessSpawner,
-            spawn: {
-              command: process.execPath,
-              args: [mockAgentPath],
-              cwd: input.cwd,
-              env: { T3_ACP_ANTIGRAVITY: "1" },
-            },
-          }).pipe(Effect.provideService(SecureRandom.SecureRandom, crypto)),
-        withProcess: (_stop, task) => task,
-        // @effect-diagnostics-next-line effectSucceedWithVoid:off - This optional result requires undefined, not the wider void type.
-        defaultModel: Effect.succeed(undefined),
-      });
-      const session = yield* adapter.openSession({
-        threadId: ThreadId.make("thread-antigravity-compaction"),
-        providerSessionId: ProviderSessionId.make("provider-session-antigravity-compaction"),
-        modelSelection: { instanceId, model: "gemini-test-low" },
-        runtimePolicy: ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
-          runtimeMode: "full-access",
-          interactionMode: "default",
-          cwd: process.cwd(),
-        }),
-      });
-      assert.isUndefined(session.compactThread);
-    }).pipe(Effect.provide(layerSession), Effect.scoped),
+  it.live.each([false, true])(
+    "negotiates native goals (%s) without enabling manual compaction",
+    (nativeGoals) =>
+      Effect.gen(function* () {
+        const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+        const path = yield* Path.Path;
+        const crypto = yield* SecureRandom.SecureRandom;
+        const mockAgentPath = yield* path.fromFileUrl(
+          new URL("../../../scripts/acp-mock-agent.ts", import.meta.url),
+        );
+        const instanceId = ProviderInstanceId.make("antigravity-compaction-test");
+        const goalSupport = yield* Ref.make(false);
+        const startupMilestone = yield* Deferred.make<void>();
+        const consumeStartupCommands = yield* Deferred.make<void>();
+        const adapter = yield* makeAntigravityAdapterV2({
+          instanceId,
+          selfInvocation: yield* resolveSelfInvocation(),
+          makeRuntime: (input) =>
+            makeAntigravityAcpRuntime({
+              ...input,
+              childProcessSpawner,
+              spawn: {
+                command: process.execPath,
+                args: [mockAgentPath],
+                cwd: input.cwd,
+                env: { T3_ACP_ANTIGRAVITY: "1" },
+              },
+            }).pipe(
+              Effect.provideService(SecureRandom.SecureRandom, crypto),
+              Effect.map((runtime) => ({
+                ...runtime,
+                drainEvents: Deferred.succeed(startupMilestone, undefined).pipe(
+                  Effect.andThen(runtime.drainEvents),
+                ),
+              })),
+            ),
+          withProcess: (_stop, task) => task,
+          defaultModel: Effect.undefined,
+          supportsNativeGoals: Ref.get(goalSupport).pipe(
+            Effect.tap(() => Deferred.succeed(startupMilestone, undefined)),
+          ),
+          onSessionEvent: (event) =>
+            event._tag === "AvailableCommandsUpdated"
+              ? Deferred.await(consumeStartupCommands).pipe(
+                  Effect.andThen(Ref.set(goalSupport, nativeGoals)),
+                )
+              : Effect.void,
+        });
+        const opening = yield* adapter
+          .openSession({
+            threadId: ThreadId.make("thread-antigravity-compaction"),
+            providerSessionId: ProviderSessionId.make("provider-session-antigravity-compaction"),
+            modelSelection: { instanceId, model: "gemini-test-low" },
+            runtimePolicy: ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
+              runtimeMode: "full-access",
+              interactionMode: "default",
+              cwd: process.cwd(),
+            }),
+          })
+          .pipe(Effect.forkScoped);
+        yield* Deferred.await(startupMilestone);
+        yield* Deferred.succeed(consumeStartupCommands, undefined);
+        const session = yield* Fiber.join(opening);
+        assert.isUndefined(session.compactThread);
+        assert.equal(session.providerSession.capabilities.turns.supportsNativeGoals, nativeGoals);
+        assert.equal((yield* adapter.getCapabilities()).turns.supportsNativeGoals, nativeGoals);
+      }).pipe(Effect.provide(layerSession)),
   );
 });
 
@@ -220,8 +249,7 @@ describe("AntigravityAdapterV2 session open", () => {
         selfInvocation: yield* resolveSelfInvocation(),
         makeRuntime: () => Effect.fail(cause),
         withProcess: (_stop, task) => task,
-        // @effect-diagnostics-next-line effectSucceedWithVoid:off - This optional result requires undefined, not the wider void type.
-        defaultModel: Effect.succeed(undefined),
+        defaultModel: Effect.undefined,
       });
       const threadId = ThreadId.make("thread-antigravity-sign-in");
       const error = yield* adapter
@@ -242,7 +270,7 @@ describe("AntigravityAdapterV2 session open", () => {
         error._tag === "ProviderAdapterOpenSessionError" && error.requiresSignIn,
         requiresSignIn,
       );
-    }).pipe(Effect.provide(layerSession), Effect.scoped),
+    }).pipe(Effect.provide(layerSession)),
   );
 });
 
@@ -260,7 +288,7 @@ describe("AntigravityAdapterV2 client file system", () => {
       // effect-acp keeps the last handler registered per method; so does this.
       let readTextFile: Parameters<RuntimeService["handleReadTextFile"]>[0] | undefined;
       let writeTextFile: Parameters<RuntimeService["handleWriteTextFile"]>[0] | undefined;
-      const logs = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-antigravity-log-" });
+      const logs = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-antigravity-log-" });
       const requestLog = path.join(logs, "requests.ndjson");
       const crypto = yield* SecureRandom.SecureRandom;
       const instanceId = ProviderInstanceId.make("antigravity-containment-test");
@@ -292,14 +320,13 @@ describe("AntigravityAdapterV2 client file system", () => {
             })),
           ),
         withProcess: (_stop, task) => task,
-        // @effect-diagnostics-next-line effectSucceedWithVoid:off - This optional result requires undefined, not the wider void type.
-        defaultModel: Effect.succeed(undefined),
+        defaultModel: Effect.undefined,
       });
       const workspace = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-antigravity-workspace-",
+        prefix: "cinderdeck-antigravity-workspace-",
       });
       const outside = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-antigravity-outside-",
+        prefix: "cinderdeck-antigravity-outside-",
       });
       const outsideFile = path.join(outside, "secret.txt");
       yield* fileSystem.writeFileString(outsideFile, "secret");
@@ -389,7 +416,7 @@ describe("AntigravityAdapterV2 client file system", () => {
         context("fs/read_text_file"),
       );
       assert.equal(viaInsideLink.content, "inside");
-    }).pipe(Effect.provide(layerSession), Effect.scoped),
+    }).pipe(Effect.provide(layerSession)),
   );
 });
 
@@ -458,11 +485,10 @@ describe("AntigravityAdapterV2 workspace changes", () => {
             })),
           ),
         withProcess: (_stop, task) => task,
-        // @effect-diagnostics-next-line effectSucceedWithVoid:off - This optional result requires undefined, not the wider void type.
-        defaultModel: Effect.succeed(undefined),
+        defaultModel: Effect.undefined,
       });
-      const workspaceA = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-ag-a-" });
-      const workspaceB = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-ag-b-" });
+      const workspaceA = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-ag-a-" });
+      const workspaceB = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-ag-b-" });
       yield* fileSystem.writeFileString(path.join(workspaceA, "a.txt"), "from a");
       yield* fileSystem.writeFileString(path.join(workspaceB, "b.txt"), "from b");
       const policyFor = (cwd: string) =>
@@ -545,7 +571,7 @@ describe("AntigravityAdapterV2 workspace changes", () => {
           },
         ],
       );
-      assert.include(JSON.stringify(sent.prompt), documentPath);
+      assert.include(JSON.stringify(sent.prompt), JSON.stringify(documentPath).slice(1, -1));
       if (readTextFile === undefined) {
         return yield* Effect.die("Antigravity sessions must serve client file requests");
       }
@@ -560,7 +586,7 @@ describe("AntigravityAdapterV2 workspace changes", () => {
         context,
       ).pipe(Effect.exit);
       assert.isTrue(Exit.isFailure(fromA), "the previous workspace is no longer readable");
-    }).pipe(Effect.provide(layerSession), Effect.scoped),
+    }).pipe(Effect.provide(layerSession)),
   );
 });
 
@@ -709,8 +735,7 @@ describe("AntigravityAdapterV2 html_render pages", () => {
             })),
           ),
         withProcess: (_stop, task) => task,
-        // @effect-diagnostics-next-line effectSucceedWithVoid:off - This optional result requires undefined, not the wider void type.
-        defaultModel: Effect.succeed(undefined),
+        defaultModel: Effect.undefined,
       });
       const runtimePolicy = ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
         runtimeMode: "full-access",
@@ -797,25 +822,25 @@ describe("AntigravityAdapterV2 html_render pages", () => {
 
       assert.deepEqual(tool("published"), {
         status: "completed",
-        toolName: "t3-code.html_render",
+        toolName: "cinderdeck-code.html_render",
         page: page("replacement"),
         output: { htmlRender: page("replacement") },
       });
       assert.deepEqual(tool("unpublished"), {
         status: "completed",
-        toolName: "t3-code.html_render",
+        toolName: "cinderdeck-code.html_render",
         page: undefined,
         output: "Summary of unpublished",
       });
       assert.deepEqual(tool("failed"), {
         status: "failed",
-        toolName: "t3-code.html_render",
+        toolName: "cinderdeck-code.html_render",
         page: undefined,
         output: "Summary of failed",
       });
       assert.deepEqual(tool("error"), {
         status: "completed",
-        toolName: "t3-code.html_render",
+        toolName: "cinderdeck-code.html_render",
         page: undefined,
         output: [],
       });
@@ -833,7 +858,7 @@ describe("AntigravityAdapterV2 html_render pages", () => {
       for (const name of ["failed-retry", "error-retry"]) {
         assert.deepEqual(tool(name), {
           status: "completed",
-          toolName: "t3-code.html_render",
+          toolName: "cinderdeck-code.html_render",
           page: page(name),
           output: { htmlRender: page(name) },
         });
@@ -841,12 +866,12 @@ describe("AntigravityAdapterV2 html_render pages", () => {
       assert.strictEqual(yield* mcpSessions.takeHtmlRender(threadId, report), undefined);
       assert.strictEqual(yield* mcpSessions.takeHtmlRender(threadId, failed), undefined);
       assert.strictEqual(yield* mcpSessions.takeHtmlRender(threadId, errored), undefined);
-    }).pipe(Effect.provide(layerSession), Effect.scoped),
+    }).pipe(Effect.provide(layerSession)),
   );
 });
 
 describe("AntigravityAdapterV2 subagent reads", () => {
-  it.effect("completes a read T3 served when the agent later fails it with a step error", () =>
+  it.effect("completes a read Cinderdeck served when the agent later fails it with a step error", () =>
     Effect.gen(function* () {
       const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
       const fileSystem = yield* FileSystem.FileSystem;
@@ -856,10 +881,10 @@ describe("AntigravityAdapterV2 subagent reads", () => {
         new URL("../../../scripts/acp-mock-agent.ts", import.meta.url),
       );
       const workspace = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-antigravity-reads-",
+        prefix: "cinderdeck-antigravity-reads-",
       });
       const outside = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-antigravity-reads-outside-",
+        prefix: "cinderdeck-antigravity-reads-outside-",
       });
       const served = path.join(workspace, "served.ts");
       yield* fileSystem.writeFileString(served, "export {};");
@@ -911,7 +936,7 @@ describe("AntigravityAdapterV2 subagent reads", () => {
                     send(
                       normalizeAntigravitySessionUpdate({ sessionId: "mock-session-1", update }),
                     );
-                  // The agent's own view_file never reaches T3, so it must not take a served read.
+                  // The agent's own view_file never reaches Cinderdeck, so it must not take a served read.
                   const reads = [
                     ["call_native", served, "Running view_file"],
                     ["call_served", served, "Running client_view_file"],
@@ -954,8 +979,7 @@ describe("AntigravityAdapterV2 subagent reads", () => {
             })),
           ),
         withProcess: (_stop, task) => task,
-        // @effect-diagnostics-next-line effectSucceedWithVoid:off - This optional result requires undefined, not the wider void type.
-        defaultModel: Effect.succeed(undefined),
+        defaultModel: Effect.undefined,
       });
       const runtimePolicy = ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
         runtimeMode: "full-access",
@@ -1040,7 +1064,7 @@ describe("AntigravityAdapterV2 subagent reads", () => {
             event.turnItem.nativeItemRef?.nativeId === nativeId &&
             event.turnItem.status === status,
         );
-      // T3 completes a served read itself instead of leaving it running until the flush.
+      // Cinderdeck completes a served read itself instead of leaving it running until the flush.
       assert.isAbove(firstEvent("call_served", "completed"), -1);
       assert.isBelow(firstEvent("call_served", "completed"), firstEvent("call_native", "failed"));
       const failed = { status: "failed" as const, output: stepError };
@@ -1050,7 +1074,7 @@ describe("AntigravityAdapterV2 subagent reads", () => {
       assert.deepEqual(read("call_missing"), failed);
       assert.deepEqual(read("call_denied"), failed);
       assert.deepEqual(read("call_unseen"), failed);
-    }).pipe(Effect.provide(layerSession), Effect.scoped),
+    }).pipe(Effect.provide(layerSession)),
   );
 });
 
@@ -1090,8 +1114,7 @@ describe("AntigravityAdapterV2 runtime mode ceiling", () => {
             })),
           ),
         withProcess: (_stop, task) => task,
-        // @effect-diagnostics-next-line effectSucceedWithVoid:off - This optional result requires undefined, not the wider void type.
-        defaultModel: Effect.succeed(undefined),
+        defaultModel: Effect.undefined,
       });
       const threadId = ThreadId.make("thread-antigravity-ceiling");
       yield* adapter.openSession({
@@ -1133,7 +1156,7 @@ describe("AntigravityAdapterV2 session system prompt", () => {
         const mockAgentPath = yield* path.fromFileUrl(
           new URL("../../../scripts/acp-mock-agent.ts", import.meta.url),
         );
-        const logs = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-antigravity-log-" });
+        const logs = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-antigravity-log-" });
         const requestLog = path.join(logs, "requests.ndjson");
         type RuntimeService = AcpSessionRuntime.AcpSessionRuntime["Service"];
         const promptReceived = yield* Deferred.make<Parameters<RuntimeService["prompt"]>[0]>();
@@ -1167,10 +1190,9 @@ describe("AntigravityAdapterV2 session system prompt", () => {
               })),
             ),
           withProcess: (_stop, task) => task,
-          // @effect-diagnostics-next-line effectSucceedWithVoid:off - This optional result requires undefined, not the wider void type.
-          defaultModel: Effect.succeed(undefined),
+          defaultModel: Effect.undefined,
         });
-        const workspace = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-ag-sp-" });
+        const workspace = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-ag-sp-" });
         const runtimePolicy = ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
           runtimeMode: "full-access",
           interactionMode: "default",
@@ -1249,6 +1271,6 @@ describe("AntigravityAdapterV2 session system prompt", () => {
           assert.notInclude(append, "systemPrompt");
           assert.include(sent, "<pull_request_linking>");
         }
-      }).pipe(Effect.provide(layerSession), Effect.scoped),
+      }).pipe(Effect.provide(layerSession)),
   );
 });

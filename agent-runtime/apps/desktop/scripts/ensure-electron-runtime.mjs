@@ -136,7 +136,7 @@ function installFromElectronCache(electronDir) {
 }
 
 function downloadElectronRuntime(electronDir, version) {
-  const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-electron-"));
+  const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-electron-"));
   const zipPath = NodePath.join(tempDir, `electron-v${version}-${hostPlatform}-${hostArch}.zip`);
 
   try {
@@ -207,6 +207,10 @@ export function ensureElectronRuntime() {
   repairPathFile(electronDir, platformPath);
 
   return electronPath;
+}
+
+export function setup() {
+  ensureElectronRuntime();
 }
 
 // `file://${argv[1]}` never matches on Windows (drive letters need `file:///C:/`).

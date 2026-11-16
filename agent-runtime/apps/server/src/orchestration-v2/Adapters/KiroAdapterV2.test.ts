@@ -18,6 +18,7 @@ import {
 } from "@cinderdeck/contracts";
 import { resolveSelfInvocation } from "@cinderdeck/shared/nodeRuntime";
 import { htmlRenderFromToolItem } from "@cinderdeck/shared/toolOutput";
+import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -38,8 +39,11 @@ import type * as AcpSessionRuntime from "@cinderdeck/provider-acp/server/AcpSess
 import * as IdAllocator from "@cinderdeck/provider-core/server/IdAllocator";
 import * as McpProviderSessions from "@cinderdeck/provider-core/server/McpProviderSessions";
 import {
+  ProviderAdapterTurnStartError,
   type ProviderAdapterV2Error,
   type ProviderAdapterV2Event,
+  type ProviderAdapterV2TurnInput,
+  ProviderCompactionUnsupportedError,
   ProviderAdapterV2RuntimePolicy,
 } from "@cinderdeck/provider-core/server/ProviderAdapter";
 import {
@@ -239,7 +243,7 @@ const configResult = (configOptions: ReadonlyArray<unknown>) =>
   answer("session/set_config_option", { configOptions });
 const reasoning = (value: string) => [{ id: "reasoningEffort", value }];
 
-/** Kiro's `session/new` result, recorded from 2.27.0 and trimmed to what T3 reads. */
+/** Kiro's `session/new` result, recorded from 2.27.0 and trimmed to what Cinderdeck reads. */
 const sessionSetup = (configOptions: ReadonlyArray<unknown>) => ({
   _meta: { schemaVersion: "1.0.0", id: SESSION_ID, agentMode: "vibe", source: "local" },
   sessionId: SESSION_ID,
@@ -254,13 +258,13 @@ const sessionSetup = (configOptions: ReadonlyArray<unknown>) => ({
   configOptions,
 });
 
-/** What Kiro sends right after `initialize` and around `session/new`, all unknown to T3. */
+/** What Kiro sends right after `initialize` and around `session/new`, all unknown to Cinderdeck. */
 const kiroSessionNoise: ReadonlyArray<Frame> = [
   kiroNotification("_kiro/mcp/status", { sessionId: SESSION_ID, servers: [] }),
   kiroNotification("_kiro/sessions/changed", { upserted: [], deleted: [] }),
 ];
 
-// Kiro advertises `sessionCapabilities.close`, so T3 closes the session on teardown.
+// Kiro advertises `sessionCapabilities.close`, so Cinderdeck closes the session on teardown.
 const closeSession: ReadonlyArray<Frame> = [
   outbound("session/close", { sessionId: SESSION_ID }),
   answer("session/close", {}),
@@ -316,6 +320,8 @@ const runKiroScript = Effect.fn("runKiroScript")(function* (input: {
       model: string,
       options?: ModelSelection["options"],
     ) => Effect.Effect<void, ProviderAdapterV2Error>;
+    /** Runs Cinderdeck's compact action as turn `ordinal`. */
+    readonly compact: (ordinal: number) => Effect.Effect<void, ProviderAdapterV2Error>;
     readonly interrupt: (
       providerTurnId: ProviderTurnId,
     ) => Effect.Effect<void, ProviderAdapterV2Error>;
@@ -329,7 +335,7 @@ const runKiroScript = Effect.fn("runKiroScript")(function* (input: {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const replayDir = yield* fileSystem.makeTempDirectoryScoped({
-    prefix: `t3-kiro-${input.scenario}-`,
+    prefix: `cinderdeck-kiro-${input.scenario}-`,
   });
   const statusPath = path.join(replayDir, "status.json");
   const transcript = yield* decodeAcpReplayTranscript(
@@ -390,10 +396,15 @@ const runKiroScript = Effect.fn("runKiroScript")(function* (input: {
     });
     const providerThread = yield* session.ensureThread({ threadId, modelSelection, runtimePolicy });
     const now = yield* DateTime.now;
-    const startTurnOn = (ordinal: number, model: string, options?: ModelSelection["options"]) => {
+    const turnInput = (
+      ordinal: number,
+      model: string,
+      options?: ModelSelection["options"],
+      text = "Say hello",
+    ): ProviderAdapterV2TurnInput => {
       const suffix = `${threadId}:${ordinal}`;
       const turnSelection = { instanceId, model, ...(options === undefined ? {} : { options }) };
-      return session.startTurn({
+      return {
         appThread: {
           createdBy: "user",
           creationSource: "web",
@@ -428,17 +439,26 @@ const runKiroScript = Effect.fn("runKiroScript")(function* (input: {
           createdBy: "user",
           creationSource: "web",
           messageId: MessageId.make(`message:${suffix}`),
-          text: "Say hello",
+          text,
           attachments: [],
         },
         modelSelection: turnSelection,
         runtimePolicy,
-      });
+      };
     };
+    const startTurnOn = (ordinal: number, model: string, options?: ModelSelection["options"]) =>
+      session.startTurn(turnInput(ordinal, model, options));
+    const compact = (ordinal: number) =>
+      session.compactThread === undefined
+        ? Effect.die("Kiro adapter does not offer compactThread")
+        : session.compactThread(
+            turnInput(ordinal, modelSelection.model, input.options, "/compact"),
+          );
     yield* input.drive({
       events: session.events,
       startTurn: startTurnOn(1, modelSelection.model, input.options),
       startTurnOn,
+      compact,
       interrupt: (providerTurnId) => session.interruptTurn({ providerThread, providerTurnId }),
       respond: (requestId, decision) => session.respondToRuntimeRequest({ requestId, decision }),
     });
@@ -460,14 +480,14 @@ const terminalStatus = (events: ReadonlyArray<ProviderAdapterV2Event>) => {
 };
 
 describe("KiroAdapterV2", () => {
-  it.effect("opens a session on a deployment that advertises no Kiro extensions", () =>
+  it.effect("opens a session and refuses compaction on a deployment with no Kiro extensions", () =>
     runKiroScript({
       scenario: "no-extensions",
       frames: [
         outbound("initialize"),
         answer("initialize", KIRO_V3_INITIALIZE_WITHOUT_EXTENSIONS),
         outbound("session/new", { cwd: "<workspace>", mcpServers: "<any>" }),
-        // No autopilot option advertised, so T3 sends no config write.
+        // No autopilot option advertised, so Cinderdeck sends no config write.
         answer("session/new", sessionSetup([modeOption])),
         turnPrompt,
         update({
@@ -476,12 +496,20 @@ describe("KiroAdapterV2", () => {
         }),
         answer("session/prompt", { stopReason: "end_turn" }),
       ],
-      drive: ({ events, startTurn }) =>
+      drive: ({ events, startTurn, compact }) =>
         Effect.gen(function* () {
           yield* startTurn;
           assert.equal(terminalStatus(yield* collectTurn(events)), "completed");
+          // `_kiro/session/compact` is not advertised, so Cinderdeck must not send it.
+          const compacted = yield* Effect.exit(compact(2));
+          const error = Exit.isFailure(compacted) ? Cause.squash(compacted.cause) : undefined;
+          assert.instanceOf(error, ProviderAdapterTurnStartError);
+          assert.instanceOf(
+            (error as ProviderAdapterTurnStartError).cause,
+            ProviderCompactionUnsupportedError,
+          );
         }),
-    }).pipe(Effect.provide(testLayer), Effect.scoped),
+    }).pipe(Effect.provide(testLayer)),
   );
 
   it.effect("switches back to Kiro's default model after a named one", () =>
@@ -529,7 +557,7 @@ describe("KiroAdapterV2", () => {
             assert.equal(terminalStatus(yield* collectTurn(events)), "completed");
           }
         }),
-    }).pipe(Effect.provide(testLayer), Effect.scoped),
+    }).pipe(Effect.provide(testLayer)),
   );
 
   it.effect("sets the thread's effort once the model write advertises it, and after a switch", () =>
@@ -610,7 +638,7 @@ describe("KiroAdapterV2", () => {
             assert.equal(terminalStatus(yield* collectTurn(events)), "completed");
           }
         }),
-    }).pipe(Effect.provide(testLayer), Effect.scoped),
+    }).pipe(Effect.provide(testLayer)),
   );
 
   it.effect("waits for Kiro to advertise the model before setting its effort", () =>
@@ -660,7 +688,7 @@ describe("KiroAdapterV2", () => {
           yield* startTurnOn(1, "claude-opus-5.5", reasoning("high"));
           assert.equal(terminalStatus(yield* collectTurn(events)), "completed");
         }),
-    }).pipe(Effect.provide(testLayer), Effect.scoped),
+    }).pipe(Effect.provide(testLayer)),
   );
 
   it.effect("never sends an effort level the model does not offer", () =>
@@ -716,7 +744,7 @@ describe("KiroAdapterV2", () => {
             assert.equal(terminalStatus(yield* collectTurn(events)), "completed");
           }
         }),
-    }).pipe(Effect.provide(testLayer), Effect.scoped),
+    }).pipe(Effect.provide(testLayer)),
   );
 
   it.effect("answers a stale 'this session' approval with Kiro's allow_once", () =>
@@ -777,7 +805,7 @@ describe("KiroAdapterV2", () => {
           yield* respond(yield* Deferred.await(pending), "acceptForSession");
           assert.equal(terminalStatus(yield* Fiber.join(turn)), "completed");
         }),
-    }).pipe(Effect.provide(testLayer), Effect.scoped),
+    }).pipe(Effect.provide(testLayer)),
   );
 
   it.effect("sends a model Kiro does not list, and fails with Kiro's own message", () =>
@@ -827,7 +855,7 @@ describe("KiroAdapterV2", () => {
           }
           assert.include(terminal.failure.message, "'claude-opus-9' is not available");
         }),
-    }).pipe(Effect.provide(testLayer), Effect.scoped),
+    }).pipe(Effect.provide(testLayer)),
   );
 });
 
@@ -893,7 +921,7 @@ describe("KiroAdapterV2 agents", () => {
           yield* startTurnOn(2, "claude-opus-5.5", agent("spec"));
           assert.equal(terminalStatus(yield* collectTurn(events)), "completed");
         }),
-    }).pipe(Effect.provide(testLayer), Effect.scoped),
+    }).pipe(Effect.provide(testLayer)),
   );
 
   it.effect("puts Kiro default back after an agent switch moved the session off it", () =>
@@ -929,7 +957,7 @@ describe("KiroAdapterV2 agents", () => {
           yield* startTurn;
           assert.equal(terminalStatus(yield* collectTurn(events)), "completed");
         }),
-    }).pipe(Effect.provide(testLayer), Effect.scoped),
+    }).pipe(Effect.provide(testLayer)),
   );
 
   it.effect("keeps the session's agent when the thread's agent no longer exists", () =>
@@ -956,7 +984,7 @@ describe("KiroAdapterV2 agents", () => {
           yield* startTurn;
           assert.equal(terminalStatus(yield* collectTurn(events)), "completed");
         }),
-    }).pipe(Effect.provide(testLayer), Effect.scoped),
+    }).pipe(Effect.provide(testLayer)),
   );
 });
 
@@ -992,7 +1020,7 @@ describe("KiroAdapterV2 early Stop", () => {
 
   /**
    * Runs a Kiro turn and presses Stop as soon as it runs. Once Stop holds its
-   * cancel, `drive` gets the replay gate, a receipt for the cancel T3 sends,
+   * cancel, `drive` gets the replay gate, a receipt for the cancel Cinderdeck sends,
    * and Stop's exit.
    */
   const earlyStop = (input: {
@@ -1245,13 +1273,13 @@ describe("KiroAdapterV2 MCP tools", () => {
   // Probed live on Kiro 2.33.1 against a stdio MCP server named t3-code, without
   // the permission round trip. Kiro titles the call "@t3-code/html_render", names
   // it in `tool_id`, and keeps only the result's text.
-  it.effect("shows T3's html_render as T3's tool with the page T3 published", () =>
+  it.effect("shows Cinderdeck's html_render as Cinderdeck's tool with the page Cinderdeck published", () =>
     Effect.gen(function* () {
       const mcpSessions = yield* McpProviderSessions.McpProviderSessions;
       const toolCallId = "tooluse_4N3LnlI9PRlphUtzdBQGDD";
       const args = { html: "<p>hi</p>", title: "Probe", height: 120 };
-      const rawInput = { tool_id: "t3-code::html_render", arguments: args };
-      const kiroMeta = { kiro: { serverName: "t3-code", toolOrigin: "default" } };
+      const rawInput = { tool_id: "cinderdeck-code::html_render", arguments: args };
+      const kiroMeta = { kiro: { serverName: "cinderdeck-code", toolOrigin: "default" } };
       const page = { attachmentId: "kiro-mcp-html-render-page", title: "Probe", height: 120 };
       yield* runKiroScript({
         scenario: "mcp-html-render",
@@ -1292,7 +1320,7 @@ describe("KiroAdapterV2 MCP tools", () => {
         ],
         drive: ({ events, startTurn }) =>
           Effect.gen(function* () {
-            // T3's MCP server records the page when Kiro calls html_render.
+            // Cinderdeck's MCP server records the page when Kiro calls html_render.
             yield* mcpSessions.recordHtmlRender(
               ThreadId.make("thread-kiro-mcp-html-render"),
               args,
@@ -1310,7 +1338,7 @@ describe("KiroAdapterV2 MCP tools", () => {
             const completed = items.at(-1);
             assert.deepEqual(
               items.map((item) => item.toolName),
-              items.map(() => "t3-code.html_render"),
+              items.map(() => "cinderdeck-code.html_render"),
             );
             assert.equal(completed?.status, "completed");
             assert.deepEqual(completed?.input, args);
@@ -1320,13 +1348,13 @@ describe("KiroAdapterV2 MCP tools", () => {
             );
           }),
       });
-    }).pipe(Effect.provide(testLayer), Effect.scoped),
+    }).pipe(Effect.provide(testLayer)),
   );
 });
 
 describe("KiroAdapterV2 unknown model", () => {
   // Recorded live from Kiro 2.27.0 with the thread on a model id the account
-  // lacks. Kiro has not advertised `model` yet, so T3 sends the id; Kiro
+  // lacks. Kiro has not advertised `model` yet, so Cinderdeck sends the id; Kiro
   // accepts it and fails the prompt with its own explanation.
   it.effect("fails the turn with Kiro's own unavailable-model message", () =>
     Effect.gen(function* () {
@@ -1355,7 +1383,7 @@ describe("KiroAdapterV2 unknown model", () => {
       yield* runKiroScript({
         scenario: "unknown-model",
         model: "not-a-kiro-model",
-        // As recorded: Kiro already runs on Autopilot, so T3 writes only the model.
+        // As recorded: Kiro already runs on Autopilot, so Cinderdeck writes only the model.
         runtimeMode: "full-access",
         frames: [
           ...(frames as ReadonlyArray<Frame>),
@@ -1375,7 +1403,7 @@ describe("KiroAdapterV2 unknown model", () => {
             assert.equal(terminal.failure.code, "-32000");
           }),
       });
-    }).pipe(Effect.provide(testLayer), Effect.scoped),
+    }).pipe(Effect.provide(testLayer)),
   );
 });
 

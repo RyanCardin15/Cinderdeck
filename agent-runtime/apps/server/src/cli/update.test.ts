@@ -12,17 +12,23 @@ import * as Path from "effect/Path";
 import * as TestClock from "effect/testing/TestClock";
 import * as TestConsole from "effect/testing/TestConsole";
 import { HttpClient, HttpClientResponse } from "effect/http";
+import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import { afterEach, vi } from "vite-plus/test";
 
 import packageJson from "../../package.json" with { type: "json" };
 import * as BootService from "../cloud/bootService.ts";
-import { pinnedRuntimePaths, prunePinnedRuntimes } from "../cloud/pinnedRuntime.ts";
+import {
+  pinnedRuntimePaths,
+  posixLauncherScript,
+  prunePinnedRuntimes,
+  readPosixLauncherTarget,
+  resolveLauncherPath,
+} from "../cloud/pinnedRuntime.ts";
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
 import * as ProcessRunner from "../processRunner.ts";
 import {
   repointLauncher,
-  resolveLauncherPath,
   resolveMirrorVersion,
   resolveNewestVersion,
   runUpdate,
@@ -51,7 +57,7 @@ it.effect("authenticates each release page until the requested channel is found"
     const httpClient = HttpClient.make((request) => {
       const url = new URL(request.url);
       assert.equal(url.origin, "https://api.github.com");
-      assert.equal(url.pathname, "/repos/pingdotgg/t3code/releases");
+      assert.equal(url.pathname, "/repos/pingdotgg/cinderdeck/releases");
       assert.equal(request.headers.accept, "application/vnd.github+json");
       assert.equal(request.headers.authorization, "Bearer gh-token");
       const page = url.searchParams.get("page") ?? "";
@@ -73,7 +79,7 @@ it.effect("reads the newest version from the update feed file a mirror publishes
     const requested: string[] = [];
     const mirror = {
       organization: "Example Corp",
-      feedUrl: "https://updates.example.com/t3code/?token=abc",
+      feedUrl: "https://updates.example.com/cinderdeck/?token=abc",
     };
     const resolve = (
       channel: "stable" | "nightly" | "preview",
@@ -104,8 +110,8 @@ it.effect("reads the newest version from the update feed file a mirror publishes
       "1.5.0-nightly.20261101.2",
     );
     assert.deepStrictEqual(requested, [
-      "https://updates.example.com/t3code/latest-mac.yml?token=abc",
-      "https://updates.example.com/t3code/nightly-linux-arm64.yml?token=abc",
+      "https://updates.example.com/cinderdeck/latest-mac.yml?token=abc",
+      "https://updates.example.com/cinderdeck/nightly-linux-arm64.yml?token=abc",
     ]);
     // A feed for the wrong track is not trusted to mean the requested one.
     assert.include(
@@ -116,7 +122,7 @@ it.effect("reads the newest version from the update feed file a mirror publishes
   }),
 );
 
-it.layer(NodeServices.layer)("t3 update under a managed policy", (it) => {
+it.layer(NodeServices.layer)("cinderdeck update under a managed policy", (it) => {
   const runWithPolicy = (
     updates: ManagedUpdatesPolicy,
     input: { readonly channel?: "stable" | "nightly"; readonly requestedVersion?: string } = {},
@@ -150,7 +156,7 @@ it.layer(NodeServices.layer)("t3 update under a managed policy", (it) => {
   it.effect("refuses to update when updates are off", () =>
     Effect.gen(function* () {
       const error = yield* runWithPolicy({ mode: "off" });
-      assert.equal(error.message, "Example Corp manages T3 Code updates.");
+      assert.equal(error.message, "Example Corp manages Cinderdeck updates.");
     }),
   );
 
@@ -167,7 +173,7 @@ it.layer(NodeServices.layer)("t3 update under a managed policy", (it) => {
       for (const error of [byChannel, byVersion]) {
         assert.equal(
           error.message,
-          "Example Corp manages T3 Code updates. Only stable releases can be installed.",
+          "Example Corp manages Cinderdeck updates. Only stable releases can be installed.",
         );
       }
     }),
@@ -177,7 +183,7 @@ it.layer(NodeServices.layer)("t3 update under a managed policy", (it) => {
     Effect.gen(function* () {
       const requested: string[] = [];
       const error = yield* runWithPolicy(
-        { mode: "auto", feedUrl: "https://updates.example.com/t3code" },
+        { mode: "auto", feedUrl: "https://updates.example.com/cinderdeck" },
         { channel: "stable" },
         HttpClient.make((request) => {
           requested.push(new URL(request.url).origin);
@@ -192,15 +198,15 @@ it.layer(NodeServices.layer)("t3 update under a managed policy", (it) => {
   );
 });
 
-it.layer(NodeServices.layer)("t3 update launcher", (it) => {
-  it.effect("repoints a symlink that lives in a runtime versions tree", () =>
+it.layer(NodeServices.layer)("cinderdeck update launcher", (it) => {
+  it.effect("replaces a legacy symlink with a script that execs the new version", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-update-" });
-      const oldExe = path.join(root, "runtime/versions/1.0.0/t3");
-      const newExe = path.join(root, "runtime/versions/2.0.0/t3");
-      const launcher = path.join(root, "bin/t3");
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-update-" });
+      const oldExe = path.join(root, "runtime/versions/1.0.0/cinderdeck");
+      const newExe = path.join(root, "runtime/versions/2.0.0/cinderdeck");
+      const launcher = path.join(root, "bin/cinderdeck");
       for (const file of [oldExe, newExe]) {
         yield* fs.makeDirectory(path.dirname(file), { recursive: true });
         yield* fs.writeFileString(file, "");
@@ -215,44 +221,117 @@ it.layer(NodeServices.layer)("t3 update launcher", (it) => {
       });
 
       assert.deepStrictEqual(Option.getOrUndefined(repointed), launcher);
-      assert.equal(yield* fs.readLink(launcher), newExe);
+      assert.equal(yield* fs.readFileString(launcher), posixLauncherScript(newExe));
+      // Replaced, not written through.
+      assert.equal(yield* fs.readFileString(oldExe), "");
     }).pipe(Effect.scoped, Effect.provideService(HostProcess.Platform, "linux")),
+  );
+
+  it.effect.skipIf(HostProcess.Platform.defaultValue() === "win32")(
+    "finds the script that ran this executable and rewrites it, keeping aliases and arguments",
+    () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+        const root = yield* fs.realPath(
+          yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-update-" }),
+        );
+        // A quote and a space in the home path exercise the script's quoting.
+        const home = path.join(root, "it's home");
+        const entry = (version: string) => path.join(home, "runtime/versions", version, "cinderdeck");
+        for (const version of ["1.0.0", "2.0.0"]) {
+          yield* fs.makeDirectory(path.dirname(entry(version)), { recursive: true });
+          yield* fs.writeFileString(entry(version), '#!/bin/sh\nprintf \'[%s]\\n\' "$0" "$@"\n', {
+            mode: 0o755,
+          });
+        }
+        const launcher = path.join(root, "bin/cinderdeck");
+        const alias = path.join(root, "alias/cinderdeck");
+        yield* fs.makeDirectory(path.dirname(launcher), { recursive: true });
+        yield* fs.makeDirectory(path.dirname(alias), { recursive: true });
+        yield* fs.writeFileString(launcher, posixLauncherScript(entry("1.0.0")), { mode: 0o755 });
+        yield* fs.symlink(launcher, alias);
+        const repoint = (environment: Record<string, string>) =>
+          repointLauncher({
+            // The script execs by absolute path, so argv0 names the executable.
+            launchedAs: entry("1.0.0"),
+            baseDir: home,
+            targetEntryPath: entry("2.0.0"),
+          }).pipe(Effect.provideService(HostProcess.Environment, environment));
+
+        assert.equal(
+          Option.getOrUndefined(yield* repoint({ PATH: path.dirname(alias) })),
+          launcher,
+        );
+        assert.equal(yield* fs.readLink(alias), launcher);
+        const args = ["two words", "it's quoted", "", "*", "$HOME"];
+        assert.equal(
+          yield* spawner.string(ChildProcess.make(alias, args, { cwd: root })),
+          [entry("2.0.0"), ...args].map((arg) => `[${arg}]\n`).join(""),
+        );
+
+        // Like the shell, a relative PATH entry resolves from the working directory, and a
+        // script nobody can execute is passed over.
+        const unrunnable = path.join(root, "unrunnable/cinderdeck");
+        yield* fs.makeDirectory(path.dirname(unrunnable), { recursive: true });
+        yield* fs.writeFileString(unrunnable, posixLauncherScript(entry("2.0.0")), { mode: 0o644 });
+        yield* fs.writeFileString(launcher, posixLauncherScript(entry("2.0.0")), { mode: 0o755 });
+        const relative = yield* repointLauncher({
+          launchedAs: entry("2.0.0"),
+          baseDir: home,
+          targetEntryPath: entry("1.0.0"),
+        }).pipe(
+          Effect.provideService(HostProcess.Environment, {
+            PATH: `${path.dirname(unrunnable)}:bin`,
+          }),
+          Effect.provideService(HostProcess.WorkingDirectory, root),
+        );
+        assert.equal(Option.getOrUndefined(relative), launcher);
+        assert.equal(yield* fs.readFileString(unrunnable), posixLauncherScript(entry("2.0.0")));
+
+        // An edited script is the user's own wrapper now.
+        const edited = `${posixLauncherScript(entry("1.0.0"))}# mine\n`;
+        yield* fs.writeFileString(launcher, edited);
+        assert.isTrue(Option.isNone(yield* repoint({ PATH: path.dirname(launcher) })));
+        assert.equal(yield* fs.readFileString(launcher), edited);
+      }).pipe(Effect.scoped, Effect.provideService(HostProcess.Platform, "linux")),
   );
 
   it.effect.each([
     { name: "no launcher records", recorded: undefined },
     { name: "an empty launcher record", recorded: "" },
-    { name: "whole launcher records", recorded: "/opt/t3\n" },
-    { name: "Windows launcher records", recorded: "C:\\t3.cmd\r\n" },
+    { name: "whole launcher records", recorded: "/opt/cinderdeck\n" },
+    { name: "Windows launcher records", recorded: "C:\\cinderdeck.cmd\r\n" },
     // An interrupted append cut this record short.
     { name: "an unterminated launcher record", recorded: "/opt/t" },
-    // Another process's append is cut short after t3 update reads the records.
-    { name: "a record cut short after the read", recorded: "/opt/t3\n", cut: "/opt/t" },
+    // Another process's append is cut short after cinderdeck update reads the records.
+    { name: "a record cut short after the read", recorded: "/opt/cinderdeck\n", cut: "/opt/t" },
   ])("keeps the runtime a repointed launcher off PATH points at with $name", ({ recorded, cut }) =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-update-" });
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-update-" });
       yield* TestClock.setTime(Duration.toMillis(Duration.days(1)));
       for (const version of ["1.0.0", "2.0.0"]) {
         const directory = path.join(root, "runtime/versions", version);
         yield* fs.makeDirectory(directory, { recursive: true });
-        yield* fs.writeFileString(path.join(directory, "t3"), "");
+        yield* fs.writeFileString(path.join(directory, "cinderdeck"), "");
         yield* fs.writeFileString(path.join(directory, ".install-complete"), `${version}\n`);
         yield* fs.utimes(path.join(directory, ".install-complete"), 0, 0);
       }
       if (recorded !== undefined) {
         yield* fs.writeFileString(path.join(root, "runtime/launchers"), recorded);
       }
-      // A launcher in the T3 home itself, which neither PATH nor the default bin dir reaches.
-      const launcher = path.join(root, "t3");
-      yield* fs.symlink(path.join(root, "runtime/versions/1.0.0/t3"), launcher);
+      // A launcher in the Cinderdeck home itself, which neither PATH nor the default bin dir reaches.
+      const launcher = path.join(root, "cinderdeck");
+      yield* fs.symlink(path.join(root, "runtime/versions/1.0.0/cinderdeck"), launcher);
 
       const launchersFile = path.join(root, "runtime/launchers");
       yield* repointLauncher({
         launchedAs: launcher,
         baseDir: root,
-        targetEntryPath: path.join(root, "runtime/versions/2.0.0/t3"),
+        targetEntryPath: path.join(root, "runtime/versions/2.0.0/cinderdeck"),
       }).pipe(
         Effect.provideService(FileSystem.FileSystem, {
           ...fs,
@@ -268,7 +347,7 @@ it.layer(NodeServices.layer)("t3 update launcher", (it) => {
               ),
         }),
       );
-      // A later server start prunes with no idea how this machine launches t3.
+      // A later server start prunes with no idea how this machine launches cinderdeck.
       const removed = yield* prunePinnedRuntimes({ baseDir: root, keep: [] }).pipe(
         Effect.provideService(ProcessRunner.ProcessRunner, unrelatedLsof),
         Effect.provideService(HostProcess.Platform, "darwin"),
@@ -277,21 +356,20 @@ it.layer(NodeServices.layer)("t3 update launcher", (it) => {
       );
 
       assert.deepStrictEqual(removed, ["1.0.0"]);
-      // macOS temp dirs sit behind the /var -> /private/var symlink, so compare canonical paths.
       assert.equal(
-        yield* fs.realPath(launcher),
-        yield* fs.realPath(path.join(root, "runtime/versions/2.0.0/t3")),
+        yield* readPosixLauncherTarget(launcher),
+        path.join(root, "runtime/versions/2.0.0/cinderdeck"),
       );
-    }).pipe(Effect.scoped, Effect.provideService(HostProcess.Platform, "linux")),
+    }).pipe(Effect.provideService(HostProcess.Platform, "linux")),
   );
 
   const launcherFixture = Effect.fnUntraced(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-update-" });
-    const oldExe = path.join(root, "runtime/versions/1.0.0/t3");
-    const newExe = path.join(root, "runtime/versions/2.0.0/t3");
-    const launcher = path.join(root, "t3");
+    const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-update-" });
+    const oldExe = path.join(root, "runtime/versions/1.0.0/cinderdeck");
+    const newExe = path.join(root, "runtime/versions/2.0.0/cinderdeck");
+    const launcher = path.join(root, "cinderdeck");
     for (const file of [oldExe, newExe]) {
       yield* fs.makeDirectory(path.dirname(file), { recursive: true });
       yield* fs.writeFileString(file, "");
@@ -313,7 +391,7 @@ it.layer(NodeServices.layer)("t3 update launcher", (it) => {
       });
 
       assert.equal(yield* fs.readFileString(launchersFile), `\n${launcher}\n`);
-    }).pipe(Effect.scoped, Effect.provideService(HostProcess.Platform, "linux")),
+    }).pipe(Effect.provideService(HostProcess.Platform, "linux")),
   );
 
   it.effect("fails instead of repointing a launcher it cannot record", () =>
@@ -331,11 +409,11 @@ it.layer(NodeServices.layer)("t3 update launcher", (it) => {
 
       assert.isTrue(Exit.isFailure(result));
       assert.equal(yield* fs.readLink(launcher), oldExe);
-    }).pipe(Effect.scoped, Effect.provideService(HostProcess.Platform, "linux")),
+    }).pipe(Effect.provideService(HostProcess.Platform, "linux")),
   );
 
   it.effect.each(["recording", "repointing"] as const)(
-    "never leaves a repointed launcher unrecorded when t3 update dies while %s",
+    "never leaves a repointed launcher unrecorded when cinderdeck update dies while %s",
     (step) =>
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
@@ -350,37 +428,37 @@ it.layer(NodeServices.layer)("t3 update launcher", (it) => {
             ...fs,
             writeFileString: (path, data, options) =>
               step === "recording" && path === launchersFile
-                ? Effect.die("t3 update was killed")
+                ? Effect.die("cinderdeck update was killed")
                 : fs.writeFileString(path, data, options),
             rename: (from, to) =>
               step === "repointing" && to === launcher
-                ? Effect.die("t3 update was killed")
+                ? Effect.die("cinderdeck update was killed")
                 : fs.rename(from, to),
           }),
           Effect.exit,
         );
 
-        const repointed = (yield* fs.readLink(launcher)) === newExe;
+        const repointed = (yield* readPosixLauncherTarget(launcher)) === newExe;
         const recorded = (yield* fs
           .readFileString(launchersFile)
           .pipe(Effect.orElseSucceed(() => "")))
           .split("\n")
           .includes(launcher);
         assert.isFalse(repointed && !recorded);
-      }).pipe(Effect.scoped, Effect.provideService(HostProcess.Platform, "linux")),
+      }).pipe(Effect.provideService(HostProcess.Platform, "linux")),
   );
 
   it.effect("leaves a plain copy or a foreign symlink alone", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-update-" });
-      const newExe = path.join(root, "runtime/versions/2.0.0/t3");
-      const copy = path.join(root, "copy/t3");
-      const foreign = path.join(root, "foreign/t3");
-      const elsewhere = path.join(root, "elsewhere/t3");
-      const otherHome = path.join(root, "other/runtime/versions/1.0.0/t3");
-      const otherLauncher = path.join(root, "other/bin/t3");
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-update-" });
+      const newExe = path.join(root, "runtime/versions/2.0.0/cinderdeck");
+      const copy = path.join(root, "copy/cinderdeck");
+      const foreign = path.join(root, "foreign/cinderdeck");
+      const elsewhere = path.join(root, "elsewhere/cinderdeck");
+      const otherHome = path.join(root, "other/runtime/versions/1.0.0/cinderdeck");
+      const otherLauncher = path.join(root, "other/bin/cinderdeck");
       for (const file of [newExe, copy, elsewhere, otherHome]) {
         yield* fs.makeDirectory(path.dirname(file), { recursive: true });
         yield* fs.writeFileString(file, "");
@@ -400,32 +478,33 @@ it.layer(NodeServices.layer)("t3 update launcher", (it) => {
       }
       assert.equal(yield* fs.readLink(foreign), elsewhere);
       assert.equal(yield* fs.readLink(otherLauncher), otherHome);
-    }).pipe(Effect.scoped, Effect.provideService(HostProcess.Platform, "linux")),
+    }).pipe(Effect.provideService(HostProcess.Platform, "linux")),
   );
 
   it.effect("finds the launcher a bare command name resolved to on PATH", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-update-" });
-      const launcher = path.join(root, "bin/t3");
+      const delimiter = (yield* HostProcess.Platform) === "win32" ? ";" : ":";
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-update-" });
+      const launcher = path.join(root, "bin/cinderdeck");
       yield* fs.makeDirectory(path.dirname(launcher), { recursive: true });
-      yield* fs.writeFileString(launcher, "");
+      yield* fs.writeFileString(launcher, "", { mode: 0o755 });
 
       const bare = yield* resolveLauncherPath.pipe(
-        Effect.provideService(HostProcess.InvokedAs, "t3"),
+        Effect.provideService(HostProcess.InvokedAs, "cinderdeck"),
         Effect.provideService(HostProcess.Environment, {
-          PATH: `${path.join(root, "missing")}:${path.join(root, "bin")}`,
+          PATH: [path.join(root, "missing"), path.join(root, "bin")].join(delimiter),
         }),
         Effect.provideService(HostProcess.WorkingDirectory, root),
       );
       const relative = yield* resolveLauncherPath.pipe(
-        Effect.provideService(HostProcess.InvokedAs, "./bin/t3"),
+        Effect.provideService(HostProcess.InvokedAs, "./bin/cinderdeck"),
         Effect.provideService(HostProcess.Environment, { PATH: "" }),
         Effect.provideService(HostProcess.WorkingDirectory, root),
       );
       const absent = yield* resolveLauncherPath.pipe(
-        Effect.provideService(HostProcess.InvokedAs, "t3"),
+        Effect.provideService(HostProcess.InvokedAs, "cinderdeck"),
         Effect.provideService(HostProcess.Environment, { PATH: path.join(root, "missing") }),
         Effect.provideService(HostProcess.WorkingDirectory, root),
       );
@@ -433,7 +512,7 @@ it.layer(NodeServices.layer)("t3 update launcher", (it) => {
       assert.equal(bare, launcher);
       assert.equal(relative, launcher);
       assert.equal(absent, undefined);
-    }).pipe(Effect.scoped, Effect.provideService(HostProcess.Platform, "linux")),
+    }),
   );
 });
 
@@ -455,21 +534,21 @@ const withoutTerminals = Effect.acquireRelease(
     }),
 );
 
-it.layer(NodeServices.layer)("t3 update with a background service", (it) => {
+it.layer(NodeServices.layer)("cinderdeck update with a background service", (it) => {
   it.effect("names the version a service with a pending restart still runs", () =>
     Effect.gen(function* () {
       yield* withoutTerminals;
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-update-" });
+      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-update-" });
       const version = packageJson.version;
       const runtime = pinnedRuntimePaths(path, baseDir, version, "linux");
       yield* fs.makeDirectory(runtime.versionDir, { recursive: true });
       yield* fs.writeFileString(runtime.entryPath, "");
       yield* fs.writeFileString(runtime.sentinelPath, `${version}\n`);
-      const unitPath = path.join(baseDir, "t3code.service");
+      const unitPath = path.join(baseDir, "cinderdeck.service");
       const logPath = path.join(baseDir, "boot-service.log");
-      // An earlier `t3 update` pointed the service at this version without restarting it.
+      // An earlier `cinderdeck update` pointed the service at this version without restarting it.
       const service = Layer.mock(BootService.BootService, {
         status: Effect.succeed<BootService.BootServiceStatus>({
           supported: true,
@@ -489,7 +568,7 @@ it.layer(NodeServices.layer)("t3 update with a background service", (it) => {
           input.args?.includes("--version") === true
             ? unrelatedLsof
                 .run(input)
-                .pipe(Effect.map((result) => ({ ...result, stdout: `t3 v${version}\n` })))
+                .pipe(Effect.map((result) => ({ ...result, stdout: `cinderdeck v${version}\n` })))
             : unrelatedLsof.run(input),
       });
 
@@ -520,10 +599,9 @@ it.layer(NodeServices.layer)("t3 update with a background service", (it) => {
 
       assert.include(
         output,
-        `Background service still running the version before ${version}. Run \`t3 service restart\` when you are ready to switch it to ${version}.`,
+        `Background service still running the version before ${version}. Run \`cinderdeck service restart\` when you are ready to switch it to ${version}.`,
       );
     }).pipe(
-      Effect.scoped,
       Effect.provideService(HostProcess.Platform, "linux"),
       Effect.provideService(HostProcess.Environment, { PATH: "" }),
     ),

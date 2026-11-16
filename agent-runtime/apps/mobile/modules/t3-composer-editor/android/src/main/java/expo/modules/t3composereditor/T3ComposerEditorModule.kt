@@ -8,10 +8,10 @@ import android.content.Context
 import org.json.JSONObject
 import org.json.JSONArray
 
-internal object T3ComposerClipboard {
+internal object CinderdeckComposerClipboard {
   // Pasted thread links become chips in JS; packages/shared/src/threadLinks.ts parses them.
   fun hasThreadLink(text: String): Boolean =
-    text.contains("t3-thread://v2/") || text.contains("https://app.t3.codes/threads/")
+    text.contains("t3-thread://v2/") || text.contains("https://app.cinderdeck.codes/threads/")
 
   fun write(context: Context, text: String, fragment: String) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -22,7 +22,7 @@ internal object T3ComposerClipboard {
     }
     val records = payload?.optJSONArray("records")
     if (payload == null || records == null) {
-      clipboard.setPrimaryClip(ClipData.newPlainText("T3 Code", text))
+      clipboard.setPrimaryClip(ClipData.newPlainText("Cinderdeck", text))
       return
     }
     val all = (0 until records.length()).map { records.getJSONObject(it) }
@@ -40,12 +40,12 @@ internal object T3ComposerClipboard {
     clipboard.setPrimaryClip(
       if (selected.isEmpty()) {
         ClipData.newPlainText(
-          "T3 Code",
+          "Cinderdeck",
           text
         )
       } else {
         ClipData.newHtmlText(
-          "T3 Code",
+          "Cinderdeck",
           text,
           "<pre data-t3-context-fragment=\"$encoded\">$escaped</pre>"
         )
@@ -66,11 +66,12 @@ internal object T3ComposerClipboard {
 }
 
 class T3ComposerEditorModule : Module() {
+  @Suppress("LongMethod") // A flat list of the view's props and events.
   override fun definition() = ModuleDefinition {
     Name("T3ComposerEditor")
 
     AsyncFunction("writeContextClipboard") { text: String, fragment: String ->
-      T3ComposerClipboard.write(requireNotNull(appContext.reactContext), text, fragment)
+      CinderdeckComposerClipboard.write(requireNotNull(appContext.reactContext), text, fragment)
     }
 
     View(T3ComposerEditorView::class) {
@@ -108,6 +109,12 @@ class T3ComposerEditorModule : Module() {
       Prop("readOnly") { view: T3ComposerEditorView, readOnly: Boolean ->
         view.setReadOnly(readOnly)
       }
+      Prop("enterBehavior") { view: T3ComposerEditorView, behavior: String ->
+        view.setEnterBehavior(behavior)
+      }
+      Prop("submitEnabled") { view: T3ComposerEditorView, enabled: Boolean ->
+        view.setSubmitEnabled(enabled)
+      }
       Prop("scrollEnabled") { view: T3ComposerEditorView, scrollEnabled: Boolean ->
         view.setScrollEnabled(scrollEnabled)
       }
@@ -132,6 +139,7 @@ class T3ComposerEditorModule : Module() {
         "onComposerSelectionChange",
         "onComposerFocus",
         "onComposerBlur",
+        "onComposerSubmit",
         "onComposerPasteImages",
         "onComposerContextPress",
         "onComposerPasteContext",

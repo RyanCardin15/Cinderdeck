@@ -1,10 +1,15 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { createCdpRelayConnection, type CdpRelayTarget } from "./CdpRelay.ts";
+import {
+  createCdpRelayConnection,
+  type CdpRelayConnection,
+  type CdpRelayTarget,
+} from "./CdpRelay.ts";
 
 const makeTarget = (
   send: CdpRelayTarget["send"],
   setDownloadDirectory: CdpRelayTarget["setDownloadDirectory"] = () => {},
+  ackScreencastFrame: CdpRelayTarget["ackScreencastFrame"] = () => {},
 ): CdpRelayTarget => ({
   send,
   targetId: async () => "GUEST-TARGET",
@@ -12,6 +17,8 @@ const makeTarget = (
   title: () => "Fixture",
   userAgent: () => "Electron",
   setDownloadDirectory,
+  receivesScreencast: () => true,
+  ackScreencastFrame,
 });
 
 const makeRelay = (target: CdpRelayTarget, write: (raw: string) => void) =>
@@ -34,7 +41,7 @@ describe("CDP relay", () => {
       {
         method: "Target.attachedToTarget",
         params: expect.objectContaining({
-          sessionId: "t3-preview-page",
+          sessionId: "cinderdeck-preview-page",
           targetInfo: expect.objectContaining({ targetId: "GUEST-TARGET", type: "page" }),
         }),
       },
@@ -54,7 +61,7 @@ describe("CDP relay", () => {
     const written: Array<Record<string, unknown>> = [];
     const relay = makeRelay(makeTarget(send), (raw) => written.push(JSON.parse(raw)));
     relay.receive(
-      JSON.stringify({ id: 5, method: "Page.captureScreenshot", sessionId: "t3-preview-page" }),
+      JSON.stringify({ id: 5, method: "Page.captureScreenshot", sessionId: "cinderdeck-preview-page" }),
     );
     relay.receive(JSON.stringify({ id: 6, method: "DOM.enable", sessionId: "iframe-session" }));
     pending[1]!();
@@ -69,7 +76,7 @@ describe("CDP relay", () => {
     expect(written.at(-1)).toEqual({
       id: 5,
       result: { method: "Page.captureScreenshot" },
-      sessionId: "t3-preview-page",
+      sessionId: "cinderdeck-preview-page",
     });
   });
 
@@ -80,7 +87,7 @@ describe("CDP relay", () => {
       JSON.stringify({
         id: 1,
         method: "Runtime.runIfWaitingForDebugger",
-        sessionId: "t3-preview-page",
+        sessionId: "cinderdeck-preview-page",
       }),
     );
     relay.receive(
@@ -107,11 +114,11 @@ describe("CDP relay", () => {
         id: 1,
         method: "Emulation.setFocusEmulationEnabled",
         params: { enabled: true },
-        sessionId: "t3-preview-page",
+        sessionId: "cinderdeck-preview-page",
       }),
     );
     await settle();
-    expect(written).toEqual([{ id: 1, result: {}, sessionId: "t3-preview-page" }]);
+    expect(written).toEqual([{ id: 1, result: {}, sessionId: "cinderdeck-preview-page" }]);
     expect(send).not.toHaveBeenCalled();
   });
 
@@ -125,7 +132,7 @@ describe("CDP relay", () => {
     relay.event("Page.loadEventFired", { timestamp: 1 }, "");
     relay.event("Runtime.consoleAPICalled", {}, "iframe-session");
     expect(written.slice(-2)).toEqual([
-      { method: "Page.loadEventFired", params: { timestamp: 1 }, sessionId: "t3-preview-page" },
+      { method: "Page.loadEventFired", params: { timestamp: 1 }, sessionId: "cinderdeck-preview-page" },
       { method: "Runtime.consoleAPICalled", params: {}, sessionId: "iframe-session" },
     ]);
   });
@@ -133,9 +140,13 @@ describe("CDP relay", () => {
 
 describe("CDP relay extra sessions", () => {
   it("gives a second page session the page's commands and events", async () => {
-    const send = vi.fn(async () => ({}));
+    const send = vi.fn<CdpRelayTarget["send"]>(async () => ({}));
     const written: Array<Record<string, unknown>> = [];
-    const relay = makeRelay(makeTarget(send), (raw) => written.push(JSON.parse(raw)));
+    const nativeAcks: Array<number> = [];
+    const relay = makeRelay(
+      makeTarget(send, undefined, (frameId) => nativeAcks.push(frameId)),
+      (raw) => written.push(JSON.parse(raw)),
+    );
     relay.receive(JSON.stringify({ id: 1, method: "Target.setAutoAttach", params: {} }));
     relay.receive(JSON.stringify({ id: 2, method: "Target.attachToBrowserTarget" }));
     await settle();
@@ -165,8 +176,63 @@ describe("CDP relay extra sessions", () => {
     await settle();
     expect(send).toHaveBeenLastCalledWith("Page.startScreencast", {}, undefined, extra);
     written.length = 0;
-    relay.event("Page.screencastFrame", { data: "x" }, undefined);
-    expect(written.map((m) => m["sessionId"])).toEqual(["t3-preview-page", extra]);
+    const frame = (frameId: number) =>
+      relay.event("Page.screencastFrame", { data: "x", sessionId: frameId }, undefined);
+    const ack = (sessionId: string, frameId: number) =>
+      relay.receive(
+        JSON.stringify({
+          id: 6,
+          method: "Page.screencastFrameAck",
+          params: { sessionId: frameId },
+          sessionId,
+        }),
+      );
+    const delivered = () => {
+      const frames = written
+        .filter((m) => m["method"])
+        .map((m) => [m["sessionId"], (m["params"] as { sessionId?: number }).sessionId]);
+      written.length = 0;
+      return frames;
+    };
+    frame(1);
+    expect(delivered()).toEqual([
+      ["cinderdeck-preview-page", 1],
+      [extra, 1],
+    ]);
+    // A session that has not acknowledged its frame gets only the newest one, on its ack.
+    for (let i = 2; i < 100; i++) frame(i);
+    expect(delivered()).toEqual([]);
+    // Frames every session is busy for stay unacknowledged, so Chromium pauses at its in-flight limit.
+    expect(nativeAcks).toEqual([1]);
+    ack(extra, 1);
+    await settle();
+    expect(delivered()).toEqual([[extra, 99]]);
+    // Each consumer ack lets Chromium send one more frame.
+    expect(nativeAcks).toEqual([1, 2]);
+    ack(extra, 99);
+    await settle();
+    expect(delivered()).toEqual([]);
+    expect(nativeAcks).toEqual([1, 2, 3]);
+    frame(100);
+    expect(delivered()).toEqual([[extra, 100]]);
+    ack(extra, 99);
+    await settle();
+    frame(101);
+    expect(delivered()).toEqual([]);
+    expect(send.mock.calls.some(([method]) => method === "Page.screencastFrameAck")).toBe(false);
+    // A restart keeps the unacknowledged frame's slot until its own acknowledgement.
+    relay.receive(JSON.stringify({ id: 7, method: "Page.stopScreencast", sessionId: extra }));
+    relay.receive(JSON.stringify({ id: 8, method: "Page.startScreencast", sessionId: extra }));
+    await settle();
+    delivered();
+    frame(102);
+    expect(delivered()).toEqual([]);
+    ack(extra, 100);
+    await settle();
+    expect(delivered()).toEqual([[extra, 102]]);
+    // Other events still reach a session while its frame is unacknowledged.
+    relay.event("Page.loadEventFired", { timestamp: 1 }, undefined);
+    expect(delivered().map(([session]) => session)).toEqual(["cinderdeck-preview-page", extra]);
   });
 });
 
@@ -186,7 +252,7 @@ describe("CDP relay downloads", () => {
         method: "Browser.setDownloadBehavior",
         params: {
           behavior: "allowAndName",
-          browserContextId: "t3-preview",
+          browserContextId: "cinderdeck-preview",
           downloadPath: "/srv/artifacts",
           eventsEnabled: true,
         },
@@ -312,10 +378,10 @@ describe("CDP relay payload budget", () => {
     const written: Array<Record<string, unknown>> = [];
     const relay = makeRelay(makeTarget(send), (raw) => written.push(JSON.parse(raw)));
     relay.receive(
-      JSON.stringify({ id: 1, method: "DOM.getDocument", sessionId: "t3-preview-page" }),
+      JSON.stringify({ id: 1, method: "DOM.getDocument", sessionId: "cinderdeck-preview-page" }),
     );
     relay.receive(
-      JSON.stringify({ id: 2, method: "Page.captureScreenshot", sessionId: "t3-preview-page" }),
+      JSON.stringify({ id: 2, method: "Page.captureScreenshot", sessionId: "cinderdeck-preview-page" }),
     );
     await settle();
 
@@ -352,5 +418,45 @@ describe("CDP relay payload budget", () => {
     relay.receive(JSON.stringify({ id: 2, method: "Target.setAutoAttach" }));
     expect(close).toHaveBeenCalledOnce();
     expect(written.map((message) => message["method"])).toEqual([]);
+  });
+});
+
+describe("CDP relay reconnects", () => {
+  it("reports the page's default execution context to every connection", async () => {
+    // Electron keeps one debugger attached, so Runtime stays enabled after a client drops,
+    // and the native Runtime.enable announces contexts again only after Runtime.disable.
+    let runtimeEnabled = false;
+    let current: CdpRelayConnection | undefined;
+    const context = {
+      context: { id: 1, origin: "null", name: "", auxData: { isDefault: true, frameId: "F" } },
+    };
+    const send = vi.fn(async (method: string) => {
+      if (method === "Runtime.disable") runtimeEnabled = false;
+      if (method === "Runtime.enable" && !runtimeEnabled) {
+        runtimeEnabled = true;
+        current!.event("Runtime.executionContextCreated", context, "");
+      }
+      return {};
+    });
+    const connect = async () => {
+      const written: Array<Record<string, unknown>> = [];
+      current = makeRelay(makeTarget(send), (raw) => written.push(JSON.parse(raw)));
+      current.receive(JSON.stringify({ id: 1, method: "Target.setAutoAttach", params: {} }));
+      await settle();
+      current.receive(
+        JSON.stringify({ id: 2, method: "Runtime.enable", sessionId: "cinderdeck-preview-page" }),
+      );
+      await settle();
+      return written.filter((m) => m["method"] === "Runtime.executionContextCreated");
+    };
+    const expected = [
+      {
+        method: "Runtime.executionContextCreated",
+        params: context,
+        sessionId: "cinderdeck-preview-page",
+      },
+    ];
+    expect(await connect()).toEqual(expected);
+    expect(await connect()).toEqual(expected);
   });
 });

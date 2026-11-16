@@ -14,6 +14,7 @@ import {
 } from "@cinderdeck/provider-core/server/driver";
 import { ProviderDriverError } from "@cinderdeck/provider-core/server/errors";
 import { mergeProviderInstanceEnvironment } from "@cinderdeck/provider-core/server/instanceEnvironment";
+import { expandHomePath } from "@cinderdeck/provider-core/server/pathExpansion";
 import { withInstanceIdentity } from "@cinderdeck/provider-core/server/instanceIdentity";
 import { makeManualOnlyProviderMaintenanceCapabilities } from "@cinderdeck/provider-core/server/maintenanceResolver";
 import { makeManagedServerProvider } from "@cinderdeck/provider-core/server/managedProvider";
@@ -33,7 +34,7 @@ import {
 const DRIVER_KIND = ProviderDriverKind.make("kiro");
 const decodeKiroSettings = Schema.decodeSync(KiroSettings);
 // Kiro updates itself in the background (`kiro-cli update` reports only), so
-// T3 offers no one-click update.
+// Cinderdeck offers no one-click update.
 const MAINTENANCE = makeManualOnlyProviderMaintenanceCapabilities({
   provider: DRIVER_KIND,
   packageName: null,
@@ -53,6 +54,7 @@ const unsupportedTextGeneration: ProviderTextGeneration = (() => {
     generateBranchName: () => unsupported("generateBranchName"),
     generateThreadTitle: () => unsupported("generateThreadTitle"),
     generateReviewGuide: () => unsupported("generateReviewGuide"),
+    generateTranscriptionPostProcessing: () => unsupported("generateTranscriptionPostProcessing"),
   };
 })();
 
@@ -95,7 +97,11 @@ export const KiroDriver: ProviderDriver<KiroSettings, KiroDriverEnv> = {
       accentColor,
       continuationGroupKey: continuationIdentity.continuationKey,
     });
-    const effectiveConfig = { ...config, enabled } satisfies KiroSettings;
+    const effectiveConfig = {
+      ...config,
+      enabled,
+      binaryPath: expandHomePath(config.binaryPath, yield* HostProcess.HomeDirectory),
+    } satisfies KiroSettings;
     const snapshotSettings = yield* makeProviderSnapshotSettingsSource(effectiveConfig);
     const snapshot = yield* makeManagedServerProvider<ProviderSnapshotSettings<KiroSettings>>({
       resolveMaintenance: () => Effect.succeed(MAINTENANCE),
@@ -126,7 +132,14 @@ export const KiroDriver: ProviderDriver<KiroSettings, KiroDriverEnv> = {
     const orchestrationAdapter = yield* makeKiroAdapterV2Driver(
       snapshot.getSnapshot.pipe(Effect.map((current) => kiroDefaultModelId(current.models))),
     )
-      .create({ instanceId, displayName, accentColor, environment, enabled, config })
+      .create({
+        instanceId,
+        displayName,
+        accentColor,
+        environment,
+        enabled,
+        config: effectiveConfig,
+      })
       .pipe(
         Effect.mapError(
           (cause) =>

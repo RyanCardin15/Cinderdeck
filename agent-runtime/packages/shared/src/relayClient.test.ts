@@ -154,7 +154,7 @@ describe("RelayClient", () => {
   it.effect("cancels a contended install without removing the other installer's lock", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
-      const baseDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-cloudflared-test-" });
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-cloudflared-test-" });
       const directory = `${baseDir}/tools/cloudflared/${RelayClient.CLOUDFLARED_VERSION}/linux-x64`;
       const lockPath = `${directory}/cloudflared.lock`;
       yield* fileSystem.makeDirectory(directory, { recursive: true });
@@ -194,7 +194,7 @@ describe("RelayClient", () => {
   it.effect.each(["live owner", "recent legacy"] as const)("keeps a lock with a %s", (kind) =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
-      const baseDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-cloudflared-test-" });
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-cloudflared-test-" });
       const lockPath = `${baseDir}/tools/cloudflared/${RelayClient.CLOUDFLARED_VERSION}/linux-x64/cloudflared.lock`;
       const owner = `${process.pid}-still-running`;
       yield* fileSystem.makeDirectory(lockPath.slice(0, lockPath.lastIndexOf("/")), {
@@ -237,7 +237,7 @@ describe("RelayClient", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-cloudflared-test-",
+        prefix: "cinderdeck-cloudflared-test-",
       });
       const lockPath = `${baseDir}/tools/cloudflared/${RelayClient.CLOUDFLARED_VERSION}/linux-x64/cloudflared.lock`;
       yield* fileSystem.makeDirectory(lockPath.slice(0, lockPath.lastIndexOf("/")), {
@@ -259,7 +259,7 @@ describe("RelayClient", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-cloudflared-test-",
+        prefix: "cinderdeck-cloudflared-test-",
       });
       const lockPath = `${baseDir}/tools/cloudflared/${RelayClient.CLOUDFLARED_VERSION}/linux-x64/cloudflared.lock`;
       yield* fileSystem.makeDirectory(lockPath.slice(0, lockPath.lastIndexOf("/")), {
@@ -283,7 +283,7 @@ describe("RelayClient", () => {
   it.effect("keeps a replacement lock when a stale contender resumes cleanup", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
-      const baseDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-cloudflared-test-" });
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-cloudflared-test-" });
       const lockPath = `${baseDir}/tools/cloudflared/${RelayClient.CLOUDFLARED_VERSION}/linux-x64/cloudflared.lock`;
       const abandoned = "2147483647-exited-installer";
       const replacement = `${process.pid}-replacement`;
@@ -323,7 +323,7 @@ describe("RelayClient", () => {
   it.effect("releases the install lock when a download is cancelled", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
-      const baseDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-cloudflared-test-" });
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-cloudflared-test-" });
       const lockPath = `${baseDir}/tools/cloudflared/${RelayClient.CLOUDFLARED_VERSION}/linux-x64/cloudflared.lock`;
       const downloading = yield* Deferred.make<void>();
       const manager = yield* RelayClient.makeCloudflaredRelayClient({ baseDir });
@@ -355,7 +355,7 @@ describe("RelayClient", () => {
   it.effect.skipIf(windowsHost)("releases a lock acquired while installation is cancelled", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
-      const baseDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-cloudflared-test-" });
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-cloudflared-test-" });
       const lockPath = `${baseDir}/tools/cloudflared/${RelayClient.CLOUDFLARED_VERSION}/linux-x64/cloudflared.lock`;
       const acquired = yield* Deferred.make<void>();
       const completeWrite = yield* Deferred.make<void>();
@@ -417,7 +417,7 @@ describe("RelayClient", () => {
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-          prefix: "t3-cloudflared-test-",
+          prefix: "cinderdeck-cloudflared-test-",
         });
         const bytes = new TextEncoder().encode("test-cloudflared-binary");
         const manager = yield* RelayClient.makeCloudflaredRelayClient({
@@ -471,11 +471,52 @@ describe("RelayClient", () => {
       ),
   );
 
+  it.effect.skipIf(windowsHost)(
+    "installs when the downloaded binary's first launch is held by an antivirus scan",
+    () =>
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const baseDir = yield* fileSystem.makeTempDirectoryScoped({
+          prefix: "cinderdeck-cloudflared-test-",
+        });
+        const scanning = yield* Deferred.make<void>();
+        const manager = yield* RelayClient.makeCloudflaredRelayClient({
+          baseDir,
+          releaseAsset: testReleaseAsset,
+        }).pipe(
+          Effect.provideService(
+            ChildProcessSpawner.ChildProcessSpawner,
+            ChildProcessSpawner.make(() =>
+              Deferred.succeed(scanning, undefined).pipe(
+                Effect.andThen(Effect.sleep("25 seconds")),
+                Effect.as(
+                  makeHandle(
+                    0,
+                    `cloudflared version ${RelayClient.CLOUDFLARED_VERSION} (built 2026-01-01-00:00 UTC)\n`,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        const installing = yield* manager.install.pipe(Effect.forkChild);
+        yield* Deferred.await(scanning);
+        yield* TestClock.adjust("25 seconds");
+
+        expect(yield* Fiber.join(installing)).toMatchObject({
+          status: "available",
+          source: "managed",
+          version: RelayClient.CLOUDFLARED_VERSION,
+        });
+      }).pipe(Effect.scoped, Effect.provide(layerInstallRuntime("linux"))),
+  );
+
   it.effect("rejects downloads whose checksum does not match the pinned manifest", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-cloudflared-test-",
+        prefix: "cinderdeck-cloudflared-test-",
       });
       const manager = yield* RelayClient.makeCloudflaredRelayClient({
         baseDir,
@@ -514,7 +555,7 @@ describe("RelayClient", () => {
     return Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-cloudflared-test-",
+        prefix: "cinderdeck-cloudflared-test-",
       });
       const manager = yield* RelayClient.makeCloudflaredRelayClient({
         baseDir,
@@ -552,7 +593,7 @@ describe("RelayClient", () => {
     return Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-cloudflared-test-",
+        prefix: "cinderdeck-cloudflared-test-",
       });
       const binDir = `${baseDir}/bin`;
       const executablePath = `${binDir}/${executableName}`;
@@ -625,7 +666,7 @@ describe("RelayClient", () => {
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-          prefix: "t3-cloudflared-test-",
+          prefix: "cinderdeck-cloudflared-test-",
         });
         return yield* body(baseDir);
       }).pipe(
@@ -800,7 +841,7 @@ describe("RelayClient", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-cloudflared-test-",
+        prefix: "cinderdeck-cloudflared-test-",
       });
       const { locked, renames } = yield* makeLockedRenames(fileSystem, {
         rename: "staging",

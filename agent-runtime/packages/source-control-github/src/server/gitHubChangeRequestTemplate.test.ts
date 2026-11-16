@@ -16,6 +16,9 @@ const TEMPLATE_DIRECTORIES = [
   ".github/PULL_REQUEST_TEMPLATE",
   "PULL_REQUEST_TEMPLATE",
   "docs/PULL_REQUEST_TEMPLATE",
+  ".github/pull_request_template",
+  "pull_request_template",
+  "docs/pull_request_template",
 ] as const;
 
 const layerPrTemplateDetectionTest = Layer.merge(
@@ -39,7 +42,7 @@ const runWithTempDirectory = <A, E, R>(
   Effect.scoped(
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
-      const cwd = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-pr-template-" });
+      const cwd = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-pr-template-" });
       yield* runGit(cwd, ["init", "--initial-branch=main"]);
       yield* runGit(cwd, ["config", "user.email", "test@example.com"]);
       yield* runGit(cwd, ["config", "user.name", "Test User"]);
@@ -161,7 +164,7 @@ it.effect.skipIf(!symlinksSupported)(
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const outsideDirectory = yield* fileSystem.makeTempDirectoryScoped({
-          prefix: "t3-pr-template-outside-",
+          prefix: "cinderdeck-pr-template-outside-",
         });
         const outsideTemplate = path.join(outsideDirectory, "secret.md");
         yield* fileSystem.writeFileString(outsideTemplate, "LOCAL_SECRET_SENTINEL");
@@ -189,7 +192,7 @@ it.effect.skipIf(!symlinksSupported)(
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const outsideDirectory = yield* fileSystem.makeTempDirectoryScoped({
-          prefix: "t3-pr-template-outside-",
+          prefix: "cinderdeck-pr-template-outside-",
         });
         const templatePath = yield* writeTemplate(
           cwd,

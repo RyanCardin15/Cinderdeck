@@ -10,12 +10,16 @@ import {
   ReceivedProjectIcon,
   StoredProjectIcon,
   ProjectReadFileError,
+  ProjectReadFileInput,
+  ProjectReadFileResult,
   ProjectCreatePayload,
   ProjectUpdatePayload,
   ProjectMutation,
   ProjectSearchContentsError,
   ProjectSearchEntriesError,
   ProjectWriteFileError,
+  ProjectWriteFileInput,
+  ProjectWriteFileResult,
 } from "./project.ts";
 
 const decodeProjectCreatePayload = Schema.decodeUnknownSync(ProjectCreatePayload);
@@ -23,6 +27,45 @@ const decodeProjectUpdatePayload = Schema.decodeUnknownSync(ProjectUpdatePayload
 const decodeProjectMutation = Schema.decodeUnknownSync(ProjectMutation);
 
 describe("project RPC errors", () => {
+  it("keeps whitespace in file paths across the wire", () => {
+    const roundTrip = <S extends Schema.Codec<unknown, unknown>>(schema: S, value: S["Type"]) =>
+      Schema.decodeUnknownSync(schema)(Schema.encodeSync(schema)(value));
+
+    for (const relativePath of [" ", " report.txt", "report.txt\t"]) {
+      const cwd = "/workspace";
+      const resolvedPath = `${cwd}/${relativePath}`;
+      expect(roundTrip(ProjectReadFileInput, { cwd, relativePath }).relativePath).toBe(
+        relativePath,
+      );
+      expect(
+        roundTrip(ProjectWriteFileInput, { cwd, relativePath, contents: "" }).relativePath,
+      ).toBe(relativePath);
+      expect(
+        roundTrip(ProjectReadFileResult, {
+          relativePath,
+          contents: "",
+          byteLength: 0,
+          truncated: false,
+        }).relativePath,
+      ).toBe(relativePath);
+      expect(roundTrip(ProjectWriteFileResult, { relativePath }).relativePath).toBe(relativePath);
+      for (const FileError of [ProjectReadFileError, ProjectWriteFileError]) {
+        const error = new FileError({
+          cwd,
+          relativePath,
+          failure: "operation_failed",
+          resolvedPath,
+          operationPath: resolvedPath,
+        });
+        expect(roundTrip(FileError, error)).toMatchObject({
+          relativePath,
+          resolvedPath,
+          operationPath: resolvedPath,
+        });
+      }
+    }
+  });
+
   it("derives stable messages from structured request context while retaining causes", () => {
     const cause = new Error("sensitive platform detail");
     const searchError = new ProjectSearchEntriesError({
@@ -147,11 +190,11 @@ const decodeProjectShell = Schema.decodeUnknownEffect(OrchestrationProjectShell)
 
 effectIt.effect("reads monograms stored in the pre-v2 fallback shape", () =>
   Effect.gen(function* () {
-    const monogram = { kind: "monogram", text: "T3", color: "violet" } as const;
+    const monogram = { kind: "monogram", text: "Cinderdeck", color: "violet" } as const;
     const fallback = { kind: "lucide", name: "folder-code", color: "violet" } as const;
     for (const legacy of [
-      { ...fallback, monogramText: "T3" },
-      { ...fallback, monogram: "T3" },
+      { ...fallback, monogramText: "Cinderdeck" },
+      { ...fallback, monogram: "Cinderdeck" },
     ]) {
       assert.deepEqual(yield* decodeStoredIcon(legacy), monogram);
       assert.deepEqual(yield* decodeReceivedIcon(legacy), monogram);

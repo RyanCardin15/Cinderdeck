@@ -1,4 +1,4 @@
-import { SourceControlProviderKind } from "@cinderdeck/contracts";
+import { SecretProviderId, SourceControlProviderKind } from "@cinderdeck/contracts";
 import { assert, it, vi } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as ConfigProvider from "effect/ConfigProvider";
@@ -9,6 +9,7 @@ import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as Queue from "effect/Queue";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
@@ -32,36 +33,44 @@ const bitbucketPullRequest = {
   updated_on: "2026-01-02T00:00:00.000Z",
   links: {
     html: {
-      href: "https://bitbucket.org/pingdotgg/t3code/pull-requests/42",
+      href: "https://bitbucket.org/pingdotgg/cinderdeck/pull-requests/42",
     },
   },
   source: {
     branch: { name: "feature/source-control" },
     repository: {
-      full_name: "octocat/t3code",
+      full_name: "octocat/cinderdeck",
       workspace: { slug: "octocat" },
     },
   },
   destination: {
     branch: { name: "main" },
     repository: {
-      full_name: "pingdotgg/t3code",
+      full_name: "pingdotgg/cinderdeck",
       workspace: { slug: "pingdotgg" },
     },
   },
 };
 
 const repositoryJson = {
-  full_name: "pingdotgg/t3code",
+  full_name: "pingdotgg/cinderdeck",
   links: {
-    html: { href: "https://bitbucket.org/pingdotgg/t3code" },
+    html: { href: "https://bitbucket.org/pingdotgg/cinderdeck" },
     clone: [
-      { name: "https", href: "https://bitbucket.org/pingdotgg/t3code.git" },
-      { name: "ssh", href: "git@bitbucket.org:pingdotgg/t3code.git" },
+      { name: "https", href: "https://bitbucket.org/pingdotgg/cinderdeck.git" },
+      { name: "ssh", href: "git@bitbucket.org:pingdotgg/cinderdeck.git" },
     ],
   },
   mainbranch: { name: "main" },
 };
+
+const gitOutput = (stdout: string) => ({
+  exitCode: ChildProcessSpawner.ExitCode(0),
+  stdout,
+  stderr: "",
+  stdoutTruncated: false,
+  stderrTruncated: false,
+});
 
 function makeLayer(input: {
   readonly response: (request: HttpClientRequest.HttpClientRequest) => Response;
@@ -85,8 +94,11 @@ function makeLayer(input: {
           ),
   );
   const gitMock = {
+    execute: vi.fn<HostGit["execute"]>(() =>
+      Effect.succeed(gitOutput("git@bitbucket.org:pingdotgg/cinderdeck.git\n")),
+    ),
     readConfigValue: vi.fn<HostGit["readConfigValue"]>(() =>
-      Effect.succeed<string | null>("git@bitbucket.org:pingdotgg/t3code.git"),
+      Effect.succeed<string | null>("git@bitbucket.org:pingdotgg/cinderdeck.git"),
     ),
     resolvePrimaryRemoteName: vi.fn<HostGit["resolvePrimaryRemoteName"]>(() =>
       Effect.succeed("origin"),
@@ -110,7 +122,7 @@ function makeLayer(input: {
       remotes: [
         {
           name: "origin",
-          url: input.remoteUrl ?? "git@bitbucket.org:pingdotgg/t3code.git",
+          url: input.remoteUrl ?? "git@bitbucket.org:pingdotgg/cinderdeck.git",
           pushUrl: Option.none(),
           isPrimary: true,
         },
@@ -169,18 +181,18 @@ it.effect("parses pull request responses from the Bitbucket REST API", () => {
     assert.deepStrictEqual(result, {
       number: 42,
       title: "Add Bitbucket provider",
-      url: "https://bitbucket.org/pingdotgg/t3code/pull-requests/42",
+      url: "https://bitbucket.org/pingdotgg/cinderdeck/pull-requests/42",
       baseRefName: "main",
       headRefName: "feature/source-control",
       state: "open",
       updatedAt: Option.some(DateTime.makeUnsafe("2026-01-02T00:00:00.000Z")),
       isCrossRepository: true,
-      headRepositoryNameWithOwner: "octocat/t3code",
+      headRepositoryNameWithOwner: "octocat/cinderdeck",
       headRepositoryOwnerLogin: "octocat",
     });
     assert.strictEqual(
       execute.mock.calls[0]?.[0].url,
-      "https://api.test.local/2.0/repositories/pingdotgg/t3code/pullrequests/42",
+      "https://api.test.local/2.0/repositories/pingdotgg/cinderdeck/pullrequests/42",
     );
   }).pipe(Effect.provide(layer));
 });
@@ -219,7 +231,7 @@ it.effect.each([false, true])("honors PR URL repositories, context=%s", (withCon
                 baseUrl: "https://bitbucket.org",
               },
               remoteName: "origin",
-              remoteUrl: "git@bitbucket.org:pingdotgg/t3code.git",
+              remoteUrl: "git@bitbucket.org:pingdotgg/cinderdeck.git",
             },
           }
         : {}),
@@ -253,6 +265,44 @@ it.effect.each([false, true])("honors PR URL repositories, context=%s", (withCon
   }).pipe(Effect.provide(layer));
 });
 
+it.effect("adds a fork remote with the protocol of the URL origin fetches from", () => {
+  // `git remote -v` shows origin's SSH `insteadOf` rewrite; config holds HTTPS, then an SSH push URL.
+  const { git, layer } = makeLayer({
+    git: {
+      execute: () =>
+        Effect.succeed(
+          gitOutput(
+            "https://bitbucket.org/pingdotgg/cinderdeck.git\ngit@bitbucket.org:pingdotgg/cinderdeck.git\n",
+          ),
+        ),
+    },
+    response: (request) =>
+      Response.json(
+        request.url.endsWith("/pullrequests/42")
+          ? bitbucketPullRequest
+          : {
+              ...repositoryJson,
+              full_name: "octocat/cinderdeck",
+              links: {
+                clone: [
+                  { name: "https", href: "https://bitbucket.org/octocat/cinderdeck.git" },
+                  { name: "ssh", href: "git@bitbucket.org:octocat/cinderdeck.git" },
+                ],
+              },
+            },
+      ),
+  });
+  return Effect.gen(function* () {
+    const bitbucket = yield* BitbucketApi.BitbucketApi;
+    yield* bitbucket.checkoutPullRequest({ cwd: "/repo", reference: "#42" });
+    assert.deepStrictEqual(git.ensureRemote.mock.calls[0]?.[0], {
+      cwd: "/repo",
+      preferredName: "octocat",
+      url: "https://bitbucket.org/octocat/cinderdeck.git",
+    });
+  }).pipe(Effect.provide(layer));
+});
+
 it.effect.each([false, true])(
   "reuses matching checkout remotes for numeric references, context=%s",
   (withContext) => {
@@ -260,7 +310,7 @@ it.effect.each([false, true])(
       response: () =>
         Response.json({
           ...bitbucketPullRequest,
-          source: { ...bitbucketPullRequest.source, repository: { full_name: "pingdotgg/t3code" } },
+          source: { ...bitbucketPullRequest.source, repository: { full_name: "pingdotgg/cinderdeck" } },
         }),
     });
     return Effect.gen(function* () {
@@ -277,7 +327,7 @@ it.effect.each([false, true])(
                   baseUrl: "https://bitbucket.org",
                 },
                 remoteName: "upstream",
-                remoteUrl: "git@bitbucket.org:PingDotGG/T3Code.git",
+                remoteUrl: "git@bitbucket.org:PingDotGG/Cinderdeck.git",
               },
             }
           : {}),
@@ -304,7 +354,7 @@ it.effect("lists pull requests with Bitbucket state and source branch query para
             state: "MERGED",
             source: {
               branch: { name: "feature/merged" },
-              repository: { full_name: "pingdotgg/t3code" },
+              repository: { full_name: "pingdotgg/cinderdeck" },
             },
           },
         ],
@@ -324,7 +374,7 @@ it.effect("lists pull requests with Bitbucket state and source branch query para
     const request = execute.mock.calls[0]?.[0];
     assert.strictEqual(
       request?.url,
-      "https://api.test.local/2.0/repositories/pingdotgg/t3code/pullrequests",
+      "https://api.test.local/2.0/repositories/pingdotgg/cinderdeck/pullrequests",
     );
     assert.deepStrictEqual(request?.urlParams.params, [
       ["pagelen", "10"],
@@ -355,14 +405,14 @@ it.effect("reads repository clone URLs and default branch", () => {
     const bitbucket = yield* BitbucketApi.BitbucketApi;
     const cloneUrls = yield* bitbucket.getRepositoryCloneUrls({
       cwd: "/repo",
-      repository: "pingdotgg/t3code",
+      repository: "pingdotgg/cinderdeck",
     });
     const defaultBranch = yield* bitbucket.getDefaultBranch({ cwd: "/repo" });
 
     assert.deepStrictEqual(cloneUrls, {
-      nameWithOwner: "pingdotgg/t3code",
-      url: "https://bitbucket.org/pingdotgg/t3code.git",
-      sshUrl: "git@bitbucket.org:pingdotgg/t3code.git",
+      nameWithOwner: "pingdotgg/cinderdeck",
+      url: "https://bitbucket.org/pingdotgg/cinderdeck.git",
+      sshUrl: "git@bitbucket.org:pingdotgg/cinderdeck.git",
     });
     assert.strictEqual(defaultBranch, "main");
   }).pipe(Effect.provide(layer));
@@ -377,7 +427,7 @@ it.effect.each([false, true])(
 
     return Effect.gen(function* () {
       const bitbucket = yield* BitbucketApi.BitbucketApi;
-      for (const repository of ["t3code", "", " \t "]) {
+      for (const repository of ["cinderdeck", "", " \t "]) {
         const error = yield* bitbucket
           .getRepositoryCloneUrls({
             cwd: "/repo",
@@ -391,7 +441,7 @@ it.effect.each([false, true])(
                       baseUrl: "https://bitbucket.org",
                     },
                     remoteName: "origin",
-                    remoteUrl: "git@bitbucket.org:pingdotgg/t3code.git",
+                    remoteUrl: "git@bitbucket.org:pingdotgg/cinderdeck.git",
                   },
                 }
               : {}),
@@ -428,7 +478,7 @@ it.effect("prefers an explicit repository and uses context when the repository i
       remoteName: "origin",
       remoteUrl: "git@bitbucket.org:another/context.git",
     };
-    for (const repository of ["pingdotgg/t3code", "https://bitbucket.org/pingdotgg/t3code.git"]) {
+    for (const repository of ["pingdotgg/cinderdeck", "https://bitbucket.org/pingdotgg/cinderdeck.git"]) {
       yield* bitbucket.getRepositoryCloneUrls({ cwd: "/repo", context, repository });
     }
     yield* bitbucket.getDefaultBranch({ cwd: "/repo", context });
@@ -436,8 +486,8 @@ it.effect("prefers an explicit repository and uses context when the repository i
     assert.deepStrictEqual(
       execute.mock.calls.map(([request]) => request.url).toSorted(),
       [
-        "https://api.test.local/2.0/repositories/pingdotgg/t3code",
-        "https://api.test.local/2.0/repositories/pingdotgg/t3code",
+        "https://api.test.local/2.0/repositories/pingdotgg/cinderdeck",
+        "https://api.test.local/2.0/repositories/pingdotgg/cinderdeck",
         "https://api.test.local/2.0/repositories/another/context",
         "https://api.test.local/2.0/repositories/another/context/branching-model",
       ].toSorted(),
@@ -506,8 +556,8 @@ it.effect("sends a self-hosted Bitbucket remote nowhere unless an API base url i
     const cloud = makeLayer({ response, env: cloudEnv });
     yield* defaultBranch(cloud, false);
     assert.deepStrictEqual(requestedUrls(cloud), [
-      "https://api.bitbucket.org/2.0/repositories/pingdotgg/t3code",
-      "https://api.bitbucket.org/2.0/repositories/pingdotgg/t3code/branching-model",
+      "https://api.bitbucket.org/2.0/repositories/pingdotgg/cinderdeck",
+      "https://api.bitbucket.org/2.0/repositories/pingdotgg/cinderdeck/branching-model",
     ]);
 
     const configured = makeLayer({ response, remoteUrl });
@@ -545,8 +595,8 @@ it.effect(
       assert.deepStrictEqual(
         execute.mock.calls.map((call) => call[0].url).toSorted(),
         [
-          "https://api.test.local/2.0/repositories/pingdotgg/t3code",
-          "https://api.test.local/2.0/repositories/pingdotgg/t3code/branching-model",
+          "https://api.test.local/2.0/repositories/pingdotgg/cinderdeck",
+          "https://api.test.local/2.0/repositories/pingdotgg/cinderdeck/branching-model",
         ].toSorted(),
       );
     }).pipe(Effect.provide(layer));
@@ -602,7 +652,7 @@ it.effect("creates pull requests using the official REST payload shape", () => {
     const request = execute.mock.calls[0]?.[0];
     assert.strictEqual(
       request?.url,
-      "https://api.test.local/2.0/repositories/pingdotgg/t3code/pullrequests",
+      "https://api.test.local/2.0/repositories/pingdotgg/cinderdeck/pullrequests",
     );
     assert.strictEqual(request?.method, "POST");
     assert.ok(request);
@@ -613,13 +663,13 @@ it.effect("creates pull requests using the official REST payload shape", () => {
       description: "PR body",
       source: {
         branch: { name: "feature/provider" },
-        repository: { full_name: "owner/t3code" },
+        repository: { full_name: "owner/cinderdeck" },
       },
       destination: {
         branch: { name: "main" },
       },
     });
-  }).pipe(Effect.provide(layer), Effect.scoped);
+  }).pipe(Effect.provide(layer));
 });
 
 it.effect("reports the account Bitbucket confirms for the configured credential", () => {
@@ -669,6 +719,24 @@ it.effect("prefers credentials saved in settings over the environment, without a
     });
     yield* bitbucket.probeAuth;
     assert.strictEqual(lastAuthorization(), basic("user@example.com", "token"));
+
+    // A reference left in place by getWithSecrets is one its secret provider could not read.
+    const requests = execute.mock.calls.length;
+    yield* settings.update({
+      sourceControlHosts: {
+        bitbucket: {
+          accessToken: { provider: SecretProviderId.make("vault"), reference: "bb#token" },
+        },
+      },
+    });
+    const auth = yield* bitbucket.probeAuth;
+    assert.strictEqual(auth.status, "unauthenticated");
+    assert.include(Option.getOrThrow(auth.detail), '"vault"');
+    const error = yield* Effect.flip(
+      bitbucket.listPullRequests({ cwd: "/repo", headSelector: "feature", state: "open" }),
+    );
+    assert.strictEqual(error._tag, "SettingsSecretUnresolvedError");
+    assert.strictEqual(execute.mock.calls.length, requests);
   }).pipe(Effect.provide(layer));
 });
 
@@ -747,15 +815,15 @@ it.effect("keeps Bitbucket response bodies out of checkout diagnostics", () => {
 it.effect("checks out fork pull requests through an ensured fork remote", () => {
   const { git, layer } = makeLayer({
     response: (request) => {
-      if (request.url.endsWith("/repositories/octocat/t3code")) {
+      if (request.url.endsWith("/repositories/octocat/cinderdeck")) {
         return Response.json({
           ...repositoryJson,
-          full_name: "octocat/t3code",
+          full_name: "octocat/cinderdeck",
           links: {
-            html: { href: "https://bitbucket.org/octocat/t3code" },
+            html: { href: "https://bitbucket.org/octocat/cinderdeck" },
             clone: [
-              { name: "https", href: "https://bitbucket.org/octocat/t3code.git" },
-              { name: "ssh", href: "git@bitbucket.org:octocat/t3code.git" },
+              { name: "https", href: "https://bitbucket.org/octocat/cinderdeck.git" },
+              { name: "ssh", href: "git@bitbucket.org:octocat/cinderdeck.git" },
             ],
           },
         });
@@ -765,7 +833,7 @@ it.effect("checks out fork pull requests through an ensured fork remote", () => 
         source: {
           branch: { name: "main" },
           repository: {
-            full_name: "octocat/t3code",
+            full_name: "octocat/cinderdeck",
             workspace: { slug: "octocat" },
           },
         },
@@ -784,23 +852,23 @@ it.effect("checks out fork pull requests through an ensured fork remote", () => 
     assert.deepStrictEqual(git.ensureRemote.mock.calls[0]?.[0], {
       cwd: "/repo",
       preferredName: "octocat",
-      url: "git@bitbucket.org:octocat/t3code.git",
+      url: "git@bitbucket.org:octocat/cinderdeck.git",
     });
     assert.deepStrictEqual(git.fetchRemoteBranch.mock.calls[0]?.[0], {
       cwd: "/repo",
       remoteName: "octocat",
       remoteBranch: "main",
-      localBranch: "t3code/pr-42/main",
+      localBranch: "cinderdeck/pr-42/main",
     });
     assert.deepStrictEqual(git.setBranchUpstream.mock.calls[0]?.[0], {
       cwd: "/repo",
-      branch: "t3code/pr-42/main",
+      branch: "cinderdeck/pr-42/main",
       remoteName: "octocat",
       remoteBranch: "main",
     });
     assert.deepStrictEqual(git.switchRef.mock.calls[0]?.[0], {
       cwd: "/repo",
-      refName: "t3code/pr-42/main",
+      refName: "cinderdeck/pr-42/main",
     });
   }).pipe(Effect.provide(layer));
 });

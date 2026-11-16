@@ -23,8 +23,15 @@ import { projectCommand } from "./cli/project.ts";
 import { threadCommand } from "./cli/thread.ts";
 import { runDefaultServerCommand, serveCommand, startCommand } from "./cli/server.ts";
 import { updateCommand } from "./cli/update.ts";
+import {
+  confirmCliInstall,
+  inTerminalForeground,
+  installCommand,
+  offerCliInstall,
+} from "./cli/install.ts";
 import { uninstallCommand } from "./cli/uninstall.ts";
-import { serviceLauncherCommand } from "./cli/serviceLauncher.ts";
+import { runServiceLauncherCli } from "./cli/serviceLauncher.ts";
+import { speechWorkerCommand } from "./cli/speechWorker.ts";
 import { claudeHistoryCommand } from "./cli/claudeHistory.ts";
 import { sshHelperCommand } from "./cli/sshHelper.ts";
 import { serviceCommand } from "./cli/service.ts";
@@ -37,7 +44,7 @@ import { connectCommand, statusCommand, upCommand } from "./cli/up.ts";
 const layerCliRuntime = Layer.mergeAll(NodeServices.layer, NodeCrypto.layer, NetService.layer);
 
 const connectPublicConfigMissingMessage =
-  "T3 Connect commands are unavailable: this build is missing T3 Connect public configuration.";
+  "Cinderdeck Connect commands are unavailable: this build is missing Cinderdeck Connect public configuration.";
 
 class ConnectPublicConfigMissingError extends CliError.UserError {
   override get message() {
@@ -48,12 +55,12 @@ class ConnectPublicConfigMissingError extends CliError.UserError {
 const connectUnavailableCommand = Command.make("connect", {
   command: Argument.String("command").pipe(Argument.variadic),
 }).pipe(
-  Command.withDescription("T3 Connect is unavailable in builds without public configuration."),
+  Command.withDescription("Cinderdeck Connect is unavailable in builds without public configuration."),
   Command.unlisted,
   Command.withHandler(() =>
     Effect.fail(
       new CliError.ShowHelp({
-        commandPath: ["t3", "connect"],
+        commandPath: ["cinderdeck", "connect"],
         errors: [new ConnectPublicConfigMissingError({ cause: connectPublicConfigMissingMessage })],
       }),
     ),
@@ -61,16 +68,16 @@ const connectUnavailableCommand = Command.make("connect", {
 );
 
 export const makeCli = ({ cloudEnabled = hasCloudPublicConfig } = {}) =>
-  Command.make("t3", { ...sharedServerCommandFlags }).pipe(
+  Command.make("cinderdeck", { ...sharedServerCommandFlags }).pipe(
     Command.withDescription(
-      "Run T3 Code in this terminal and open it in your browser. To use it from your other devices, run `t3 up`.",
+      "Run Cinderdeck in this terminal and open it in your browser. To use it from your other devices, run `cinderdeck up`.",
     ),
     Command.withHandler(runDefaultServerCommand),
     Command.withSubcommands([
       Command.make("help").pipe(
         Command.withDescription("Show command help."),
         Command.withHandler(() =>
-          Effect.fail(new CliError.ShowHelp({ commandPath: ["t3"], errors: [] })),
+          Effect.fail(new CliError.ShowHelp({ commandPath: ["cinderdeck"], errors: [] })),
         ),
       ),
       acpMcpBridgeCommand,
@@ -88,9 +95,16 @@ export const makeCli = ({ cloudEnabled = hasCloudPublicConfig } = {}) =>
       statusCommand,
       serviceCommand,
       updateCommand,
+      installCommand,
       uninstallCommand,
-      serviceLauncherCommand,
+      // bin.ts runs the bare service invocation; this keeps flags and help working like other commands.
+      Command.make("__service-launcher").pipe(
+        Command.unlisted,
+        // The launcher owns shutdown until its child exits; `runMain` would interrupt that shutdown.
+        Command.withHandler(() => Effect.sync(() => void runServiceLauncherCli())),
+      ),
       claudeHistoryCommand,
+      speechWorkerCommand,
       sshHelperCommand,
 
       servicePreflightCommand,
@@ -108,7 +122,22 @@ export const cli = makeCli();
 export function runCli() {
   extendConnectionAttemptTimeout();
   keepOutboundFetchOnHttp1();
-  Command.run(cli, { version: packageJson.version }).pipe(
+  offerCliInstall({
+    args: process.argv.slice(2),
+    // A child started over IPC (a service launcher) has no one to answer.
+    interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY) && process.send === undefined,
+    foreground: inTerminalForeground,
+    confirm: confirmCliInstall,
+  }).pipe(
+    // The offer handles its own errors; even an unexpected defect must not stop the command.
+    Effect.catchDefect(() => Effect.succeed(true)),
+    Effect.flatMap((proceed) =>
+      proceed
+        ? Command.run(cli, { version: packageJson.version })
+        : Effect.sync(() => {
+            process.exitCode = 130;
+          }),
+    ),
     Effect.scoped,
     Effect.provide(layerCliRuntime),
     NodeRuntime.runMain,

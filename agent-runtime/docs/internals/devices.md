@@ -3,13 +3,13 @@
 The environment server owns simulators and emulators the way it owns
 terminals: discovery, streaming, and agent access all run there, and every
 client reaches them through the environment connection. This is what makes the
-Device panel work over Tailscale and T3 Connect, including when an SSH host runs the devices.
+Device panel work over Tailscale and Cinderdeck Connect, including when an SSH host runs the devices.
 
 ## Two external tools, one seam
 
 [expo-device-hub](../../apps/server/src/device/LocalDeviceHost.ts) streams and
 [agent-device](../../apps/server/src/device/AgentDeviceShim.ts) drives. Each is
-npm-installed at a pinned version into the T3 home after its matching Device
+npm-installed at a pinned version into the Cinderdeck home after its matching Device
 panel consent step. Manual setup installs and starts only expo-device-hub;
 agent-device remains absent and stopped until agent access is granted. Both run
 with the server's Node; `npx` would make the first `device_open` after a reboot
@@ -26,10 +26,10 @@ operations, so a host whose devices live elsewhere only replaces them.
 SSH hosts forward both endpoints to server loopback. Every proxied request
 also carries the host id; device ids alone are not unique across hosts.
 
-## EAS Simulator hosts are billed sessions
+## Expo hosts run billed sessions
 
-An [EAS host](../../apps/server/src/device/EasDeviceHost.ts) has no machine:
-each opened device is an EAS Simulator session that bills the Expo account
+An [Expo host](../../apps/server/src/device/EasDeviceHost.ts) has no machine:
+each opened device is an Expo Simulators session that bills the Expo account
 until it stops. Every session is created with the host's run and idle limits,
 the host refuses to start past its session limit, and closing the host stops
 its sessions. Sessions it starts are recorded under the state directory and
@@ -42,12 +42,12 @@ route each request (`DeviceHostReady.upstream`) and adds the session token serve
 clients never hold it. Agent config files are written per device
 (`DeviceOperations.agentEndpoint`), which is why `device_open` opens the
 device before targeting it. Device settings and tools run `simctl` or `adb` on
-the device's machine, which EAS does not expose, so they are unavailable there.
+the device's machine, which Expo does not expose, so they are unavailable there.
 
 ## Simlock hosts lease through the agent-device front
 
 A [Simlock host](../../apps/server/src/device/SimlockDeviceHost.ts) (alpha) opens a
-device by running T3's own agent-device CLI against the gateway's agent-device
+device by running Cinderdeck's own agent-device CLI against the gateway's agent-device
 front (`connect proxy`, then `open`), not with Simlock's lease HTTP API:
 agent-device cannot adopt a lease it did not allocate. The lease is bound to
 that one agent-device session and to the directory `open` ran in, so
@@ -89,7 +89,7 @@ upgrades for `/api`, not only `/ws`.
 
 serve-sim's preview drives its Tools panel by sending shell commands over that
 same exec channel. Proxying it, even allowlisted, would hand any environment
-session arbitrary command execution on the host, so T3 does not. The
+session arbitrary command execution on the host, so Cinderdeck does not. The
 [`device.action`](../../apps/server/src/device/DeviceActions.ts) RPC runs the
 underlying `simctl`, `adb`, and serve-sim helper binaries itself through
 `DeviceHostReady.run`, one typed action per control, and returns the settings
@@ -101,7 +101,7 @@ screenshot capture and stream tuning.
 
 The `device_*` toolkit is deliberately four tools: list, open, screenshot, and
 close. Driving happens through the `agent-device` CLI, which has the semantic
-snapshot model agents need and stays current with its own releases. T3 prepends
+snapshot model agents need and stays current with its own releases. Cinderdeck prepends
 a shim directory to the provider's PATH. The CLI installs on the environment
 server even when that server cannot run simulators. Hosts start on demand.
 
@@ -117,7 +117,7 @@ always-loaded prompt or skill: it costs nothing in threads that never open a
 device and cannot drift from the pinned CLI version. `device_open` returns a
 launcher bound to its agent-device session, so agents need no target flags.
 The launcher leaves out the flags a command refuses (`cdp` talks to Metro, not
-to the device), refuses the commands that would replace T3's connection, and
+to the device), refuses the commands that would replace Cinderdeck's connection, and
 checks that connection first: agent-device reports a sandboxed shell and a
 dropped tunnel alike as an unreachable daemon, so the launcher names which one it
 is. Ending a session (`device_close`, the Device panel, a shutdown) also closes
@@ -145,12 +145,12 @@ WebCodecs is secure-context only, so the viewer probes `isConfigSupported` and f
 MJPEG on iOS when decoding is unavailable. Android's SEMU socket has no MJPEG;
 there the panel reports that it cannot decode.
 
-serve-sim can also be locked to WebRTC, as on EAS Simulator, and then refuses
+serve-sim can also be locked to WebRTC, as on Expo Simulators, and then refuses
 AVCC with a 409 naming the transport. The viewer still asks for AVCC first, so
 hubs that serve it pay nothing, and switches on that 409, or when its MJPEG
 image fails in a browser that has `RTCPeerConnection`. Offers are not trickled:
 serve-sim takes one offer with every candidate. The video element only feeds
 the same canvas sink, so the panel and the mobile WebView keep one surface.
 Android asks serve-emu's `/api` before opening its video socket and streams
-WebRTC when it is advertised (EAS Simulator), keeping a separate `video=0`
+WebRTC when it is advertised (Expo Simulators), keeping a separate `video=0`
 socket for input so input can reconnect without restarting video.

@@ -37,7 +37,7 @@ layer("GitLabCli.layer", (it) => {
             JSON.stringify({
               iid: 42,
               title: "Add MR thread creation",
-              web_url: "https://gitlab.com/pingdotgg/t3code/-/merge_requests/42",
+              web_url: "https://gitlab.com/pingdotgg/cinderdeck/-/merge_requests/42",
               target_branch: "main",
               source_branch: "feature/mr-threads",
               sha: "a".repeat(40),
@@ -46,7 +46,7 @@ layer("GitLabCli.layer", (it) => {
               source_project_id: 101,
               target_project_id: 100,
               source_project: {
-                path_with_namespace: "octocat/t3code",
+                path_with_namespace: "octocat/cinderdeck",
               },
             }),
           ),
@@ -64,7 +64,7 @@ layer("GitLabCli.layer", (it) => {
       assert.deepStrictEqual(result, {
         number: 42,
         title: "Add MR thread creation",
-        url: "https://gitlab.com/pingdotgg/t3code/-/merge_requests/42",
+        url: "https://gitlab.com/pingdotgg/cinderdeck/-/merge_requests/42",
         baseRefName: "main",
         headRefName: "feature/mr-threads",
         headSha: "a".repeat(40),
@@ -72,7 +72,7 @@ layer("GitLabCli.layer", (it) => {
         closedAt: "2026-08-23T10:00:00Z",
         mergedAt: null,
         isCrossRepository: true,
-        headRepositoryNameWithOwner: "octocat/t3code",
+        headRepositoryNameWithOwner: "octocat/cinderdeck",
         headRepositoryOwnerLogin: "octocat",
       });
       expect(mockedRun).toHaveBeenCalledWith(
@@ -107,14 +107,14 @@ layer("GitLabCli.layer", (it) => {
               {
                 iid: 0,
                 title: "invalid",
-                web_url: "https://gitlab.com/pingdotgg/t3code/-/merge_requests/0",
+                web_url: "https://gitlab.com/pingdotgg/cinderdeck/-/merge_requests/0",
                 target_branch: "main",
                 source_branch: "feature/invalid",
               },
               {
                 iid: 43,
                 title: "  Valid MR  ",
-                web_url: " https://gitlab.com/pingdotgg/t3code/-/merge_requests/43 ",
+                web_url: " https://gitlab.com/pingdotgg/cinderdeck/-/merge_requests/43 ",
                 target_branch: " main ",
                 source_branch: " feature/mr-list ",
                 state: "merged",
@@ -138,7 +138,7 @@ layer("GitLabCli.layer", (it) => {
         {
           number: 43,
           title: "Valid MR",
-          url: "https://gitlab.com/pingdotgg/t3code/-/merge_requests/43",
+          url: "https://gitlab.com/pingdotgg/cinderdeck/-/merge_requests/43",
           baseRefName: "main",
           headRefName: "feature/mr-list",
           state: "merged",
@@ -160,6 +160,79 @@ layer("GitLabCli.layer", (it) => {
             "20",
             "--output",
             "json",
+          ],
+        }),
+      );
+    }),
+  );
+
+  it.effect(
+    "retries oversized MR lists with smaller pages without losing same-named branches",
+    () =>
+      Effect.gen(function* () {
+        const entries = Array.from({ length: 4 }, (_, index) => ({
+          iid: index + 1,
+          title: "MR " + index,
+          // The first alone escapes past the default 1 MB cap; together they pass the list cap.
+          description: index === 0 ? '"'.repeat(600_000) : "x".repeat(3_000_000),
+          web_url: "https://gitlab.com/acme/web/-/merge_requests/" + (index + 1),
+          target_branch: "main",
+          source_branch: "feature",
+          source_project_id: index === 3 ? 100 : 101,
+          target_project_id: 100,
+        }));
+        mockedRun.mockImplementation((input) => {
+          const size = Number(input.args[input.args.indexOf("--per-page") + 1]);
+          const pageIndex = input.args.indexOf("--page");
+          const page = pageIndex < 0 ? 1 : Number(input.args[pageIndex + 1]);
+          const raw = JSON.stringify(entries.slice((page - 1) * size, page * size));
+          const cap = input.maxOutputBytes ?? 1_000_000;
+          return Effect.succeed({
+            ...processOutput(raw.slice(0, cap)),
+            stdoutTruncated: raw.length > cap,
+          });
+        });
+        const glab = yield* GitLabCli.GitLabCli;
+        const result = yield* glab.listMergeRequests({
+          cwd: "/repo",
+          headSelector: "feature",
+          state: "open",
+          limit: 4,
+        });
+        assert.deepStrictEqual(
+          result.map((mr) => mr.number),
+          [1, 2, 3, 4],
+        );
+        assert.strictEqual(result[3]?.isCrossRepository, false);
+      }),
+  );
+
+  it.effect("creates same-project MRs without a repository lookup", () =>
+    Effect.gen(function* () {
+      mockedRun.mockReturnValueOnce(Effect.succeed(processOutput("{}")));
+      const glab = yield* GitLabCli.GitLabCli;
+      yield* glab.createMergeRequest({
+        cwd: "/repo",
+        baseBranch: "main",
+        headSelector: "feature/fix",
+        title: "Fix remote flow",
+        bodyFile: "/tmp/body.md",
+      });
+      expect(mockedRun).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          args: [
+            "api",
+            "--method",
+            "POST",
+            "projects/:fullpath/merge_requests",
+            "--raw-field",
+            "source_branch=feature/fix",
+            "--raw-field",
+            "target_branch=main",
+            "--raw-field",
+            "title=Fix remote flow",
+            "--field",
+            "description=@/tmp/body.md",
           ],
         }),
       );
@@ -192,6 +265,38 @@ layer("GitLabCli.layer", (it) => {
       assert.strictEqual(error.cwd, "/repo");
       assert.strictEqual(error.cause, cause);
       assert.equal(error.message.includes(cause.detail), false);
+    }),
+  );
+
+  it.effect.each([
+    { repository: "group/project", args: ["api", "projects/group%2Fproject"] },
+    {
+      repository: "https://gitlab.example.com:8443/group/sub/project.git",
+      args: ["api", "--hostname", "gitlab.example.com:8443", "projects/group%2Fsub%2Fproject"],
+    },
+    {
+      repository: "https://gitlab.com/group/project/-/tree/main",
+      args: ["api", "--hostname", "gitlab.com", "projects/group%2Fproject"],
+    },
+  ])("looks up $repository by its project path", ({ repository, args }) =>
+    Effect.gen(function* () {
+      mockedRun.mockReturnValueOnce(
+        Effect.succeed(
+          processOutput(
+            JSON.stringify({
+              path_with_namespace: "group/project",
+              web_url: "https://sourcecontrol.example.com/group/project",
+              http_url_to_repo: "https://sourcecontrol.example.com/group/project.git",
+              ssh_url_to_repo: "git@sourcecontrol.example.com:group/project.git",
+            }),
+          ),
+        ),
+      );
+
+      const glab = yield* GitLabCli.GitLabCli;
+      yield* glab.getRepositoryCloneUrls({ cwd: "/repo", repository });
+
+      expect(mockedRun).toHaveBeenCalledWith(expect.objectContaining({ command: "glab", args }));
     }),
   );
 

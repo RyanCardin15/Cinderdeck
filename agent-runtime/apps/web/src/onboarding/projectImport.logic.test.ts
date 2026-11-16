@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   groupOnboardingProjects,
+  isNewOnboardingProject,
   partitionOnboardingProjects,
   onboardingProjectKey,
   resolveOnboardingLandingProject,
@@ -72,18 +73,18 @@ describe("partitionOnboardingProjects", () => {
 
 describe("groupOnboardingProjects", () => {
   it("groups clones by origin, keeps local repos separate, and folds non-git folders away", () => {
-    const main = candidate("/code/t3code", {
-      git: github("pingdotgg/t3code"),
+    const main = candidate("/code/cinderdeck", {
+      git: github("pingdotgg/cinderdeck"),
       threadCount: 79,
       lastActiveAt: "2026-08-21T12:00:00.000Z",
     });
-    const clone = candidate("/code/clones/t3code-2", {
-      git: github("pingdotgg/t3code"),
+    const clone = candidate("/code/clones/cinderdeck-2", {
+      git: github("pingdotgg/cinderdeck"),
       threadCount: 13,
       lastActiveAt: "2026-08-10T12:00:00.000Z",
     });
     const older = candidate("/code/fleet", {
-      git: github("t3dotgg/fleet"),
+      git: github("example-developer/fleet"),
       threadCount: 295,
       lastActiveAt: "2026-08-22T00:00:00.000Z",
     });
@@ -102,14 +103,14 @@ describe("groupOnboardingProjects", () => {
       })),
     ).toEqual([
       {
-        label: "t3dotgg/fleet",
+        label: "example-developer/fleet",
         paths: ["/code/fleet"],
         threadCount: 295,
         lastActiveAt: "2026-08-22T00:00:00.000Z",
       },
       {
-        label: "pingdotgg/t3code",
-        paths: ["/code/t3code", "/code/clones/t3code-2"],
+        label: "pingdotgg/cinderdeck",
+        paths: ["/code/cinderdeck", "/code/clones/cinderdeck-2"],
         threadCount: 92,
         lastActiveAt: "2026-08-21T12:00:00.000Z",
       },
@@ -141,6 +142,7 @@ describe("resolveOnboardingProjectId", () => {
   const localProjectId = ProjectId.make("local-project");
 
   it("uses the scanned project ID when the client still has an older project at that root", () => {
+    const scanned = candidate("/projects/repo", { projectId: localProjectId });
     expect(
       resolveOnboardingProjectId(
         [
@@ -151,46 +153,47 @@ describe("resolveOnboardingProjectId", () => {
           },
         ],
         localEnvironmentId,
-        candidate("/projects/repo", { projectId: localProjectId }),
+        scanned,
       ),
     ).toBe(localProjectId);
+    expect(isNewOnboardingProject([])(localEnvironmentId, scanned)).toBe(false);
   });
 
   it("finds an existing project by normalized root in the target environment", () => {
+    const projects = [
+      {
+        id: ProjectId.make("remote-project"),
+        environmentId: remoteEnvironmentId,
+        workspaceRoot: "C:\\Work\\Repo",
+      },
+      {
+        id: localProjectId,
+        environmentId: localEnvironmentId,
+        workspaceRoot: "C:\\Work\\Repo\\",
+      },
+    ];
     expect(
-      resolveOnboardingProjectId(
-        [
-          {
-            id: ProjectId.make("remote-project"),
-            environmentId: remoteEnvironmentId,
-            workspaceRoot: "C:\\Work\\Repo",
-          },
-          {
-            id: localProjectId,
-            environmentId: localEnvironmentId,
-            workspaceRoot: "C:\\Work\\Repo\\",
-          },
-        ],
-        localEnvironmentId,
-        candidate("c:/work/repo"),
-      ),
+      resolveOnboardingProjectId(projects, localEnvironmentId, candidate("c:/work/repo")),
     ).toBe(localProjectId);
+    expect(isNewOnboardingProject(projects)(localEnvironmentId, candidate("c:/work/repo"))).toBe(
+      false,
+    );
   });
 
   it("does not reuse a project from another environment", () => {
+    const projects = [
+      {
+        id: ProjectId.make("remote-project"),
+        environmentId: remoteEnvironmentId,
+        workspaceRoot: "/projects/repo",
+      },
+    ];
     expect(
-      resolveOnboardingProjectId(
-        [
-          {
-            id: ProjectId.make("remote-project"),
-            environmentId: remoteEnvironmentId,
-            workspaceRoot: "/projects/repo",
-          },
-        ],
-        localEnvironmentId,
-        candidate("/projects/repo"),
-      ),
+      resolveOnboardingProjectId(projects, localEnvironmentId, candidate("/projects/repo")),
     ).toBeNull();
+    expect(isNewOnboardingProject(projects)(localEnvironmentId, candidate("/projects/repo"))).toBe(
+      true,
+    );
   });
 });
 

@@ -16,7 +16,7 @@ describe("discoverFxSkills", () => {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       // The workspace sits under the fake HOME, so the upward walk stops there.
-      const home = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-fx-skills-home-" });
+      const home = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-fx-skills-home-" });
       const parent = path.join(home, "projects");
       const workspace = path.join(parent, "app");
       const writeSkill = (root: string, name: string) =>
@@ -52,7 +52,7 @@ describe("discoverFxSkills", () => {
           "home-claude",
         ],
       );
-    }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+    }).pipe(Effect.provide(NodeServices.layer)),
   );
 
   // For `$review` with two skills of exactly that name, fx's model loads the
@@ -63,7 +63,7 @@ describe("discoverFxSkills", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const home = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-fx-skills-home-" });
+      const home = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-fx-skills-home-" });
       const workspace = path.join(home, "app");
       const writeSkillFile = (folder: string, contents: string) =>
         fileSystem
@@ -159,7 +159,7 @@ describe("discoverFxSkills", () => {
           ["Review", path.join(home, ".claude/skills/review/SKILL.md")],
         ],
       );
-    }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+    }).pipe(Effect.provide(NodeServices.layer)),
   );
 
   // Nix home-manager and dotfile setups link ~/.fx/skills; fx then loads
@@ -168,7 +168,7 @@ describe("discoverFxSkills", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const home = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-fx-skills-home-" });
+      const home = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-fx-skills-home-" });
       for (const [root, name] of [
         ["dotfiles/fx-skills", "managed"],
         [".claude/skills", "compat"],
@@ -194,6 +194,6 @@ describe("discoverFxSkills", () => {
         skills.map((skill) => skill.name),
         ["compat"],
       );
-    }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+    }).pipe(Effect.provide(NodeServices.layer)),
   );
 });

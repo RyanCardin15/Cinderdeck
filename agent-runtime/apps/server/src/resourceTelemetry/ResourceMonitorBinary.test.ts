@@ -20,7 +20,7 @@ describe("ResourceMonitorBinary", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-resource-monitor-binary-",
+        prefix: "cinderdeck-resource-monitor-binary-",
       });
       const binaryPath = `${baseDir}/custom-resource-monitor`;
       yield* fileSystem.writeFileString(binaryPath, "binary");
@@ -43,7 +43,7 @@ describe("ResourceMonitorBinary", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-resource-monitor-binary-",
+        prefix: "cinderdeck-resource-monitor-binary-",
       });
       const binaryPath = `${baseDir}/t3-resource-monitor`;
       yield* fileSystem.writeFileString(binaryPath, "binary");
@@ -53,7 +53,7 @@ describe("ResourceMonitorBinary", () => {
         Effect.provide(ServerConfig.layerTest(process.cwd(), baseDir)),
         Effect.provideService(HostProcess.Platform, "linux"),
         Effect.provideService(HostProcess.Architecture, "x64"),
-        Effect.provideService(ResourceMonitorBinary.ResourceMonitorHostLinuxLibc, "gnu"),
+        Effect.provideService(HostProcess.LinuxLibc, "gnu"),
         Effect.provideService(HostProcess.Environment, {
           T3CODE_RESOURCE_MONITOR_PATH: binaryPath,
         }),
@@ -70,7 +70,7 @@ describe("ResourceMonitorBinary", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-resource-monitor-binary-",
+        prefix: "cinderdeck-resource-monitor-binary-",
       });
 
       const service = yield* ResourceMonitorBinary.make().pipe(
@@ -95,7 +95,7 @@ describe("ResourceMonitorBinary", () => {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-          prefix: "t3-resource-monitor-binary-",
+          prefix: "cinderdeck-resource-monitor-binary-",
         });
         const projectDirectory = path.join(baseDir, "repo");
         const distDirectory = path.join(projectDirectory, "apps", "server", "dist");
@@ -106,7 +106,7 @@ describe("ResourceMonitorBinary", () => {
           "target",
           profile,
         );
-        const binaryPath = path.join(binaryDirectory, "t3-resource-monitor.exe");
+        const binaryPath = path.join(binaryDirectory, "cinderdeck-resource-monitor.exe");
         yield* fileSystem.makeDirectory(distDirectory, { recursive: true });
         yield* fileSystem.makeDirectory(binaryDirectory, { recursive: true });
         yield* fileSystem.writeFileString(binaryPath, "binary");
@@ -137,13 +137,13 @@ describe("ResourceMonitorBinary", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-resource-monitor-binary-",
+        prefix: "cinderdeck-resource-monitor-binary-",
       });
       const service = yield* ResourceMonitorBinary.make().pipe(
         Effect.provide(ServerConfig.layerTest(process.cwd(), baseDir)),
         Effect.provideService(HostProcess.Platform, "linux"),
         Effect.provideService(HostProcess.Architecture, "x64"),
-        Effect.provideService(ResourceMonitorBinary.ResourceMonitorHostLinuxLibc, "musl"),
+        Effect.provideService(HostProcess.LinuxLibc, "musl"),
         Effect.provideService(HostProcess.Environment, {}),
       );
       const error = yield* Effect.flip(service.resolve);

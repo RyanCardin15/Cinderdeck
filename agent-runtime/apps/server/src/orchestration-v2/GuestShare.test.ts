@@ -68,7 +68,7 @@ const setup = Effect.gen(function* () {
     commandId: CommandId.make("open-guest-share"),
     threadId,
     shareId,
-    host: "env.t3.test",
+    host: "env.cinderdeck.test",
     expiresAt: DateTime.formatIso(DateTime.add(yield* DateTime.now, { hours: 24 })),
   });
   return orchestrator;

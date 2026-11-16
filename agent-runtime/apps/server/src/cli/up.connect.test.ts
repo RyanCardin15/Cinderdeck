@@ -15,7 +15,7 @@ import packageJson from "../../package.json" with { type: "json" };
 import * as BootService from "../cloud/bootService.ts";
 import { upCommand } from "./up.ts";
 
-// T3 Connect's flows run only in builds with its public config, and they call
+// Cinderdeck Connect's flows run only in builds with its public config, and they call
 // the relay; this file swaps in the link and unlink steps.
 const events = vi.hoisted((): Array<string> => []);
 // The CLI link marker, kept in memory instead of the secret store.
@@ -58,7 +58,7 @@ vi.mock("./connect.ts", async (importOriginal) => {
 });
 
 it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer, NetService.layer))(
-  "t3 up with T3 Connect",
+  "cinderdeck up with Cinderdeck Connect",
   (it) => {
     it.effect.each([
       { label: "no link", prior: null, events: ["link", "restart", "unlink", "restart"] },
@@ -74,13 +74,13 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer, NetService.layer))
         link.desired = input.prior !== null;
         link.mode = input.prior ?? "managed";
         const fs = yield* FileSystem.FileSystem;
-        const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-up-connect-test-" });
+        const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-up-connect-test-" });
         yield* fs.writeFileString(`${baseDir}/service.env`, "T3CODE_LAN=false\n");
         const status = {
           supported: true,
           installed: true,
           current: true,
-          unitPath: "/home/me/.config/systemd/user/t3code.service",
+          unitPath: "/home/me/.config/systemd/user/cinderdeck.service",
           logPath: "/home/me/.t3/userdata/logs/boot-service.log",
         };
         vi.spyOn(BootService, "layer").mockReturnValue(
@@ -124,6 +124,56 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer, NetService.layer))
             : { desired: true, mode: input.prior },
         );
         expect(yield* fs.readFileString(`${baseDir}/service.env`)).toBe("T3CODE_LAN=false\n");
+      }),
+    );
+
+    it.effect("--connect signs in to nothing for another home's service", () =>
+      Effect.gen(function* () {
+        events.length = 0;
+        link.desired = false;
+        link.mode = "managed";
+        const fs = yield* FileSystem.FileSystem;
+        const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-up-connect-test-" });
+        vi.spyOn(BootService, "layer").mockReturnValue(
+          Layer.succeed(
+            BootService.BootService,
+            BootService.BootService.of({
+              status: Effect.succeed({
+                supported: true,
+                installed: true,
+                current: false,
+                otherBaseDir: "/srv/cinderdeck",
+                unitPath: "/home/me/.config/systemd/user/cinderdeck.service",
+                logPath: "/home/me/.t3/userdata/logs/boot-service.log",
+              }),
+              withStopped: (operation) => operation,
+              restart: Effect.sync(() => events.push("restart")).pipe(
+                Effect.as("skipped" as const),
+              ),
+              install: () => Effect.die("another home's service is not reinstalled"),
+              uninstall: Effect.succeed(false),
+            }),
+          ),
+        );
+
+        const error = yield* Command.runWith(upCommand, { version: packageJson.version })([
+          "--base-dir",
+          baseDir,
+          "--connect",
+        ]).pipe(
+          Effect.provideService(HostProcess.Environment, {}),
+          Effect.provide(
+            Layer.mergeAll(
+              ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })),
+              Layer.fresh(TestConsole.layer),
+            ),
+          ),
+          Effect.flip,
+        );
+
+        expect(error).toMatchObject({ _tag: "BootServiceOtherBaseDirError" });
+        expect(events).toEqual([]);
+        expect(link).toEqual({ desired: false, mode: "managed" });
       }),
     );
   },

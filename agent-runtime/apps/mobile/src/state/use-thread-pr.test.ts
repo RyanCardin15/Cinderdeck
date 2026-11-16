@@ -1,7 +1,13 @@
-import { ProjectId, type ThreadPullRequestLink } from "@cinderdeck/contracts";
+import {
+  ProjectId,
+  type PullRequestSummary,
+  SourceControlProviderKind,
+  type ThreadPullRequestLink,
+} from "@cinderdeck/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  knownPullRequestSummary,
   presentThreadLinkedPullRequests,
   rememberBounded,
   resolveThreadPrSource,
@@ -13,9 +19,9 @@ function linkedPr(
 ): ThreadPullRequestLink {
   return {
     host: "github.com",
-    repository: "t3tools/t3code",
+    repository: "t3tools/cinderdeck",
     number,
-    url: `https://github.com/t3tools/t3code/pull/${number}`,
+    url: `https://github.com/t3tools/cinderdeck/pull/${number}`,
     source: "manual",
     linkedAt: "2026-09-08T00:00:00.000Z",
     stack: null,
@@ -55,8 +61,8 @@ describe("presentThreadLinkedPullRequests", () => {
       presentThreadLinkedPullRequests([
         linkedPr(7, {
           host: "gitlab.com",
-          repository: "t3tools/t3code",
-          url: "https://gitlab.com/t3tools/t3code/-/merge_requests/7",
+          repository: "t3tools/cinderdeck",
+          url: "https://gitlab.com/t3tools/cinderdeck/-/merge_requests/7",
         }),
       ])?.accessibilityLabel,
     ).toBe("#7 merge request open");
@@ -66,11 +72,11 @@ describe("presentThreadLinkedPullRequests", () => {
 describe("resolveThreadPrSource compatibility", () => {
   const legacyRef = {
     projectId: ProjectId.make("project"),
-    repository: "t3tools/t3code",
+    repository: "t3tools/cinderdeck",
     number: 1,
-    url: "https://github.com/t3tools/t3code/pull/1",
+    url: "https://github.com/t3tools/cinderdeck/pull/1",
   };
-  const branchRef = { ...legacyRef, number: 2, url: "https://github.com/t3tools/t3code/pull/2" };
+  const branchRef = { ...legacyRef, number: 2, url: "https://github.com/t3tools/cinderdeck/pull/2" };
 
   it("polls the stored reference before the server config loads", () => {
     expect(
@@ -110,6 +116,49 @@ describe("resolveThreadPrSource compatibility", () => {
         true,
       ),
     ).toMatchObject({ linkedPresentation: { number: 3, state: null }, pullRequestRef: null });
+  });
+});
+
+describe("knownPullRequestSummary", () => {
+  it("seeds from the newest summary of the same pull request, never another's", () => {
+    const projectId = ProjectId.make("project");
+    const link = linkedPr(7);
+    const threads = [
+      {
+        projectId,
+        pullRequests: [
+          { ...link, snapshot: { ...link.snapshot!, updatedAt: "2026-09-08T00:00:00.000Z" } },
+        ],
+      },
+    ];
+    const listed: PullRequestSummary = {
+      provider: SourceControlProviderKind.make("github"),
+      projectId,
+      repository: "t3tools/cinderdeck",
+      number: 7,
+      title: "Listed title",
+      url: "https://github.com/t3tools/cinderdeck/pull/7",
+      state: "open",
+      headBranch: "change-7",
+      baseBranch: "main",
+      updatedAt: "2026-09-09T00:00:00.000Z",
+    };
+    const lookup = (host: string, number: number, summaries = [listed]) =>
+      knownPullRequestSummary({ host, repository: "t3tools/cinderdeck", number }, threads, summaries);
+
+    expect(lookup("github.com", 7, [])?.title).toBe("Change 7");
+    expect(lookup("github.com", 7)?.title).toBe("Listed title");
+    expect(lookup("github.com", 8)).toBeUndefined();
+    expect(lookup("gitlab.com", 7)).toBeUndefined();
+
+    const sameVersion = { ...listed, updatedAt: "2026-09-08T00:00:00.000Z" };
+    const syncedAt = Date.parse(link.snapshot!.syncedAt);
+    expect(lookup("github.com", 7, [{ ...sameVersion, observedAt: syncedAt - 1 }])?.title).toBe(
+      "Change 7",
+    );
+    expect(lookup("github.com", 7, [{ ...sameVersion, observedAt: syncedAt + 1 }])?.title).toBe(
+      "Listed title",
+    );
   });
 });
 

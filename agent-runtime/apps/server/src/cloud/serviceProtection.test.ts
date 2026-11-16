@@ -18,7 +18,7 @@ import * as ProcessRunner from "../processRunner.ts";
 import * as ServiceProtection from "./serviceProtection.ts";
 
 const temporaryDirectory = () =>
-  NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-service-protection-"));
+  NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-service-protection-"));
 
 describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")("renderPrivilegedScript", () => {
   it("writes and removes only its drop-ins and gives running main processes their score", () => {
@@ -38,7 +38,7 @@ describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")("renderPrivileg
         "[Service]\nMemoryLow=2G\nOOMScoreAdjust=-900\n",
       );
       expect(theo.managerDefaults.path).toBe(
-        "/home/theo/.config/systemd/user.conf.d/90-t3code-protect.conf",
+        "/home/theo/.config/systemd/user.conf.d/90-cinderdeck-protect.conf",
       );
       expect(theo.oomUnits).toEqual(["user@1000.service", "tailscaled.service", "ssh.service"]);
 
@@ -79,7 +79,7 @@ describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")("renderPrivileg
         expect(result.status).toBe(0);
       };
       const exists = (unit: string) =>
-        NodeFS.existsSync(NodePath.join(systemUnitDir, `${unit}.d`, "90-t3code-protect.conf"));
+        NodeFS.existsSync(NodePath.join(systemUnitDir, `${unit}.d`, "90-cinderdeck-protect.conf"));
 
       runScript(theo, "apply");
       runScript(plan(1001, []), "apply");
@@ -233,7 +233,7 @@ it.effect("counts memory.min as protection and names the first cgroup that grant
     "user-1000.slice",
     "user@1000.service",
     "app.slice",
-    "t3code.service",
+    "cinderdeck.service",
   ];
   const write = (depth: number, file: string, value: string) => {
     const directory = NodePath.join(root, ...controlGroup.slice(0, depth));
@@ -268,3 +268,32 @@ it.effect("counts memory.min as protection and names the first cgroup that grant
     Effect.provide(NodeServices.layer),
   );
 });
+
+it.effect(
+  "tells a kernel without the memory controller apart from a cgroup that grants none",
+  () => {
+    const root = temporaryDirectory();
+    NodeFS.mkdirSync(NodePath.join(root, "user.slice"), { recursive: true });
+    NodeFS.writeFileSync(NodePath.join(root, "cgroup.controllers"), "cpuset cpu io pids\n");
+    return Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const state = yield* ServiceProtection.readProtection("/home/theo/.config/systemd/user").pipe(
+        Effect.provideService(FileSystem.FileSystem, {
+          ...fs,
+          readFileString: (path, encoding) =>
+            fs.readFileString(path.replace("/sys/fs/cgroup", root), encoding),
+        }),
+      );
+      expect(state).toMatchObject({ memoryControllerAvailable: false });
+    }).pipe(
+      Effect.ensuring(Effect.sync(() => NodeFS.rmSync(root, { recursive: true, force: true }))),
+      Effect.provideService(
+        ProcessRunner.ProcessRunner,
+        runner(
+          "ControlGroup=/user.slice/user-1000.slice/user@1000.service/app.slice/cinderdeck.service\nMainPID=0\n",
+        ),
+      ),
+      Effect.provide(NodeServices.layer),
+    );
+  },
+);

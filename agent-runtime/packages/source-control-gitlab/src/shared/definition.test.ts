@@ -7,11 +7,11 @@ const parse = (url: string) => definition.parseChangeRequestUrl(new URL(url));
 
 describe("GitLab change request URLs", () => {
   it("reads a merge request on any host, nested groups and all", () => {
-    expect(parse("https://gitlab.com/t3tools/platform/t3code/-/merge_requests/42")).toEqual({
+    expect(parse("https://gitlab.com/t3tools/platform/cinderdeck/-/merge_requests/42")).toEqual({
       host: "gitlab.com",
-      repository: "t3tools/platform/t3code",
+      repository: "t3tools/platform/cinderdeck",
       number: 42,
-      repositoryUrl: "https://gitlab.com/t3tools/platform/t3code",
+      repositoryUrl: "https://gitlab.com/t3tools/platform/cinderdeck",
     });
     expect(parse("https://code.acme.test/team/project/-/merge_requests/9")).toMatchObject({
       host: "code.acme.test",
@@ -27,8 +27,8 @@ describe("GitLab change request URLs", () => {
   });
 
   it("leaves issues and single-segment paths alone", () => {
-    expect(parse("https://gitlab.com/t3tools/t3code/-/issues/12")).toBeNull();
-    expect(parse("https://gitlab.com/t3code/-/merge_requests/12")).toBeNull();
+    expect(parse("https://gitlab.com/t3tools/cinderdeck/-/issues/12")).toBeNull();
+    expect(parse("https://gitlab.com/cinderdeck/-/merge_requests/12")).toBeNull();
   });
 
   it("recognizes only merge request URLs it can parse", () => {
@@ -37,7 +37,7 @@ describe("GitLab change request URLs", () => {
       "https://gitlab.com/g/p#/-/merge_requests/5",
       "https://gitlab.com?x=/g/p/-/merge_requests/5",
       "https://gitlab.com#/g/p/-/merge_requests/5",
-      "https://gitlab.com/t3code/-/merge_requests/12",
+      "https://gitlab.com/cinderdeck/-/merge_requests/12",
       "https://gitlab.com/g//-/merge_requests/5",
     ]) {
       expect(definition.isChangeRequestReference(url), url).toBe(false);
@@ -85,6 +85,34 @@ describe("GitLab change request URLs", () => {
         webUrl: "https://gitlab.com/group/sub/project",
       }),
     ).toBe("https://gitlab.com/group/sub/project/-/merge_requests/4");
+  });
+
+  it("links authors, bots included, to their profile on the repository's host", () => {
+    expect(definition.authorProfileUrl("TonybynMp4", "https://gitlab.com/group/sub/project")).toBe(
+      "https://gitlab.com/TonybynMp4",
+    );
+    expect(
+      definition.authorProfileUrl(
+        "project_278964_bot_89f97e2c",
+        "http://gitlab.internal:8080/team/app/-/merge_requests/5",
+      ),
+    ).toBe("http://gitlab.internal:8080/project_278964_bot_89f97e2c");
+  });
+});
+
+describe("GitLab CLI commands", () => {
+  it("recognizes shell merges and closes, including glab's `accept` alias", () => {
+    for (const command of ["glab mr merge 7 --yes", "glab mr accept 7 --yes", "glab mr close 7"]) {
+      expect(definition.changeRequestCloseCommand.test(command), command).toBe(true);
+    }
+    expect(definition.changeRequestCloseCommand.test("glab mr view 7")).toBe(false);
+  });
+
+  it("recognizes shell creates, including glab's `new` alias", () => {
+    for (const command of ["glab mr create --fill --yes", "glab mr new --fill --yes"]) {
+      expect(definition.changeRequestCreateCommand.test(command), command).toBe(true);
+    }
+    expect(definition.changeRequestCreateCommand.test("glab mr view 7")).toBe(false);
   });
 });
 

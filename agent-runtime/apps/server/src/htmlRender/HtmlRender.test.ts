@@ -4,6 +4,7 @@ import { assert, describe, expect, it } from "@effect/vitest";
 import { EnvironmentId, ProviderInstanceId, ThreadId } from "@cinderdeck/contracts";
 import * as McpProviderSessions from "@cinderdeck/provider-core/server/McpProviderSessions";
 import * as HostProcess from "@cinderdeck/shared/HostProcess";
+import { symlinksSupported } from "@cinderdeck/shared/testing/symlinks";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -46,7 +47,7 @@ const layerHtmlRender = (
       ),
     ),
     Layer.provideMerge(McpProviderSessions.layer),
-    Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "t3-html-render-" })),
+    Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "cinderdeck-html-render-" })),
     Layer.provideMerge(NodeServices.layer),
   );
 const layerTest = layerHtmlRender();
@@ -59,7 +60,7 @@ describe("HtmlRender", () => {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const htmlRender = yield* HtmlRender.HtmlRender;
-      const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-html-images-" });
+      const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-html-images-" });
       const png = path.join(directory, "shot.png");
       const svg = path.join(directory, "logo.svg");
       yield* fileSystem.writeFile(png, PNG_BYTES);
@@ -88,8 +89,8 @@ describe("HtmlRender", () => {
       expect(prepared).toContain(`['${pngUri}', \`${svgUri}\`]`);
       expect(prepared).not.toContain(directory);
       for (const src of kept) expect(prepared).toContain(`<img src="${src}">`);
-      expect(prepared.indexOf("<head>")).toBeLessThan(prepared.indexOf('<style id="t3-theme">'));
-      expect(prepared.indexOf('<style id="t3-theme">')).toBeLessThan(prepared.indexOf("<title>"));
+      expect(prepared.indexOf("<head>")).toBeLessThan(prepared.indexOf('<style id="cinderdeck-theme">'));
+      expect(prepared.indexOf('<style id="cinderdeck-theme">')).toBeLessThan(prepared.indexOf("<title>"));
     }).pipe(Effect.provide(layerTest)),
   );
 
@@ -120,7 +121,7 @@ describe("HtmlRender", () => {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const htmlRender = yield* HtmlRender.HtmlRender;
-      const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-html-images-" });
+      const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-html-images-" });
       const svg = path.join(directory, "styled.svg");
       const source = [
         '<?xml version="1.0"?>',
@@ -141,7 +142,7 @@ describe("HtmlRender", () => {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const htmlRender = yield* HtmlRender.HtmlRender;
-      const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-html-images-" });
+      const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-html-images-" });
       const folder = path.join(directory, "folder.png");
       yield* fileSystem.makeDirectory(folder);
       const missing = path.join(directory, "missing.jpg");
@@ -221,7 +222,7 @@ describe("HtmlRender", () => {
       });
       expect(stored?.endsWith(".html")).toBe(true);
       const html = yield* fileSystem.readFileString(stored ?? "");
-      expect(html).toContain('<style id="t3-theme">');
+      expect(html).toContain('<style id="cinderdeck-theme">');
       expect(html).toContain("<p>Quarterly revenue</p>");
       // Antigravity reports the call without its result, so the thread's
       // provider session keeps the page for one call with these arguments.
@@ -241,6 +242,11 @@ describe("HtmlRender", () => {
       const reused = yield* htmlRender.publish({ threadId, ...page });
       yield* mcpSessions.set({ ...session, browserToolsAvailable: true });
       expect(yield* mcpSessions.takeHtmlRender(threadId, page)).toEqual(reused);
+      const first = yield* htmlRender.publish({ threadId, ...page });
+      const second = yield* htmlRender.publish({ threadId, ...page });
+      expect(yield* mcpSessions.takeHtmlRender(threadId, page)).toEqual(first);
+      expect(yield* mcpSessions.takeHtmlRender(threadId, page)).toEqual(second);
+      expect(yield* mcpSessions.takeHtmlRender(threadId, page)).toBe(undefined);
 
       yield* htmlRender.publish({ threadId, ...page });
       yield* mcpSessions.set({
@@ -256,6 +262,119 @@ describe("HtmlRender", () => {
       yield* htmlRender.publish({ threadId, ...page });
       yield* mcpSessions.clear(threadId);
       expect(yield* mcpSessions.takeHtmlRender(threadId, page)).toBe(undefined);
+    }).pipe(Effect.provide(layerTest)),
+  );
+
+  it.effect("publishes a page from an .html file as a snapshot that path calls recover", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const config = yield* ServerConfig.ServerConfig;
+      const htmlRender = yield* HtmlRender.HtmlRender;
+      const mcpSessions = yield* McpProviderSessions.McpProviderSessions;
+      const threadId = ThreadId.make("thread-html-path");
+      const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-html-page-" });
+      const file = path.join(directory, "report.html");
+      yield* fileSystem.writeFileString(file, "<!doctype html><p>First draft</p>");
+      const page = { path: file, title: "Report", height: 300 };
+
+      const first = yield* htmlRender.publish({ threadId, ...page });
+      yield* fileSystem.writeFileString(file, "<!doctype html><p>Second draft</p>");
+      const second = yield* htmlRender.publish({ threadId, ...page });
+      const inline = { html: "<!doctype html><p>First draft</p>", title: "Report", height: 300 };
+      const inlineReference = yield* htmlRender.publish({ threadId, ...inline });
+
+      const stored = yield* fileSystem.readFileString(
+        resolveAttachmentPathById({
+          attachmentsDir: config.attachmentsDir,
+          attachmentId: first.attachmentId,
+        }) ?? "",
+      );
+      expect(stored).toContain("<p>First draft</p>");
+      expect(yield* mcpSessions.takeHtmlRender(threadId, { ...page, path: `${file}x` })).toBe(
+        undefined,
+      );
+      for (const html of [inline.html, false]) {
+        expect(yield* mcpSessions.takeHtmlRender(threadId, { ...page, html })).toBe(undefined);
+      }
+      expect(yield* mcpSessions.takeHtmlRender(threadId, { ...inline, path: null })).toEqual(
+        inlineReference,
+      );
+      expect(yield* mcpSessions.takeHtmlRender(threadId, { ...page, html: null })).toEqual(first);
+      expect(yield* mcpSessions.takeHtmlRender(threadId, page)).toEqual(second);
+      expect(yield* mcpSessions.takeHtmlRender(threadId, page)).toBe(undefined);
+    }).pipe(Effect.provide(layerTest)),
+  );
+
+  it.effect("refuses anything but a regular, singly linked .html file of at most 25 MiB", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const config = yield* ServerConfig.ServerConfig;
+      const htmlRender = yield* HtmlRender.HtmlRender;
+      const threadId = ThreadId.make("thread-html-path-guard");
+      const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-html-page-" });
+      const secret = path.join(directory, "id_rsa");
+      yield* fileSystem.writeFileString(secret, "PRIVATE KEY");
+      const page = path.join(directory, "page.html");
+      yield* fileSystem.writeFileString(page, "<!doctype html><p>linked</p>");
+      const hardLinked = path.join(directory, "linked.html");
+      yield* fileSystem.link(page, hardLinked);
+      // `mv .env renamed.html` keeps one link and an .html name; only its bytes give it away.
+      const renamed = path.join(directory, "renamed.html");
+      yield* fileSystem.writeFileString(renamed, "API_KEY=abc123\n");
+      const folder = path.join(directory, "folder.html");
+      yield* fileSystem.makeDirectory(folder);
+      const internal = path.join(config.secretsDir, "page.html");
+      yield* fileSystem.makeDirectory(config.secretsDir, { recursive: true });
+      yield* fileSystem.writeFileString(internal, "<!doctype html><p>internal</p>");
+
+      for (const file of [
+        "page.html",
+        "//attacker/share/page.html",
+        path.join(directory, "missing.html"),
+        secret,
+        hardLinked,
+        renamed,
+        folder,
+        internal,
+      ]) {
+        const error = yield* htmlRender
+          .publish({ threadId, path: file, title: "X", height: 200 })
+          .pipe(Effect.flip);
+        expect(error, file).toBeInstanceOf(HtmlRender.HtmlRenderFileError);
+      }
+      const huge = path.join(directory, "huge.html");
+      yield* fileSystem.writeFileString(huge, "");
+      yield* fileSystem.truncate(huge, 25 * 1024 * 1024 + 1);
+      const tooLarge = yield* htmlRender
+        .publish({ threadId, path: huge, title: "X", height: 200 })
+        .pipe(Effect.flip);
+      expect(tooLarge).toBeInstanceOf(HtmlRender.HtmlRenderFileTooLargeError);
+    }).pipe(Effect.provide(layerTest)),
+  );
+
+  it.effect.skipIf(!symlinksSupported)("refuses an .html symlink to another file", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const htmlRender = yield* HtmlRender.HtmlRender;
+      const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-html-page-" });
+      const secret = path.join(directory, "id_rsa");
+      yield* fileSystem.writeFileString(secret, "PRIVATE KEY");
+      const symlinked = path.join(directory, "symlinked.html");
+      yield* fileSystem.symlink(secret, symlinked);
+
+      const error = yield* htmlRender
+        .publish({
+          threadId: ThreadId.make("thread-html-path-link"),
+          path: symlinked,
+          title: "X",
+          height: 200,
+        })
+        .pipe(Effect.flip);
+
+      expect(error).toBeInstanceOf(HtmlRender.HtmlRenderFileError);
     }).pipe(Effect.provide(layerTest)),
   );
 
@@ -298,7 +417,7 @@ describe("HtmlRender", () => {
         Effect.gen(function* () {
           const fileSystem = yield* FileSystem.FileSystem;
           const path = yield* Path.Path;
-          const file = yield* fileSystem.makeTempFileScoped({ prefix: "t3-browser-spawn-" });
+          const file = yield* fileSystem.makeTempFileScoped({ prefix: "cinderdeck-browser-spawn-" });
           const outcome = yield* HtmlRender.HtmlRender.use((htmlRender) =>
             htmlRender.preview({ html: "<p>x</p>" }).pipe(Effect.flip),
           ).pipe(
@@ -321,13 +440,13 @@ describe("HtmlRender", () => {
   describe.skipIf(HostProcess.Platform.defaultValue() === "win32")(
     "when the browser cannot be signalled",
     () => {
-      // A browser T3 cannot signal, as under AppArmor in an LXC container, must still exit.
+      // A browser Cinderdeck cannot signal, as under AppArmor in an LXC container, must still exit.
       it.live("asks the browser to close when the preview finishes instead of signalling it", () =>
         Effect.gen(function* () {
           const fileSystem = yield* FileSystem.FileSystem;
           const path = yield* Path.Path;
           const directory = yield* fileSystem.makeTempDirectoryScoped({
-            prefix: "t3-fake-browser-",
+            prefix: "cinderdeck-fake-browser-",
           });
           const executable = path.join(directory, "chrome-headless-shell");
           const exitRecord = path.join(directory, "exited");
@@ -339,6 +458,7 @@ process.on("SIGTERM", () => {});
 const quit = () => { fs.writeFileSync(${JSON.stringify(exitRecord)}, "asked to close"); process.exit(0); };
 const reply = (message) => fs.writeSync(4, JSON.stringify(message) + "\\0");
 const results = {
+  "Target.createBrowserContext": { browserContextId: "context" },
   "Target.createTarget": { targetId: "page" },
   "Target.attachToTarget": { sessionId: "session" },
   "Runtime.evaluate": { result: { value: 100 } },
@@ -380,7 +500,7 @@ fs.createReadStream(null, { fd: 3 }).on("end", quit).on("data", (chunk) => {
           const fileSystem = yield* FileSystem.FileSystem;
           const path = yield* Path.Path;
           const directory = yield* fileSystem.makeTempDirectoryScoped({
-            prefix: "t3-fake-browser-",
+            prefix: "cinderdeck-fake-browser-",
           });
           const executable = path.join(directory, "chrome-headless-shell");
           yield* fileSystem.writeFileString(
@@ -438,7 +558,7 @@ fs.createReadStream(null, { fd: 3 }).on("end", quit).on("data", (chunk) => {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const htmlRender = yield* HtmlRender.HtmlRender;
-        const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-html-files-" });
+        const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-html-files-" });
         const secret = path.join(directory, "secret.js");
         yield* fileSystem.writeFileString(secret, 'window.secret = "abc123";');
         const secretUrl = NodeURL.pathToFileURL(secret).href;
@@ -507,6 +627,6 @@ fs.createReadStream(null, { fd: 3 }).on("end", quit).on("data", (chunk) => {
       }).pipe(Effect.provide(layerHtmlRender(executable)));
       expect(requests).toEqual([]);
       expect(datagrams).toEqual([]);
-    }).pipe(Effect.scoped),
+    }),
   );
 });

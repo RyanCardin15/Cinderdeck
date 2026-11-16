@@ -11,6 +11,8 @@ const { version } = JSON.parse(
 );
 
 const SUPPORTED = ["darwin-arm64", "linux-arm64", "linux-x64", "win32-arm64", "win32-x64"];
+// Well inside launchd's 20 s ExitTimeOut, which SIGKILLs only the launcher and orphans the runtime.
+const TERMINATE_GRACE_MS = 5_000;
 
 function t3Home() {
   const raw = (process.env.T3CODE_HOME || "").trim();
@@ -20,8 +22,20 @@ function t3Home() {
   return path.resolve(raw);
 }
 
+const isTransient = (status) => status === 408 || status === 429 || status >= 500;
+
 async function get(url) {
-  const response = await fetch(url);
+  let response;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      response = await fetch(url);
+      if (attempt === 4 || !isTransient(response.status)) break;
+      await response.body?.cancel();
+    } catch (error) {
+      if (attempt === 4) throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** (attempt - 1)));
+  }
   if (response.status === 404) {
     throw new Error(
       `${url} does not exist yet. If ${version} was just released, try again in a few minutes.`,
@@ -50,7 +64,7 @@ async function download(url, file) {
         shown = step;
         const percent = total ? ` ${step}%` : "";
         process.stderr.write(
-          `\r\x1b[2Kt3: downloading T3 Code ${version}${percent} (${(received / 1048576).toFixed(1)} MB)`,
+          `\r\x1b[2Kt3: downloading Cinderdeck ${version}${percent} (${(received / 1048576).toFixed(1)} MB)`,
         );
       }
     }
@@ -62,9 +76,9 @@ async function download(url, file) {
 }
 
 async function install(dir, key) {
-  const archive = `t3-${version}-${key}.${process.platform === "win32" ? "zip" : "tar.gz"}`;
+  const archive = `cinderdeck-${version}-${key}.${process.platform === "win32" ? "zip" : "tar.gz"}`;
   const base = (
-    process.env.T3CODE_RELEASE_BASE_URL || "https://github.com/pingdotgg/t3code/releases/download"
+    process.env.T3CODE_RELEASE_BASE_URL || "https://github.com/RyanCardin15/Cinderdeck/releases/download"
   ).replace(/\/+$/, "");
   const sums = await (await get(`${base}/v${version}/SHA256SUMS`)).text();
   const expected = /^([0-9a-f]{64})\s+\*?(.+)$/im;
@@ -91,7 +105,7 @@ async function install(dir, key) {
     if (extract.status !== 0) throw new Error(`could not extract ${archive}`);
     fs.rmSync(file);
     const validate = spawnSync(
-      path.join(staging, process.platform === "win32" ? "t3.exe" : "t3"),
+      path.join(staging, process.platform === "win32" ? "cinderdeck.exe" : "cinderdeck"),
       ["--version"],
       {
         stdio: ["ignore", "ignore", "pipe"],
@@ -138,7 +152,7 @@ function publish(staging, dir) {
   } catch (error) {
     if (error.code !== "EEXIST") throw error;
     throw new Error(
-      `another t3 is installing ${version}. If none is running, delete ${lock} and try again.`,
+      `another cinderdeck is installing ${version}. If none is running, delete ${lock} and try again.`,
       { cause: error },
     );
   }
@@ -164,8 +178,8 @@ async function main() {
   const key = `${process.platform}-${process.arch}`;
   if (!SUPPORTED.includes(key)) {
     throw new Error(
-      `no T3 Code CLI build is available for ${key} (supported: ${SUPPORTED.join(", ")}).\n` +
-        "The desktop app is at https://github.com/pingdotgg/t3code/releases",
+      `no Cinderdeck CLI build is available for ${key} (supported: ${SUPPORTED.join(", ")}).\n` +
+        "The desktop app is at https://github.com/RyanCardin15/Cinderdeck/releases",
     );
   }
   const dir = path.join(t3Home(), "runtime", "versions", version);
@@ -174,11 +188,11 @@ async function main() {
   // Service IPC and signals must reach the child; terminal Ctrl-C already does, so do not forward SIGINT twice.
   const ipc = process.send !== undefined;
   const child = spawn(
-    path.join(dir, process.platform === "win32" ? "t3.exe" : "t3"),
+    path.join(dir, process.platform === "win32" ? "cinderdeck.exe" : "cinderdeck"),
     process.argv.slice(2),
     {
       stdio: ipc ? ["inherit", "inherit", "inherit", "ipc"] : "inherit",
-      // The executable lives in the T3 home, so this is how it knows npm launched it.
+      // The executable lives in the Cinderdeck home, so this is how it knows npm launched it.
       env: { ...process.env, T3CODE_NPM_LAUNCHER_PATH: import.meta.filename },
     },
   );
@@ -187,8 +201,13 @@ async function main() {
     child.on("message", (message) => process.connected && process.send(message));
     process.on("disconnect", () => child.connected && child.disconnect());
   }
+  let force;
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
-    process.on(signal, () => (ipc || signal !== "SIGINT") && child.kill(signal));
+    process.on(signal, () => {
+      if (!ipc && signal === "SIGINT") return;
+      child.kill(signal);
+      force ??= setTimeout(() => killTree(child), TERMINATE_GRACE_MS).unref();
+    });
   }
   child.on("error", (error) => fail(executableError(key, error.message)));
   child.on("exit", (code, signal) =>
@@ -196,9 +215,32 @@ async function main() {
   );
 }
 
+/** SIGKILL the runtime and its providers, which a runtime stuck on shutdown never stops. */
+function killTree(child) {
+  const pids = [child.pid];
+  if (process.platform !== "win32") {
+    const table =
+      spawnSync("ps", ["-A", "-o", "pid=,ppid="], { encoding: "utf8", timeout: 2_000 }).stdout ||
+      "";
+    const rows = table
+      .trim()
+      .split("\n")
+      .map((line) => line.trim().split(/\s+/).map(Number));
+    for (let i = 0; i < pids.length; i++) {
+      for (const [pid, ppid] of rows) if (ppid === pids[i]) pids.push(pid);
+    }
+  }
+  for (const pid of pids.slice(1)) {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {}
+  }
+  child.kill("SIGKILL");
+}
+
 function executableError(key, detail) {
   return new Error(
-    `could not run T3 Code ${version} for ${key}: ${detail}` +
+    `could not run Cinderdeck ${version} for ${key}: ${detail}` +
       (process.platform === "linux"
         ? "\nThe Linux release requires glibc; musl-based systems such as Alpine are not supported. Use a glibc-based Linux environment."
         : ""),
@@ -206,7 +248,7 @@ function executableError(key, detail) {
 }
 
 function fail(error) {
-  process.stderr.write(`t3: ${error.message}\n`);
+  process.stderr.write(`cinderdeck: ${error.message}\n`);
   process.exit(1);
 }
 

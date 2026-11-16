@@ -17,7 +17,7 @@ import { filePreviewKind } from "@cinderdeck/shared/filePreview";
 import { imageMimeType } from "@cinderdeck/shared/image";
 import { videoMimeType } from "@cinderdeck/shared/video";
 
-/** The working row while T3 Code's own compaction runs. */
+/** The working row while Cinderdeck's own compaction runs. */
 export const IDLE_COMPACTING_LABELS = {
   beforeCacheExpires: "Compacting before the cache expires…",
   onReturn: "Compacting…",
@@ -68,7 +68,7 @@ export function resolveUserMessagePresentation(message: {
   readonly context?: { readonly guest?: GuestMessageAttribution | undefined } | undefined;
 }): {
   readonly text: string;
-  readonly attribution: "automation" | "agent" | "t3code" | "guest" | null;
+  readonly attribution: "automation" | "agent" | "cinderdeck" | "guest" | null;
   readonly scheduledTaskId: ScheduledTaskId | undefined;
   /** Set when `attribution` is "guest". */
   readonly guestName?: string;
@@ -111,7 +111,7 @@ export function resolveUserMessagePresentation(message: {
       message.createdBy !== "agent"
         ? null
         : message.creationSource === "server"
-          ? "t3code"
+          ? "cinderdeck"
           : "agent",
     scheduledTaskId: undefined,
   };

@@ -160,7 +160,7 @@ const openFxSession = Effect.fn("openFxSession")(function* (input: {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const replayDir = yield* fileSystem.makeTempDirectoryScoped({
-    prefix: `t3-fx-${input.scenario}-`,
+    prefix: `cinderdeck-fx-${input.scenario}-`,
   });
   const statusPath = path.join(replayDir, "status.json");
   const transcript = yield* decodeAcpReplayTranscript(
@@ -277,7 +277,11 @@ describe("FxAdapterV2", () => {
           runtimeMode: "auto",
           frames: [
             ...initialize,
-            outbound("session/new", { cwd: "<workspace>", mcpServers: "<any>" }),
+            outbound("session/new", {
+              cwd: "<workspace>",
+              mcpServers: "<any>",
+              _meta: { fx: { profileMcpServers: true } },
+            }),
             answer("session/new", fxSession({ model: FX_DEFAULT_MODEL, modes })),
             ...setConfig(
               "mode",
@@ -287,7 +291,7 @@ describe("FxAdapterV2", () => {
           ],
         }),
       { discard: true },
-    ).pipe(Effect.provide(testLayer), Effect.scoped),
+    ).pipe(Effect.provide(testLayer)),
   );
 
   it.effect("puts a loaded session that ran a named model back on fx's default for Default", () =>
@@ -298,9 +302,14 @@ describe("FxAdapterV2", () => {
       loadSessionId: SESSION_ID,
       frames: [
         ...initialize,
-        outbound("session/load"),
+        outbound("session/load", {
+          sessionId: SESSION_ID,
+          cwd: "<workspace>",
+          mcpServers: "<any>",
+          _meta: { fx: { profileMcpServers: true } },
+        }),
         answer("session/load", fxSession({ model: NAMED_MODEL, modes: FX_0_0_13_MODES })),
-        // Config id `model`, never fx's `provider`, and never T3's "default".
+        // Config id `model`, never fx's `provider`, and never Cinderdeck's "default".
         ...setConfig(
           "model",
           FX_DEFAULT_MODEL,
@@ -309,7 +318,7 @@ describe("FxAdapterV2", () => {
         // Written on load even though fx reports ask.
         ...setConfig("mode", "ask", fxConfig({ model: FX_DEFAULT_MODEL, modes: FX_0_0_13_MODES })),
       ],
-    }).pipe(Effect.provide(testLayer), Effect.scoped),
+    }).pipe(Effect.provide(testLayer)),
   );
 
   // `fx status` names the gateway default, but this loaded session runs on
@@ -334,7 +343,7 @@ describe("FxAdapterV2", () => {
           fxConfig({ model: CODEX_MODEL, models: [CODEX_MODEL], modes: FX_0_0_13_MODES }),
         ),
       ],
-    }).pipe(Effect.provide(testLayer), Effect.scoped),
+    }).pipe(Effect.provide(testLayer)),
   );
 
   // fx 0.0.13's gateway takes any model id (src/acp/server.zig
@@ -367,6 +376,6 @@ describe("FxAdapterV2", () => {
         outbound("session/prompt"),
         answer("session/prompt", { stopReason: "end_turn" }),
       ],
-    }).pipe(Effect.provide(testLayer), Effect.scoped),
+    }).pipe(Effect.provide(testLayer)),
   );
 });

@@ -7,6 +7,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Option from "effect/Option";
+import * as Schedule from "effect/Schedule";
 import * as Stream from "effect/Stream";
 import * as Semaphore from "effect/Semaphore";
 import { HttpClient, HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/http";
@@ -71,6 +72,8 @@ export class PinnedRuntimeInstallError extends Schema.TaggedError<PinnedRuntimeI
     exitCode: Schema.optional(Schema.Number),
     stdoutLength: Schema.optional(Schema.Number),
     stderrLength: Schema.optional(Schema.Number),
+    httpStatus: Schema.optional(Schema.Number),
+    downloadHost: Schema.optional(Schema.String),
     cause: Schema.optional(Schema.Defect()),
   },
 ) {
@@ -117,6 +120,20 @@ interface PinnedRuntimeInstallInput {
   readonly onProgress?: (progress: PinnedRuntimeProgress) => void;
 }
 
+// GitHub release downloads intermittently answer 5xx during incidents; a retry usually lands.
+const DOWNLOAD_RETRY = { times: 3, schedule: Schedule.exponential("2 seconds") } as const;
+
+const isTransientDownloadFailure = (
+  error: HttpClientError.HttpClientError | Cause.TimeoutError,
+): boolean => {
+  // No answer or a stall means the host cannot reach the release source; retrying only delays that.
+  if (error._tag === "TimeoutError") return false;
+  // Body bytes are read raw, so a DecodeError is a body that failed after the host answered.
+  if (error.reason._tag === "DecodeError") return true;
+  const status = error.response?.status;
+  return status !== undefined && (status >= 500 || status === 429 || status === 408);
+};
+
 const fetchReleaseAsset = Effect.fn("cloud.pinned_runtime.fetch_release_asset")(function* (
   httpClient: HttpClient.HttpClient,
   url: string,
@@ -159,10 +176,18 @@ const fetchReleaseAsset = Effect.fn("cloud.pinned_runtime.fetch_release_asset")(
         return bytes;
       }),
     ),
+    Effect.retry({ ...DOWNLOAD_RETRY, while: isTransientDownloadFailure }),
     Effect.mapError(
       (cause) =>
         new PinnedRuntimeInstallError({
           step: cause._tag === "TimeoutError" ? `${step} (timed out)` : step,
+          httpStatus:
+            HttpClientError.isHttpClientError(cause) && cause.reason._tag === "StatusCodeError"
+              ? cause.reason.response.status
+              : undefined,
+          downloadHost: URL.parse(
+            HttpClientError.isHttpClientError(cause) ? cause.request.url : url,
+          )?.host,
           cause,
         }),
     ),
@@ -177,7 +202,7 @@ const installFromArchive = Effect.fn("cloud.pinned_runtime.install_archive")(fun
   const platformKey = cliArchivePlatformKey(input.platform, input.arch);
   if (platformKey === undefined) {
     return yield* new PinnedRuntimeInstallError({
-      step: `selecting a t3 release archive for ${input.platform}-${input.arch}`,
+      step: `selecting a cinderdeck release archive for ${input.platform}-${input.arch}`,
     });
   }
   const httpClient = input.httpClient;
@@ -186,18 +211,18 @@ const installFromArchive = Effect.fn("cloud.pinned_runtime.install_archive")(fun
   const archive = yield* fetchReleaseAsset(
     httpClient,
     cliReleaseAssetUrl(input.version, fileName, input.releaseBaseUrl),
-    "downloading the t3 release archive",
+    "downloading the cinderdeck release archive",
     input.onProgress,
   );
   input.onProgress?.({ stage: "verify" });
   const digest = yield* Effect.tryPromise({
     try: () => crypto.subtle.digest("SHA-256", archive),
     catch: (cause) =>
-      new PinnedRuntimeInstallError({ step: "verifying the t3 release archive", cause }),
+      new PinnedRuntimeInstallError({ step: "verifying the cinderdeck release archive", cause }),
   });
   if (Hex.encode(new Uint8Array(digest)) !== expected) {
     return yield* new PinnedRuntimeInstallError({
-      step: "verifying the t3 release archive checksum",
+      step: "verifying the cinderdeck release archive checksum",
     });
   }
 
@@ -206,12 +231,13 @@ const installFromArchive = Effect.fn("cloud.pinned_runtime.install_archive")(fun
     .writeFile(archivePath, archive)
     .pipe(
       Effect.mapError(
-        (cause) => new PinnedRuntimeInstallError({ step: "writing the t3 release archive", cause }),
+        (cause) =>
+          new PinnedRuntimeInstallError({ step: "writing the cinderdeck release archive", cause }),
       ),
     );
   input.onProgress?.({ stage: "extract" });
-  const extractStep = "extracting the t3 release archive";
-  // Strip the archive's stem directory so the executable lands at <versionDir>/t3.
+  const extractStep = "extracting the cinderdeck release archive";
+  // Strip the archive's stem directory so the executable lands at <versionDir>/cinderdeck.
   yield* input.runner
     .run({
       command: cliArchiveTarCommand(input.platform, process.env),
@@ -245,14 +271,14 @@ const publishedArchive = Effect.fn("cloud.pinned_runtime.published_archive")(fun
       yield* fetchReleaseAsset(
         input.httpClient,
         cliReleaseAssetUrl(input.version, CLI_RELEASE_CHECKSUMS_FILE, input.releaseBaseUrl),
-        "downloading the t3 release checksums",
+        "downloading the cinderdeck release checksums",
       ),
     ),
   );
   const expected = checksums.get(fileName);
   if (expected === undefined) {
     return yield* new PinnedRuntimeInstallError({
-      step: `finding ${fileName} in the t3 release checksums`,
+      step: `finding ${fileName} in the cinderdeck release checksums`,
     });
   }
   return { fileName, expected };
@@ -264,7 +290,7 @@ const isPinnedRuntimeInstallError = Schema.is(PinnedRuntimeInstallError);
 export const isUnpublishedRelease = (error: unknown): error is PinnedRuntimeInstallError =>
   isPinnedRuntimeInstallError(error) &&
   (error.step.startsWith("finding ") ||
-    (error.step.startsWith("downloading the t3 release") &&
+    (error.step.startsWith("downloading the cinderdeck release") &&
       HttpClientError.isHttpClientError(error.cause) &&
       error.cause.response?.status === 404));
 
@@ -289,7 +315,7 @@ const installPinnedRuntime = Effect.fn("cloud.pinned_runtime.ensure_installed")(
       const platformKey = cliArchivePlatformKey(input.platform, input.arch);
       if (platformKey === undefined) {
         return yield* new PinnedRuntimeInstallError({
-          step: `selecting a t3 release archive for ${input.platform}-${input.arch}`,
+          step: `selecting a cinderdeck release archive for ${input.platform}-${input.arch}`,
         });
       }
       yield* publishedArchive(input, platformKey);
@@ -400,7 +426,7 @@ const PINNED_RUNTIME_PRUNED_PREFIX = ".pruned-";
  */
 const PINNED_RUNTIME_PRUNE_GRACE = Duration.hours(1);
 /**
- * One `t3` launcher path per line, appended by the install scripts and by any prune that finds a
+ * One `cinderdeck` launcher path per line, appended by the install scripts and by any prune that finds a
  * launcher on PATH. A service does not see the installer's `T3CODE_INSTALL_BIN_DIR` or the
  * interactive PATH, so this is how it finds a custom one, including installs that predate the file.
  */
@@ -422,8 +448,36 @@ export function launcherOwnsVersionsDir(
   return relative.length > 0 && !relative.startsWith("..") && !path.isAbsolute(relative);
 }
 
+/** Node preserves argv0's spelling; resolve bare names on PATH to find the launcher symlink. */
+export const resolveLauncherPath = Effect.gen(function* () {
+  const path = yield* Path.Path;
+  const fs = yield* FileSystem.FileSystem;
+  const invokedAs = yield* HostProcess.InvokedAs;
+  const cwd = yield* HostProcess.WorkingDirectory;
+  const environment = yield* HostProcess.Environment;
+  const platform = yield* HostProcess.Platform;
+  if (invokedAs.includes("/") || invokedAs.includes("\\")) {
+    return path.resolve(cwd, invokedAs);
+  }
+  const delimiter = platform === "win32" ? ";" : ":";
+  for (const directory of (environment["PATH"] ?? "").split(delimiter)) {
+    if (directory.length === 0) continue;
+    const candidate = path.resolve(cwd, directory, invokedAs);
+    const info = yield* fs.stat(candidate).pipe(Effect.option);
+    // Like the shell, pass over directories and non-executable files named the same.
+    if (
+      Option.isSome(info) &&
+      info.value.type === "File" &&
+      (platform === "win32" || (info.value.mode & 0o111) !== 0)
+    ) {
+      return candidate;
+    }
+  }
+  return undefined;
+});
+
 /**
- * `t3 update` repoints the launcher it was started through, which may be on neither PATH nor the
+ * `cinderdeck update` repoints the launcher it was started through, which may be on neither PATH nor the
  * default bin dir. Unrecorded, the next prune would remove the runtime it now points at.
  */
 export const recordPinnedRuntimeLauncher = Effect.fn("cloud.pinned_runtime.record_launcher")(
@@ -443,10 +497,129 @@ export const recordPinnedRuntimeLauncher = Effect.fn("cloud.pinned_runtime.recor
   },
 );
 
-/** The executable a `t3.cmd` shim written by the install script or `t3 update` runs. */
+/** Whether `candidate` is a version's own executable, `<versionsDir>/<version>/cinderdeck[.exe]`. */
+export function isVersionExecutable(
+  path: Path.Path,
+  versionsDir: string,
+  candidate: string,
+): boolean {
+  const relative = path.relative(versionsDir, path.resolve(candidate));
+  // On another Windows drive, relative() returns the absolute path, like `D:\cinderdeck.exe`.
+  return (
+    !path.isAbsolute(relative) &&
+    /^(?!\.\.)[^\\/]+[\\/](?:t3|cinderdeck)(?:\.exe)?$/i.test(relative)
+  );
+}
+
+/** The executable a `cinderdeck.cmd` shim written by the install script or `cinderdeck update` runs. */
 export const windowsShimTarget = (contents: string) => /^"([^"]+)"/m.exec(contents)?.[1];
 
-/** Where the `t3` launchers written by the install scripts and `t3 update` point. */
+/** Like {@link windowsShimTarget}, but only for a shim exactly as written; never a user's wrapper. */
+export const generatedWindowsShimTarget = (contents: string) =>
+  /^@echo off\r?\n"([^"]+)" %\*\s*$/.exec(contents)?.[1];
+
+/**
+ * The `cinderdeck` script the install scripts and `cinderdeck update` write on macOS and Linux. Exec by absolute
+ * path: through a symlink, argv0 is the link, and the Cursor SDK looks for its helpers beside it.
+ */
+export const posixLauncherScript = (executable: string) =>
+  `#!/bin/sh\nexec '${executable.replaceAll("'", "'\\''")}' "$@"\n`;
+
+/** The executable a script exactly as {@link posixLauncherScript} writes it runs; never a user's wrapper. */
+export const readPosixLauncherTarget = Effect.fn("cloud.pinned_runtime.read_posix_launcher")(
+  function* (launcher: string) {
+    const fs = yield* FileSystem.FileSystem;
+    // Stat first so a runtime binary found the same way is never read whole.
+    const info = yield* fs.stat(launcher).pipe(Effect.option);
+    if (Option.isNone(info) || info.value.type !== "File" || info.value.size > 4096n) {
+      return undefined;
+    }
+    const contents = yield* fs.readFileString(launcher).pipe(Effect.option);
+    if (Option.isNone(contents)) return undefined;
+    const quoted = /^#!\/bin\/sh\nexec '((?:[^']|'\\'')*)' "\$@"\n$/.exec(contents.value)?.[1];
+    return quoted?.replaceAll("'\\''", "'");
+  },
+);
+
+/**
+ * The `cinderdeck` this executable was started through on macOS or Linux: a legacy symlink into this
+ * home's runtime/versions, or, since a script execs the executable and argv0 names it, an unedited
+ * {@link posixLauncherScript} that runs it.
+ */
+export const findPosixLauncher = Effect.fn("cloud.pinned_runtime.find_posix_launcher")(
+  function* (input: { readonly launchedAs: string; readonly versionsDir: string }) {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const environment = yield* HostProcess.Environment;
+    const linkTarget = yield* fs.readLink(input.launchedAs).pipe(Effect.option);
+    if (Option.isSome(linkTarget)) {
+      const resolved = path.resolve(path.dirname(input.launchedAs), linkTarget.value);
+      return isVersionExecutable(path, input.versionsDir, resolved) ? input.launchedAs : undefined;
+    }
+    const realPath = (file: string) =>
+      fs.realPath(file).pipe(Effect.orElseSucceed(() => undefined));
+    const executable = yield* realPath(input.launchedAs);
+    const realVersionsDir = yield* realPath(input.versionsDir);
+    if (
+      executable === undefined ||
+      realVersionsDir === undefined ||
+      !isVersionExecutable(path, realVersionsDir, executable)
+    ) {
+      return undefined;
+    }
+    const recorded = yield* fs
+      .readFileString(path.join(path.dirname(input.versionsDir), "launchers"))
+      .pipe(Effect.orElseSucceed(() => ""));
+    const cwd = yield* HostProcess.WorkingDirectory;
+    const candidates = [
+      // PATH first, resolved like the shell does: it decides which cinderdeck the user runs.
+      ...(environment["PATH"] ?? "")
+        .split(":")
+        .filter((directory) => directory.length > 0)
+        .map((directory) => path.resolve(cwd, directory, "t3")),
+      path.join(
+        environment["T3CODE_INSTALL_BIN_DIR"] ||
+          path.join(yield* HostProcess.HomeDirectory, ".local", "bin"),
+        "t3",
+      ),
+      ...recorded.split(/\r?\n/),
+    ].filter((candidate) => path.isAbsolute(candidate));
+    for (const candidate of candidates) {
+      // The script itself, so an alias that links to it keeps working.
+      const script = yield* realPath(candidate);
+      if (script === undefined) continue;
+      // Like the shell, pass over a script nobody can execute.
+      const info = yield* fs.stat(script).pipe(Effect.option);
+      if (Option.isNone(info) || (info.value.mode & 0o111) === 0) continue;
+      const target = yield* readPosixLauncherTarget(script);
+      if (target !== undefined && (yield* realPath(target)) === executable) return script;
+    }
+    return undefined;
+  },
+);
+
+/** Writes {@link posixLauncherScript} at `launcher` in one rename, replacing a legacy symlink rather than writing through it. */
+export const writePosixLauncher = Effect.fn("cloud.pinned_runtime.write_posix_launcher")(
+  function* (input: {
+    readonly launcher: string;
+    readonly executable: string;
+    /** Fail instead of replacing a file that is there, even one created after the caller looked. */
+    readonly exclusive: boolean;
+  }) {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const staging = yield* fs.makeTempFileScoped({
+      directory: path.dirname(input.launcher),
+      prefix: ".t3-",
+    });
+    yield* fs.writeFileString(staging, posixLauncherScript(input.executable));
+    yield* fs.chmod(staging, 0o755);
+    yield* input.exclusive ? fs.link(staging, input.launcher) : fs.rename(staging, input.launcher);
+  },
+  Effect.scoped,
+);
+
+/** Where the `cinderdeck` launchers written by the install scripts and `cinderdeck update` point. */
 const shellLauncherTargets = Effect.fn("cloud.pinned_runtime.shell_launcher_targets")(function* (
   baseDir: string,
 ) {
@@ -470,25 +643,43 @@ const shellLauncherTargets = Effect.fn("cloud.pinned_runtime.shell_launcher_targ
   const realVersionsDir = yield* fs
     .realPath(versionsDir)
     .pipe(Effect.orElseSucceed(() => versionsDir));
+  const inVersionsDir = (candidate: string) =>
+    launcherOwnsVersionsDir(path, versionsDir, candidate) ||
+    launcherOwnsVersionsDir(path, realVersionsDir, candidate);
   const unrecorded: Array<string> = [];
   const targets: Array<string> = [];
   for (const launcher of [...recorded, ...found]) {
-    const target =
+    const resolved =
       platform === "win32"
         ? yield* fs.readFileString(launcher).pipe(
             Effect.map(windowsShimTarget),
             Effect.orElseSucceed(() => undefined),
           )
-        : // Fully resolved, through chained links and a symlinked T3 home alike.
+        : // Fully resolved, through chained links and a symlinked Cinderdeck home alike.
           yield* fs.realPath(launcher).pipe(Effect.orElseSucceed(() => undefined));
-    if (target === undefined) continue;
-    targets.push(target);
+    if (resolved === undefined) continue;
+    const scriptTarget =
+      platform === "win32" ? undefined : yield* readPosixLauncherTarget(resolved);
+    const target =
+      scriptTarget === undefined
+        ? resolved
+        : yield* fs.realPath(scriptTarget).pipe(Effect.orElseSucceed(() => scriptTarget));
+    // A runtime's own entry, on the macOS service PATH or recorded by an earlier prune, is no launcher.
+    // It is named as `versions/<version>/cinderdeck`, and neither it nor its directory is a link.
+    const entryDir = path.dirname(path.resolve(launcher));
+    const parent = yield* fs
+      .realPath(path.dirname(entryDir))
+      .pipe(Effect.orElseSucceed(() => path.dirname(entryDir)));
     if (
-      (launcherOwnsVersionsDir(path, versionsDir, target) ||
-        launcherOwnsVersionsDir(path, realVersionsDir, target)) &&
-      !recorded.includes(launcher) &&
-      !unrecorded.includes(launcher)
+      platform !== "win32" &&
+      scriptTarget === undefined &&
+      (parent === versionsDir || parent === realVersionsDir) &&
+      target === path.join(realVersionsDir, path.basename(entryDir), path.basename(launcher))
     ) {
+      continue;
+    }
+    targets.push(target);
+    if (inVersionsDir(target) && !recorded.includes(launcher) && !unrecorded.includes(launcher)) {
       unrecorded.push(launcher);
     }
   }
@@ -501,9 +692,9 @@ const shellLauncherTargets = Effect.fn("cloud.pinned_runtime.shell_launcher_targ
 });
 
 /**
- * Resolved executables rather than command lines: a server started through the `t3` symlink
- * shows up as `t3 serve`, possibly from another T3 home that runs this home's runtimes. Windows
- * has no symlink launcher, and its `t3.cmd` shim runs the absolute path, so command lines do there.
+ * Resolved executables rather than command lines: a server started through the `cinderdeck` symlink
+ * shows up as `cinderdeck serve`, possibly from another Cinderdeck home that runs this home's runtimes. Windows
+ * has no symlink launcher, and its `cinderdeck.cmd` shim runs the absolute path, so command lines do there.
  */
 const runningExecutables = Effect.fn("cloud.pinned_runtime.running_executables")(function* () {
   const fs = yield* FileSystem.FileSystem;
@@ -516,7 +707,7 @@ const runningExecutables = Effect.fn("cloud.pinned_runtime.running_executables")
     for (const pid of pids.value) {
       if (!/^\d+$/.test(pid)) continue;
       // Unreadable ones belong to other users or are this user's non-dumpable daemons (systemd
-      // --user, ssh-agent). Neither runs a t3 runtime, and bailing on them would never prune.
+      // --user, ssh-agent). Neither runs a cinderdeck runtime, and bailing on them would never prune.
       const executable = yield* fs.readLink(`/proc/${pid}/exe`).pipe(Effect.option);
       if (Option.isSome(executable)) executables.push(executable.value);
     }
@@ -531,7 +722,7 @@ const runningExecutables = Effect.fn("cloud.pinned_runtime.running_executables")
               "-NoProfile",
               "-NonInteractive",
               "-Command",
-              "Get-CimInstance Win32_Process | Select-Object -ExpandProperty CommandLine",
+              "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); Get-CimInstance Win32_Process | Select-Object -ExpandProperty CommandLine",
             ],
           }
         : { command: "lsof", args: ["-nP", "-w", "-d", "txt", "-F", "n"] }),
@@ -616,7 +807,7 @@ const selectUnusedRuntimes = Effect.fn("cloud.pinned_runtime.select_unused")(fun
     ...(yield* shellLauncherTargets(input.baseDir)),
     ...input.references,
   ].map(foldCase);
-  // Process executables are resolved, so they name the real path of a symlinked T3 home.
+  // Process executables are resolved, so they name the real path of a symlinked Cinderdeck home.
   const realVersionsDir = yield* fs
     .realPath(versionsDir)
     .pipe(Effect.orElseSucceed(() => versionsDir));
@@ -639,7 +830,7 @@ const selectUnusedRuntimes = Effect.fn("cloud.pinned_runtime.select_unused")(fun
       Effect.andThen(fs.rename(versionDir, target)),
       Effect.andThen(Effect.sync(() => pruned.add(target))),
       Effect.catch((cause) =>
-        Effect.logWarning("Could not remove an unused t3 runtime.", { version, cause }),
+        Effect.logWarning("Could not remove an unused cinderdeck runtime.", { version, cause }),
       ),
     );
   }
@@ -671,7 +862,7 @@ export const prunePinnedRuntimes = Effect.fn("cloud.pinned_runtime.prune")(funct
         ),
       ),
       Effect.catch((cause) =>
-        Effect.logWarning("Could not remove an unused t3 runtime.", { target, cause }),
+        Effect.logWarning("Could not remove an unused cinderdeck runtime.", { target, cause }),
       ),
     );
   }

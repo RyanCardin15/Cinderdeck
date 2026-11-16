@@ -7,11 +7,11 @@ const parse = (url: string) => definition.parseChangeRequestUrl(new URL(url));
 
 describe("GitHub change request URLs", () => {
   it("reads a pull request on any host, lower-casing host and repository", () => {
-    expect(parse("https://github.com/T3Tools/T3Code/pull/123/files?w=1#diff")).toEqual({
+    expect(parse("https://github.com/CinderdeckTools/Cinderdeck/pull/123/files?w=1#diff")).toEqual({
       host: "github.com",
-      repository: "t3tools/t3code",
+      repository: "t3tools/cinderdeck",
       number: 123,
-      repositoryUrl: "https://github.com/T3Tools/T3Code",
+      repositoryUrl: "https://github.com/CinderdeckTools/Cinderdeck",
     });
     expect(parse("https://GHE.Example.com:8443/acme/web/pull/42/")).toEqual({
       host: "ghe.example.com",
@@ -23,12 +23,12 @@ describe("GitHub change request URLs", () => {
 
   it("claims only the two-segment pull route", () => {
     for (const url of [
-      "https://github.com/t3tools/t3code/issues/123",
-      "https://github.com/t3tools/t3code/pulls/123",
-      "https://github.com/t3tools/t3code/pull/abc",
-      "https://github.com/t3tools/t3code/pull/0",
+      "https://github.com/t3tools/cinderdeck/issues/123",
+      "https://github.com/t3tools/cinderdeck/pulls/123",
+      "https://github.com/t3tools/cinderdeck/pull/abc",
+      "https://github.com/t3tools/cinderdeck/pull/0",
       "https://github.com/group/sub/repo/pull/1",
-      "ftp://github.com/t3tools/t3code/pull/1",
+      "ftp://github.com/t3tools/cinderdeck/pull/1",
     ]) {
       expect(parse(url), url).toBeNull();
     }
@@ -85,14 +85,31 @@ describe("GitHub change request URLs", () => {
   it("turns GitHub's shared issue route into a pull request candidate", () => {
     const candidate = (url: string) =>
       definition.changeRequestUrlFromReferenceAutolink(new URL(url));
-    expect(candidate("https://github.com/pingdotgg/t3code/issues/8600#issuecomment-1")).toBe(
-      "https://github.com/pingdotgg/t3code/pull/8600#issuecomment-1",
+    expect(candidate("https://github.com/RyanCardin15/Cinderdeck/issues/8600#issuecomment-1")).toBe(
+      "https://github.com/RyanCardin15/Cinderdeck/pull/8600#issuecomment-1",
     );
     expect(candidate("https://code.github.example.com/acme/web/issues/42")).toBe(
       "https://code.github.example.com/acme/web/pull/42",
     );
-    expect(candidate("https://github.com/pingdotgg/t3code/issues/not-a-number")).toBeNull();
+    expect(candidate("https://github.com/RyanCardin15/Cinderdeck/issues/not-a-number")).toBeNull();
     expect(candidate("https://code.example.test/acme/web/issues/42")).toBeNull();
+  });
+});
+
+describe("GitHub CLI commands", () => {
+  it("recognizes shell pull request creates, including gh's `new` alias", () => {
+    for (const command of ["gh pr create --fill", "gh pr new --fill"]) {
+      expect(definition.changeRequestCreateCommand.test(command), command).toBe(true);
+    }
+    expect(definition.changeRequestCreateCommand.test("gh pr view 7")).toBe(false);
+  });
+});
+
+describe("GitHub repository pages", () => {
+  it("leaves the tree route on other hosts to them", () => {
+    expect(
+      definition.repositoryUrlFromPage?.(new URL("https://scm.example.test/o/r/tree/main")),
+    ).toBeNull();
   });
 });
 
@@ -176,5 +193,20 @@ describe("GitHub media URLs", () => {
     ]) {
       expect(media(url), url).toBeNull();
     }
+  });
+
+  it("addresses a committed file at a full SHA as immutable credentialed media", () => {
+    const sha = "0123456789abcdef0123456789abcdef01234567";
+    const rawFileUrl = (repositoryUrl: string, path: string, revision = sha) =>
+      definition.rawFileUrl?.({ repositoryUrl, sha: revision, path }) ?? null;
+    const url = rawFileUrl("https://github.com/owner/repo", "docs/a #1?.png");
+    expect(url).toBe(`https://github.com/owner/repo/raw/${sha}/docs/a%20%231%3F.png`);
+    expect(media(url ?? "")).toEqual({
+      fetchUrl: `https://raw.githubusercontent.com/owner/repo/${sha}/docs/a%20%231%3F.png`,
+      fileName: "a #1?.png",
+      immutable: true,
+    });
+    expect(rawFileUrl("https://github.com/owner/repo", "a.png", "main")).toBeNull();
+    expect(rawFileUrl("https://github.example.com/owner/repo", "a.png")).toBeNull();
   });
 });

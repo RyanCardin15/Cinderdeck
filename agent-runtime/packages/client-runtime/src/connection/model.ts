@@ -1,4 +1,4 @@
-import { EnvironmentId } from "@cinderdeck/contracts";
+import { EnvironmentId, type ExecutionEnvironmentDescriptor } from "@cinderdeck/contracts";
 import { RelayEnvironmentEndpointFailure } from "@cinderdeck/contracts/relay";
 import * as Schema from "effect/Schema";
 
@@ -64,6 +64,7 @@ export const ConnectionTransientReason = Schema.Literals([
   "relay-unavailable",
   "remote-unavailable",
   "session-pending",
+  "approval-pending",
 ]);
 export type ConnectionTransientReason = typeof ConnectionTransientReason.Type;
 
@@ -75,7 +76,7 @@ export const ConnectionBlockedReason = Schema.Literals([
 ]);
 export type ConnectionBlockedReason = typeof ConnectionBlockedReason.Type;
 
-/** A part of the path to an environment: this device, T3 Connect, the host's tunnel, or T3 Code on the host. */
+/** A part of the path to an environment: this device, Cinderdeck Connect, the host's tunnel, or Cinderdeck on the host. */
 export const ConnectionHop = Schema.Literals(["device", "relay", "tunnel", "server"]);
 export type ConnectionHop = typeof ConnectionHop.Type;
 
@@ -87,13 +88,14 @@ export const ConnectionFailureCause = Schema.Literals([
   "relay_error",
   "tunnel_pending",
   "tunnel_not_enabled",
+  "approval_pending",
 ]);
 export type ConnectionFailureCause = typeof ConnectionFailureCause.Type;
 
 /**
  * Where and why a failure happened, when the code that saw it knows. See
  * `presentConnectionDiagnosis`. `via` names the route when the hop alone does
- * not: T3 Code on the host can fail behind the tunnel or on a direct route.
+ * not: Cinderdeck on the host can fail behind the tunnel or on a direct route.
  */
 const ConnectionFailureFields = {
   hop: Schema.optionalKey(ConnectionHop),
@@ -108,6 +110,8 @@ export class ConnectionTransientError extends Schema.TaggedError<ConnectionTrans
     reason: ConnectionTransientReason,
     detail: Schema.String,
     traceId: Schema.optionalKey(Schema.String),
+    /** The code this device shows while the host decides whether to trust it. */
+    verificationCode: Schema.optionalKey(Schema.String),
     ...ConnectionFailureFields,
   },
 ) {
@@ -154,6 +158,8 @@ export interface PreparedConnection {
   readonly socketUrl: string;
   readonly httpAuthorization: PreparedHttpAuthorization | null;
   readonly target: ConnectionTarget;
+  /** What the server said about itself while this connection was prepared. */
+  readonly descriptor?: ExecutionEnvironmentDescriptor;
 }
 
 export type SupervisorConnectionPhase =

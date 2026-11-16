@@ -58,7 +58,7 @@ final class T3MenuDismissTouchGate: UIGestureRecognizer, UIGestureRecognizerDele
   }
 }
 
-public final class T3MenuDismissTouchGateSubscriber: ExpoAppDelegateSubscriber {
+public final class CinderdeckMenuDismissTouchGateSubscriber: ExpoAppDelegateSubscriber {
   public func subscriberDidRegister() {
     NotificationCenter.default.addObserver(
       self,

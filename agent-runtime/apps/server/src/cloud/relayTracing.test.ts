@@ -15,12 +15,12 @@ const tracesTo = (policy?: ManagedPolicyDocument) =>
   Effect.service(RelayTracing.RelayClientTracer).pipe(
     Effect.provide(
       relayLayer(
-        { serviceName: "t3code-server", runtime: "node", client: "environment-server" },
+        { serviceName: "cinderdeck-server", runtime: "node", client: "environment-server" },
         { tracesUrl: "https://traces.example.com", tracesDataset: "relay", tracesToken: "token" },
       ).pipe(
         Layer.provide(ManagedPolicy.layerTest(policy)),
         Layer.provide(
-          ServerConfig.layerTest(process.cwd(), { prefix: "t3-relay-tracing-" }).pipe(
+          ServerConfig.layerTest(process.cwd(), { prefix: "cinderdeck-relay-tracing-" }).pipe(
             Layer.provide(NodeServices.layer),
           ),
         ),
@@ -30,7 +30,7 @@ const tracesTo = (policy?: ManagedPolicyDocument) =>
     Effect.map(Option.isSome),
   );
 
-it.effect("a policy with telemetry off stops relay tracing to T3 Connect", () =>
+it.effect("a policy with telemetry off stops relay tracing to Cinderdeck Connect", () =>
   Effect.gen(function* () {
     assert.isTrue(yield* tracesTo());
     assert.isFalse(

@@ -48,8 +48,8 @@ function layerAcpRegistryProviderAdapterRegistryReplay(
       const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
       const replayGate = options.replayGate;
       const replayDir = yield* fileSystem
-        .makeTempDirectory({
-          prefix: `t3-orchestration-v2-acp-registry-replay-${transcript.scenario}-`,
+        .makeTempDirectoryScoped({
+          prefix: `cinderdeck-orchestration-v2-acp-registry-replay-${transcript.scenario}-`,
         })
         .pipe(Effect.orDie);
       const statusPath = path.join(replayDir, "status.json");

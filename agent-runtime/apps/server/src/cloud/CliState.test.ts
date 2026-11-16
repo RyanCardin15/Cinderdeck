@@ -14,6 +14,7 @@ import {
   CLOUD_LINK_REVOKED,
   CLOUD_LINKED_USER_ID,
   CLOUD_MINT_PUBLIC_KEY,
+  HOLD_WEBHOOKS_WHILE_OFFLINE_SECRET,
   PUBLISH_AGENT_ACTIVITY_SECRET,
   RELAY_ENVIRONMENT_CREDENTIAL_SECRET,
   RELAY_ISSUER_SECRET,
@@ -29,13 +30,14 @@ const persistedCloudLinkSecrets = [
   CLOUD_ENDPOINT_RUNTIME_CONFIG,
   CLOUD_ENDPOINT_CONFIRMED_ORIGIN,
   PUBLISH_AGENT_ACTIVITY_SECRET,
+  HOLD_WEBHOOKS_WHILE_OFFLINE_SECRET,
 ] as const;
 
 const layerTest = () =>
   ServerSecretStore.layer.pipe(
     Layer.provide(
       ServerConfig.layerTest(process.cwd(), {
-        prefix: "t3-cloud-cli-state-test-",
+        prefix: "cinderdeck-cloud-cli-state-test-",
       }),
     ),
   );

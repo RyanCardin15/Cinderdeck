@@ -20,7 +20,7 @@ with it. Who an install belongs to is a separate fact, sent as
 a rule can change and apply to all history.
 
 [Owner sources](../../apps/server/src/telemetry/Identify.ts), strongest first:
-T3 Connect, then the OpenAI and Claude person ids, then the client device. The
+Cinderdeck Connect, then the OpenAI and Claude person ids, then the client device. The
 server reports what it can read itself: the linked Connect account and provider
 logins. A connecting client reports its signed-in Connect account and its device,
 which links every environment opened from one phone, browser, or desktop. Use the
@@ -48,7 +48,7 @@ runs; use `surface` for the connected client.
 ## Interpreting events
 
 Use `client.turn.requested` for active-use reports. There is no connection event,
-because T3 Connect sessions expire hourly and each reconnect would count again.
+because Cinderdeck Connect sessions expire hourly and each reconnect would count again.
 A command whose id was already accepted is a retry, so it records nothing again.
 One identity can appear in several client groups during a period; adding those
 groups double-counts users.
@@ -134,7 +134,7 @@ repeating the call's outcome and duration, so event counts are not call counts.
 
 ## Delivery
 
-The server sends batches to the ingest endpoint at `ingest.t3.codes`, which archives
+The server sends batches to the ingest endpoint at `ingest.cinderdeck.codes`, which archives
 every event and forwards some of them to PostHog. A send can fail after the endpoint
 has stored the batch, so every retry is a copy.
 [Delivery](../../apps/server/src/telemetry/AnalyticsService.ts) gives each event a

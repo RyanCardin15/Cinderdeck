@@ -22,7 +22,7 @@ function status(overrides: Partial<VcsStatusResult> = {}): VcsStatusResult {
     pr: {
       number: 42,
       title: "PR branch",
-      url: "https://github.com/pingdotgg/t3code/pull/42",
+      url: "https://github.com/RyanCardin15/Cinderdeck/pull/42",
       baseRef: "main",
       headRef: "feature/current",
       state: "open",
@@ -35,7 +35,7 @@ function mergedFeaturePr(): NonNullable<VcsStatusResult["pr"]> {
   return {
     number: 42,
     title: "Feature PR",
-    url: "https://github.com/pingdotgg/t3code/pull/42",
+    url: "https://github.com/RyanCardin15/Cinderdeck/pull/42",
     baseRef: "main",
     headRef: "feature/current",
     state: "merged",
@@ -49,10 +49,10 @@ function pullRequestSummary(
   return {
     provider: SourceControlProviderKind.make("github"),
     projectId: ProjectId.make("project-1"),
-    repository: "pingdotgg/t3code",
+    repository: "pingdotgg/cinderdeck",
     number: 42,
     title: "Feature PR",
-    url: "https://github.com/pingdotgg/t3code/pull/42",
+    url: "https://github.com/RyanCardin15/Cinderdeck/pull/42",
     state,
     headBranch: "feature/current",
     baseBranch: "main",
@@ -81,9 +81,9 @@ describe("resolveDisplayedThreadPr", () => {
   const mergedPr = mergedFeaturePr();
   const linkedPullRequest = {
     projectId: ProjectId.make("project-1"),
-    repository: "pingdotgg/t3code",
+    repository: "pingdotgg/cinderdeck",
     number: 42,
-    url: "https://github.com/pingdotgg/t3code/pull/42",
+    url: "https://github.com/RyanCardin15/Cinderdeck/pull/42",
   };
   const provider = {
     kind: SourceControlProviderKind.make("github"),
@@ -103,11 +103,27 @@ describe("resolveDisplayedThreadPr", () => {
     expect(resolveDisplayedThreadPrProvider(input)).toEqual(provider);
   });
 
+  it.each(["open", "merged", "closed"] as const)(
+    "only shows an unlinked branch PR while open (state=%s)",
+    (state) => {
+      const branchPr = { ...mergedPr, state };
+      const input = {
+        threadBranch: featureBranch,
+        gitStatus: status({ pr: branchPr, sourceControlProvider: provider }),
+      };
+
+      expect(resolveDisplayedThreadPr(input)).toEqual(state === "open" ? branchPr : null);
+      expect(resolveDisplayedThreadPrProvider(input)).toEqual(
+        state === "open" ? provider : undefined,
+      );
+    },
+  );
+
   it("never attaches a PR reported by main to the feature thread", () => {
     const mainPr = {
       number: 99,
       title: "Unrelated main PR",
-      url: "https://github.com/pingdotgg/t3code/pull/99",
+      url: "https://github.com/RyanCardin15/Cinderdeck/pull/99",
       baseRef: "develop",
       headRef: "main",
       state: "merged" as const,

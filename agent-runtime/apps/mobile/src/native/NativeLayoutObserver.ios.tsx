@@ -9,9 +9,9 @@ interface ObserverProps extends ViewProps {
 function resolveObserver() {
   try {
     const module = requireOptionalNativeModule<{
-      readonly ViewPrototypes?: { readonly T3NativeControls_LayoutMetrics?: unknown };
+      readonly ViewPrototypes?: { readonly CinderdeckNativeControls_LayoutMetrics?: unknown };
     }>("T3NativeControls");
-    if (!module?.ViewPrototypes?.T3NativeControls_LayoutMetrics) return null;
+    if (!module?.ViewPrototypes?.CinderdeckNativeControls_LayoutMetrics) return null;
     return requireNativeView<ObserverProps>("T3NativeControls", "LayoutMetrics");
   } catch {
     return null;

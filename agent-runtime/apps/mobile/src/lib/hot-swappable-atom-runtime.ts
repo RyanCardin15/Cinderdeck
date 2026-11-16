@@ -12,7 +12,7 @@ interface HotAtomRuntimeEntry {
   readonly runtime: Atom.AtomRuntime<unknown, unknown>;
 }
 
-const hotAtomRuntimesKey = Symbol.for("t3.mobile.hot-atom-runtimes");
+const hotAtomRuntimesKey = Symbol.for("cinderdeck.mobile.hot-atom-runtimes");
 
 type HotAtomRuntimeGlobal = typeof globalThis & {
   [hotAtomRuntimesKey]?: Map<string, HotAtomRuntimeEntry>;
@@ -48,6 +48,7 @@ export function hotSwappableAtomRuntime<R, E>(options: {
     entry = existing;
     options.registry.set(
       entry.layerAtom,
+      // @effect-diagnostics-next-line anyUnknownInErrorContext:off - the HMR registry erases each runtime's R and E
       options.layer as Layer.Layer<
         unknown,
         unknown,

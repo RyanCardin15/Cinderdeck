@@ -54,7 +54,7 @@ const PACKAGED_CLIENTS: ReadonlyArray<ProviderClientDefinition> = [
 ];
 
 /**
- * Fields that make an instance launch without the settings a pin sets: managed Codex runs T3's own
+ * Fields that make an instance launch without the settings a pin sets: managed Codex runs Cinderdeck's own
  * runtime against OpenAI, and a server URL points OpenCode at a server it does not start. A policy
  * that owns a pin owns these too, holding each at the value given here, which clients still send
  * when they add an instance.
@@ -87,7 +87,7 @@ type PinnedConfigField = (typeof PINNED_CONFIG_FIELDS)[number];
 /**
  * Fields that decide what a provider starts and reads on startup; a driver has those its schema
  * has. Under a ceiling they are the administrator's: a wrapper binary, a skip-permissions flag, or
- * a config directory with allow rules each outrank T3 Code's mode, and no flag filter stops a wrapper.
+ * a config directory with allow rules each outrank Cinderdeck's mode, and no flag filter stops a wrapper.
  */
 const LAUNCH_CONFIG_FIELDS = [
   "binaryPath",
@@ -168,6 +168,23 @@ export const providerHostEnvironment = (
       delete next[name];
     }
   }
+  // Drivers keep this object, so PATH reads through to the host for a refresh after launch to reach them.
+  const pathKeys = Object.keys(next).filter((name) => name.toUpperCase() === "PATH");
+  if (pathKeys.length > 0) {
+    for (const name of pathKeys) delete next[name];
+    Object.defineProperty(next, "PATH", {
+      enumerable: true,
+      configurable: true,
+      get: () => environment.PATH ?? environment.Path ?? environment.path,
+      set: (value) =>
+        Object.defineProperty(next, "PATH", {
+          value,
+          enumerable: true,
+          writable: true,
+          configurable: true,
+        }),
+    });
+  }
   return next;
 };
 
@@ -206,7 +223,8 @@ const sameVariable = (
   left === right ||
   (left !== undefined &&
     right !== undefined &&
-    left.value === right.value &&
+    // A secret reference is an object, and a decoded copy is never the stored one.
+    sameValue(left.value, right.value) &&
     left.sensitive === right.sensitive);
 
 const pinnedFields = (pin: ManagedProviderInstance): ReadonlyArray<PinnedConfigField> =>
@@ -388,6 +406,8 @@ export function makeManagedProviders(
     const result: ServerSettings = {
       ...settings,
       providerInstances: providerInstances as ServerSettings["providerInstances"],
+      // An allow-list names agent drivers; text generators would send code to any other API.
+      ...(allowed === undefined ? {} : { textGenerators: {} }),
       sourceControlWriterModelSelection: allowedSelection(
         settings,
         settings.sourceControlWriterModelSelection,

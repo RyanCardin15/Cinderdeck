@@ -20,7 +20,7 @@ describe("VcsProjectConfig", () => {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const root = yield* fileSystem.makeTempDirectoryScoped({
-          prefix: "t3-vcs-config-test-",
+          prefix: "cinderdeck-vcs-config-test-",
         });
         const configDir = path.join(root, ".t3code");
         const nested = path.join(root, "packages", "app");
@@ -50,7 +50,7 @@ describe("VcsProjectConfig", () => {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const root = yield* fileSystem.makeTempDirectoryScoped({
-          prefix: "t3-vcs-config-test-",
+          prefix: "cinderdeck-vcs-config-test-",
         });
         const configDir = path.join(root, ".t3code");
         const cwd = path.join(root, "invalid\0child");
@@ -92,7 +92,7 @@ describe("VcsProjectConfig", () => {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const root = yield* fileSystem.makeTempDirectoryScoped({
-          prefix: "t3-vcs-config-test-",
+          prefix: "cinderdeck-vcs-config-test-",
         });
         const configDir = path.join(root, ".t3code");
         yield* fileSystem.makeDirectory(configDir, { recursive: true });

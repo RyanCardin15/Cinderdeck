@@ -40,7 +40,7 @@ const writeFirefoxCookieDatabase = Effect.fnUntraced(function* (
   schemaVersion = 15,
 ) {
   const fileSystem = yield* FileSystem.FileSystem;
-  const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3code-firefox-test-" });
+  const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-firefox-test-" });
   const file = `${directory}/cookies.sqlite`;
   const database = new NodeSqlite.DatabaseSync(file);
   database.exec(`pragma user_version = ${schemaVersion}`);
@@ -78,7 +78,7 @@ const writeFirefoxCookieDatabase = Effect.fnUntraced(function* (
 });
 
 const run = <A, E>(effect: Effect.Effect<A, E, FileSystem.FileSystem | Path.Path | Scope.Scope>) =>
-  effect.pipe(Effect.provide(NodeServices.layer), Effect.scoped);
+  effect.pipe(Effect.provide(NodeServices.layer));
 
 describe("readFirefoxCookies", () => {
   it.effect("converts millisecond expiries from schema 16 and newer", () =>

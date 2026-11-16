@@ -1,4 +1,4 @@
-// @effect-diagnostics preferSchemaOverJson:off - JSON string literals safely embed paths and arguments in generated JavaScript.
+// @effect-diagnostics globalJsonInEffect:off - JSON string literals safely embed paths and arguments in generated JavaScript.
 import * as Schema from "effect/Schema";
 import * as Effect from "effect/Effect";
 import * as Path from "effect/Path";
@@ -63,9 +63,9 @@ async function withToolMaintenance(root, operation) {
 }
 function pruneTools(root, specs, flat) {
   return withToolMaintenance(root, () => {
-    // Keep installs used by any running helper, including older T3 releases.
+    // Keep installs used by any running helper, including older Cinderdeck releases.
     const scan = process.platform === 'win32'
-      ? require('node:child_process').spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Get-CimInstance Win32_Process | Select-Object -ExpandProperty CommandLine'], { encoding: 'utf8', timeout: 10000 })
+      ? require('node:child_process').spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); Get-CimInstance Win32_Process | Select-Object -ExpandProperty CommandLine'], { encoding: 'utf8', timeout: 10000 })
       : require('node:child_process').spawnSync('ps', ['-ax', '-o', 'command='], { encoding: 'utf8', timeout: 10000 });
     if (scan.status !== 0 || !scan.stdout) return;
     for (const [name, required] of specs) {

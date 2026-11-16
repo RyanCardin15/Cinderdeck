@@ -1,5 +1,4 @@
 import * as NodeV8 from "node:v8";
-import * as NodeVM from "node:vm";
 import { assert, it } from "@effect/vitest";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -16,9 +15,6 @@ import * as KeyValueStore from "effect/persistence/KeyValueStore";
 import * as TestClock from "effect/testing/TestClock";
 import * as PullRequestReadCache from "./PullRequestReadCache.ts";
 
-NodeV8.setFlagsFromString("--expose-gc");
-const collectGarbage = NodeVM.runInNewContext("gc") as () => void;
-
 const cacheLayer = (directory: string) =>
   PullRequestReadCache.make.pipe(Effect.provide(KeyValueStore.layerFileSystem(directory)));
 
@@ -26,7 +22,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("PR filesystem ca
   it.effect("clears in-flight reads before a new service can reuse them", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-pr-cache-" });
+      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-pr-cache-" });
       const started = yield* Deferred.make<void>();
       const release = yield* Deferred.make<void>();
       const cache = yield* cacheLayer(directory);
@@ -44,6 +40,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("PR filesystem ca
       const invalidate = yield* cache
         .invalidate("pr")
         .pipe(Effect.forkChild({ startImmediately: true }));
+      // Another PR's invalidation does not wait on this read; this one's does.
+      yield* cache.invalidate("other-pr");
+      assert.isUndefined(invalidate.pollUnsafe());
       yield* Deferred.succeed(release, undefined);
       yield* Fiber.join(read);
       yield* Fiber.join(invalidate);
@@ -56,7 +55,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("PR filesystem ca
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-pr-cache-" });
+      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-pr-cache-" });
       const cache = yield* cacheLayer(directory);
       yield* cache.get("summary", Effect.succeed("value"));
       const [entry] = yield* fs.readDirectory(directory);
@@ -73,7 +72,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("PR filesystem ca
   it.effect("invalidates only the changed scope across restarts and coalesces its next reads", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-pr-cache-" });
+      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-pr-cache-" });
       let reads = 0;
       const lookup = Effect.sync(() => String(++reads));
       const cache = yield* cacheLayer(directory);
@@ -138,7 +137,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("PR filesystem ca
   it.effect("does not persist failed GitHub reads", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-pr-cache-" });
+      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-pr-cache-" });
       const cache = yield* cacheLayer(directory);
       const error = new PullRequestOperationError({ operation: "summary", detail: "unavailable" });
       yield* cache.get("summary", Effect.fail(error)).pipe(Effect.flip);
@@ -152,7 +151,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("PR filesystem ca
     (corrupt) =>
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
-        const directory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-pr-cache-" });
+        const directory = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-pr-cache-" });
         const original = yield* cacheLayer(directory);
         yield* original.get("summary", Effect.succeed("stale"), ["pr"]);
         yield* fs.writeFileString(directory + "/revisions", corrupt);
@@ -200,13 +199,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("PR filesystem ca
   it.effect("does not keep a caller's data alive after its reads and invalidations", () =>
     Effect.gen(function* () {
       const cache = yield* PullRequestReadCache.make;
-      const sweeps: Array<WeakRef<object>> = [];
+      class SweepData extends Map<string, number> {}
       // Like a sync sweep: an Effect.fn made per run that closes over that run's data.
       const sweep = Effect.fn("sweep")(function* (index: number) {
-        const groups = new Map<string, number>(
-          Array.from({ length: 1_000 }, (_, id) => [`group-${id}`, id]),
-        );
-        sweeps.push(new WeakRef(groups));
+        const groups = new SweepData(Array.from({ length: 1_000 }, (_, id) => [`group-${id}`, id]));
         const read = Effect.fn("read")(function* (pr: string) {
           const size = groups.size;
           yield* cache.invalidate(pr);
@@ -216,10 +212,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("PR filesystem ca
         yield* Effect.forEach(["pr-1", "pr-2"], read, { discard: true });
       });
       for (let index = 0; index < 5; index++) yield* sweep(index);
-      // WeakRef targets stay alive until the current job ends, so yield before collecting.
-      yield* Effect.yieldNow;
-      collectGarbage();
-      assert.strictEqual(sweeps.filter((sweepData) => sweepData.deref() !== undefined).length, 0);
+      // Counts after a full GC. A WeakRef would keep its target alive until the job ends.
+      assert.strictEqual(NodeV8.queryObjects(SweepData, { format: "count" }), 0);
     }).pipe(Effect.provide(KeyValueStore.layerMemory)),
   );
 

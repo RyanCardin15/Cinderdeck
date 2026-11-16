@@ -1,7 +1,7 @@
 // TEMPORARY one-time workaround for a Node --build-sea bug on Linux arm64.
 // It breaks kernels with 16 KiB or 64 KiB pages. Revert when Node ships a fix.
 // Node issue: https://github.com/nodejs/node/issues/67048
-// Workaround PR: https://github.com/pingdotgg/t3code/pull/25825
+// Workaround PR: https://github.com/RyanCardin15/Cinderdeck/pull/25825
 import * as NodeModule from "node:module";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -32,6 +32,7 @@ const run = Effect.fn("LinuxArm64Sea.run")(function* (args: Array<string>, verbo
 // Builds the SEA blob with this Node and injects it into a copy of this Node with postject.
 export const injectLinuxArm64Sea = Effect.fn("LinuxArm64Sea.inject")(function* (input: {
   bundlePath: string;
+  cliAssetPath: string;
   outputPath: string;
   nodeVersion: string;
   verbose: boolean;
@@ -44,18 +45,21 @@ export const injectLinuxArm64Sea = Effect.fn("LinuxArm64Sea.inject")(function* (
   }
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const temp = yield* fs.makeTempDirectoryScoped({ prefix: "t3-sea-" });
+  const temp = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-sea-" });
   const blobPath = path.join(temp, "sea.blob");
   const configPath = path.join(temp, "sea.json");
   yield* fs.writeFileString(
     configPath,
     yield* encodeJson({
       main: input.bundlePath,
+      assets: { "binMain.mjs": input.cliAssetPath },
       output: blobPath,
       mainFormat: "module",
       disableExperimentalSEAWarning: true,
       // Node SEA useCodeCache breaks import(), which the server needs.
       useCodeCache: false,
+      // The bootstrap loads the embedded CLI with require(esm).
+      execArgv: ["--require-module"],
     }),
   );
   yield* run(["--experimental-sea-config", configPath], input.verbose);

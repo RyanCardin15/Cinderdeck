@@ -1,5 +1,9 @@
-import { DESKTOP_RENDERER_ACCESS_HEADER, hasDesktopRendererAccess } from "@cinderdeck/shared/desktopRendererAccess";
+import {
+  DESKTOP_RENDERER_ACCESS_HEADER,
+  hasDesktopRendererAccess,
+} from "@cinderdeck/shared/desktopRendererAccess";
 import * as Context from "effect/Context";
+import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -172,9 +176,14 @@ const proxyRequest = Effect.fn("desktop.protocol.proxyRequest")(function* (
   const targetUrl = new URL(targetOrigin);
   targetUrl.pathname = requestUrl.pathname;
   targetUrl.search = requestUrl.search;
-  const token = process.env.DECKHAND_RENDERER_TOKEN;
-  if (!hasDesktopRendererAccess(token, token) || targetOrigin.protocol !== "http:" ||
-      !["localhost", "127.0.0.1", "[::1]"].includes(targetOrigin.hostname)) {
+  const token = Option.getOrUndefined(
+    yield* Config.String("DECKHAND_RENDERER_TOKEN").pipe(Config.option, Effect.orDie),
+  );
+  if (
+    !hasDesktopRendererAccess(token, token) ||
+    targetOrigin.protocol !== "http:" ||
+    !["localhost", "127.0.0.1", "[::1]"].includes(targetOrigin.hostname)
+  ) {
     return new Response(null, { status: 403 });
   }
   const headers = new Headers(request.headers);
@@ -224,9 +233,7 @@ const serveDesktopAsset = Effect.fn("desktop.protocol.serveAsset")(function* (
   if (request.method !== "GET" && request.method !== "HEAD") {
     return new Response(null, { status: 405 });
   }
-  const pathname = yield* Effect.try(() => decodeURIComponent(url.pathname)).pipe(
-    Effect.orElseSucceed(() => null),
-  );
+  const pathname = Option.getOrNull(Option.liftThrowable(decodeURIComponent)(url.pathname));
   if (pathname === null || pathname.includes("\0")) return new Response(null, { status: 400 });
   const root = path.resolve(assetDirectory);
   const assetPath = path.resolve(root, `.${pathname}`);

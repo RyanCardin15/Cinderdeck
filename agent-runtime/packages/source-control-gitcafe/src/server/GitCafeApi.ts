@@ -82,7 +82,7 @@ const credentialFailure = (
 ): typeof GitCafeApiFailure.Type =>
   error._tag === "GitCafeCliMissingError"
     ? "missing-tool"
-    : error._tag === "GitCafeNotSignedInError"
+    : error._tag === "GitCafeNotSignedInError" || error._tag === "SettingsSecretUnresolvedError"
       ? "unauthenticated"
       : "failed";
 
@@ -150,7 +150,7 @@ export const make = Effect.gen(function* () {
     const send = (url: string) => {
       const base = HttpClientRequest.make(method)(url).pipe(
         HttpClientRequest.bearerToken(Redacted.value(credential.token)),
-        HttpClientRequest.setHeaders({ accept: "application/json", "user-agent": "t3code" }),
+        HttpClientRequest.setHeaders({ accept: "application/json", "user-agent": "cinderdeck" }),
       );
       return Effect.gen(function* () {
         const response = yield* httpClient

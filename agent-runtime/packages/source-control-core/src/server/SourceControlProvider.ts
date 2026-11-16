@@ -100,7 +100,8 @@ export function sourceControlRefFromInput(input: {
 }
 
 export function repositoryPathFromRemoteUrl(url: string | null): string | null {
-  const trimmed = url?.trim() ?? "";
+  const remote = url?.trim() ?? "";
+  const trimmed = /^(?:ssh|https?|git):\/\//iu.test(remote) ? remote.split(/[?#]/u, 1)[0]! : remote;
   if (trimmed.length === 0) {
     return null;
   }
@@ -121,6 +122,8 @@ export class SourceControlProvider extends Context.Service<
     readonly headBranchProbe?: (input: {
       readonly headSelectors: ReadonlyArray<string>;
       readonly state: "open" | "all";
+      /** `owner:branch` to read instead of bare names, when the caller knows the head's owner. */
+      readonly ownerHeadSelector?: string | undefined;
     }) => { readonly headSelectors: ReadonlyArray<string>; readonly limit: number };
     readonly readChangeRequestTemplate?: (input: {
       readonly cwd: string;
@@ -160,7 +163,7 @@ export class SourceControlProvider extends Context.Service<
       readonly repository: string | null;
     }) => Effect.Effect<boolean>;
     /**
-     * Told when T3 records `baseBranch`, a branch name on the host, as the base `branch` was cut
+     * Told when Cinderdeck records `baseBranch`, a branch name on the host, as the base `branch` was cut
      * from, for a host whose own tools keep that in git config of their own.
      */
     readonly recordBranchBase?: (input: {

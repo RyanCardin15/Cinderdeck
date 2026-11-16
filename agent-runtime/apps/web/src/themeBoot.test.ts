@@ -3,10 +3,12 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import indexHtml from "../index.html?raw";
 import {
   CUSTOM_THEMES_STORAGE_KEY,
+  ENVIRONMENT_THEMES_STORAGE_KEY,
   getDefaultThemeColors,
   getThemeColorsForMode,
   invalidateCustomThemes,
   isKnownThemePreference,
+  publishedThemeDefinitions,
   resolveThemeAppearance,
   T3_CHAT_THEME,
   EMBER_THEME,
@@ -153,12 +155,12 @@ describe("index.html boot script", () => {
   }> = [
     { name: "no stored preference on a dark OS", storage: {}, prefersDark: true },
     {
-      name: "T3 Chat follows a dark OS",
+      name: "Cinderdeck Chat follows a dark OS",
       storage: { [THEME_STORAGE_KEY]: "t3-chat", [THEME_FOLLOW_SYSTEM_STORAGE_KEY]: "true" },
       prefersDark: true,
     },
     {
-      name: "an explicit global dark mode applies to T3 Chat",
+      name: "an explicit global dark mode applies to Cinderdeck Chat",
       storage: {
         [THEME_STORAGE_KEY]: "t3-chat",
         [THEME_APPEARANCE_MODE_STORAGE_KEY]: "dark",
@@ -188,11 +190,11 @@ describe("index.html boot script", () => {
     },
     {
       name: "a legacy t3-grove preference resolves through the alias",
-      storage: { [THEME_STORAGE_KEY]: "t3-grove", [THEME_FOLLOW_SYSTEM_STORAGE_KEY]: "true" },
+      storage: { [THEME_STORAGE_KEY]: "cinderdeck-grove", [THEME_FOLLOW_SYSTEM_STORAGE_KEY]: "true" },
       prefersDark: true,
     },
     {
-      name: "legacy t3-chat-dark resolves to dark T3 Chat",
+      name: "legacy t3-chat-dark resolves to dark Cinderdeck Chat",
       storage: { [THEME_STORAGE_KEY]: "t3-chat-dark" },
       prefersDark: true,
     },
@@ -281,6 +283,30 @@ describe("index.html boot script", () => {
     expect(boot.bootVariables["--boot-accent"]).toBe(colors.accent);
     expect(boot.backgroundColor).toBe(colors.chrome);
     expect(boot.metaContent).toBe(colors.chrome);
+  });
+
+  it("paints a published theme from its stored copy before the server connects", () => {
+    const [published] = publishedThemeDefinitions([
+      {
+        id: "nightfall",
+        name: "Nightfall",
+        appearance: "dark",
+        canvas: "#1a1b26",
+        accent: "#7aa2f7",
+      },
+    ]);
+    if (!published) throw new Error("expected the published theme");
+    const boot = runBootScript({
+      storage: {
+        [THEME_STORAGE_KEY]: "nightfall",
+        [ENVIRONMENT_THEMES_STORAGE_KEY]: JSON.stringify([published]),
+      },
+      prefersDark: true,
+    });
+
+    expect(boot.themeId).toBe("nightfall");
+    expect(boot.bootVariables["--boot-background"]).toBe(published.colors.canvas);
+    expect(boot.backgroundColor).toBe(published.colors.chrome);
   });
 
   it("keeps every built-in boot splash in sync with the real palettes", () => {

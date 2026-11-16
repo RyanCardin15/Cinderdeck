@@ -201,9 +201,11 @@ describe("scoreThreadSearch", () => {
   });
 
   it("finds a branch pasted with the app's worktree prefix", () => {
-    const subject = thread("Cmd+K search", { branch: "t3/cmdk-search-v2" });
-    expect(scoreThreadSearch(foldSearchQuery("t3/cmdk-search-v2"), subject, NOW)).not.toBeNull();
-    expect(scoreThreadSearch(foldSearchQuery("t3/cmdk"), subject, NOW)).not.toBeNull();
+    const subject = thread("Cmd+K search", { branch: "cinderdeck/cmdk-search-v2" });
+    expect(
+      scoreThreadSearch(foldSearchQuery("cinderdeck/cmdk-search-v2"), subject, NOW),
+    ).not.toBeNull();
+    expect(scoreThreadSearch(foldSearchQuery("cinderdeck/cmdk"), subject, NOW)).not.toBeNull();
   });
 
   it("ranks a title holding the words above the app's own branch prefix and project name", () => {
@@ -212,7 +214,7 @@ describe("scoreThreadSearch", () => {
       rankTitles(`${WORKTREE_BRANCH_PREFIX} connect`, [
         thread("Diagnose Connect provisioning failures", {
           ...busy,
-          branch: "t3/diagnose-connect",
+          branch: "cinderdeck/diagnose-connect",
           projectTitle: "r2tools",
         }),
         thread(`${WORKTREE_BRANCH_PREFIX.toUpperCase()} Connect Tunnel Lifecycle Review`, {
@@ -234,7 +236,7 @@ describe("scoreThreadSearch", () => {
 
   it("matches pull request numbers, branches, and projects with every token somewhere", () => {
     const subject = thread("Trim model lists", {
-      branch: "t3/trim-mcp-models",
+      branch: "cinderdeck/trim-mcp-models",
       projectTitle: "r2tools",
       pullRequests: [{ number: 22889, title: "Smaller MCP payloads" }],
     });
@@ -324,7 +326,7 @@ describe("scoreThreadSearch beyond Latin text and titles", () => {
 
   it("says which field matched when the title does not", () => {
     const subject = thread("Trim model lists", {
-      branch: "t3/cleanup-payloads",
+      branch: `${WORKTREE_BRANCH_PREFIX}/cleanup-payloads`,
       pullRequests: [{ number: 22889, title: "Smaller MCP payloads" }],
     });
     for (const query of ["#22889", "pr 22889", "pr22889", "pull request #22889"]) {
@@ -341,6 +343,19 @@ describe("scoreThreadSearch beyond Latin text and titles", () => {
       ranges: [{ start: 0, end: 7 }],
     });
     expect(scoreThreadSearch("trim", subject, NOW)?.explain?.()).toBeUndefined();
+    // The flat fallback has the same prefix semantics as a nested worktree ref.
+    const prefix = WORKTREE_BRANCH_PREFIX;
+    const flat = thread("Add search", { branch: `${prefix}-abcd1234` });
+    expect(scoreThreadSearch(prefix, flat, NOW)).toBeNull();
+    expect(scoreThreadSearch(`${prefix} connect`, flat, NOW)).toBeNull();
+    expect(scoreThreadSearch("abcd1234", flat, NOW)).not.toBeNull();
+    for (const query of [
+      `${prefix}-abcd`,
+      `${prefix}-abcd1234 connect`,
+      `connect ${prefix}-abcd1234`,
+    ]) {
+      expect(scoreThreadSearch(query, { ...flat, projectTitle: "connect" }, NOW)).not.toBeNull();
+    }
   });
 
   it("reads letters and numbers typed together, without forgiving typos in numbers", () => {

@@ -64,6 +64,11 @@ export const SCENARIOS = [
     name: "Multi turn",
     file: `${FIXTURES}/multi_turn/registry_transcript.ndjson`,
   },
+  {
+    id: "command-output",
+    name: "Command output",
+    file: "./dev-replay/command_output_transcript.ndjson",
+  },
 ] as const;
 
 // Session setup and vendor state stay out: they would replace the replay agent's own models.
@@ -286,8 +291,8 @@ function runAgent(): void {
         };
       case "session/new":
       case "session/load": {
-        // T3 starts one agent process per thread, so ids must be unique across processes.
-        // Loading after a restart keeps the thread usable; T3 already holds its history.
+        // Cinderdeck starts one agent process per thread, so ids must be unique across processes.
+        // Loading after a restart keeps the thread usable; Cinderdeck already holds its history.
         const sessionId =
           message.method === "session/load" ? String(params.sessionId) : NodeCrypto.randomUUID();
         const cwd = typeof params.cwd === "string" ? params.cwd : process.cwd();

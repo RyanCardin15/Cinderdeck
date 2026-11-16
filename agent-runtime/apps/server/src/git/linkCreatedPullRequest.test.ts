@@ -144,7 +144,7 @@ describe("linkCreatedPullRequest", () => {
         result: prResult({
           status: "created",
           number: 42,
-          url: "https://github.com/t3tools/t3code/pull/42",
+          url: "https://github.com/t3tools/cinderdeck/pull/42",
         }),
         commandId,
       }).pipe(Effect.provide(layerDependenciesFor(dispatch)));
@@ -155,9 +155,9 @@ describe("linkCreatedPullRequest", () => {
           commandId: "server:pr-created-link:test",
           threadId: THREAD_ID,
           host: "github.com",
-          repository: "t3tools/t3code",
+          repository: "t3tools/cinderdeck",
           number: 42,
-          url: "https://github.com/t3tools/t3code/pull/42",
+          url: "https://github.com/t3tools/cinderdeck/pull/42",
           source: "created",
         },
       ]);
@@ -169,7 +169,7 @@ it.effect(
   "refreshes PR readers after a push from a thread or project, but not a local commit",
   () =>
     Effect.gen(function* () {
-      const refreshed: string[] = [];
+      const refreshed: Array<[string, boolean | undefined]> = [];
       const layerDependencies = Layer.mergeAll(
         Layer.mock(Orchestrator.OrchestratorV2)({
           getThreadShell: () => Effect.succeed(v2PullRequestThread(thread)),
@@ -178,9 +178,9 @@ it.effect(
           listShells: () => Effect.succeed([project]),
         }),
         Layer.mock(PullRequestService.PullRequestService)({
-          refreshAfterTurn: (id) =>
+          refreshAfterTurn: (id, options) =>
             Effect.sync(() => {
-              refreshed.push(id);
+              refreshed.push([id, options?.pushed]);
             }),
         }),
       );
@@ -203,6 +203,10 @@ it.effect(
         { cwd: "/draft-worktree", projectId: PROJECT_ID },
         { push: { status: "pushed" } },
       ).pipe(Effect.provide(layerDependencies));
-      expect(refreshed).toEqual([PROJECT_ID, PROJECT_ID, PROJECT_ID]);
+      expect(refreshed).toEqual([
+        [PROJECT_ID, true],
+        [PROJECT_ID, true],
+        [PROJECT_ID, true],
+      ]);
     }),
 );

@@ -24,18 +24,18 @@ export interface AccountAppsConnection extends Schema.Struct.Type<typeof Account
  * An account is a container owning projects, credentials, billing and other organization
  * data and settings. Actors may own and be members of accounts.
  */
-export const AccountsAccount = Schema.Struct({
+export const Account = Schema.Struct({
   name: Schema.String,
   /** Paginated list of apps associated with this account. By default sorted by name. Use filter to adjust the sorting order. */
   appsPaginated: AccountAppsConnection
 })
-export interface AccountsAccount extends Schema.Struct.Type<typeof AccountsAccount.fields> {}
+export interface Account extends Schema.Struct.Type<typeof Account.fields> {}
 
 /** Represents a human SSO (not robot) actor. */
 export const SSOUser = Schema.Struct({
   __typename: Schema.Literal("SSOUser"),
   username: Schema.String,
-  accounts: Schema.Array(AccountsAccount)
+  accounts: Schema.Array(Account)
 })
 export interface SSOUser extends Schema.Struct.Type<typeof SSOUser.fields> {}
 
@@ -43,7 +43,7 @@ export interface SSOUser extends Schema.Struct.Type<typeof SSOUser.fields> {}
 export const User = Schema.Struct({
   __typename: Schema.Literal("User"),
   username: Schema.String,
-  accounts: Schema.Array(AccountsAccount)
+  accounts: Schema.Array(Account)
 })
 export interface User extends Schema.Struct.Type<typeof User.fields> {}
 
@@ -52,7 +52,7 @@ export const Robot = Schema.Struct({
   __typename: Schema.Literal("Robot"),
   firstName: Schema.NullOr(Schema.String),
   /** Associated accounts */
-  accounts: Schema.Array(AccountsAccount)
+  accounts: Schema.Array(Account)
 })
 export interface Robot extends Schema.Struct.Type<typeof Robot.fields> {}
 
@@ -60,12 +60,12 @@ export interface Robot extends Schema.Struct.Type<typeof Robot.fields> {}
 export const ActorOther = Schema.Struct({
   __typename: GraphQL.otherTypename<Shared.Typename.Actor>()(["SSOUser", "User", "Robot"]),
   /** Associated accounts */
-  accounts: Schema.Array(AccountsAccount)
+  accounts: Schema.Array(Account)
 })
 export interface ActorOther extends Schema.Struct.Type<typeof ActorOther.fields> {}
 
-/** `query T3ExpoViewer` */
-export const T3ExpoViewer = GraphQL.query("T3ExpoViewer", {
+/** `query CinderdeckExpoViewer` */
+export const CinderdeckExpoViewer = GraphQL.query("CinderdeckExpoViewer", {
   document: {
     variables: [],
     selections: [
@@ -86,57 +86,9 @@ export const T3ExpoViewer = GraphQL.query("T3ExpoViewer", {
     ]))
   })
 })
-export declare namespace T3ExpoViewer {
-  export type Variables = typeof T3ExpoViewer.variables.Type
-  export type Result = typeof T3ExpoViewer.result.Type
-}
-
-/**
- * An account is a container owning projects, credentials, billing and other organization
- * data and settings. Actors may own and be members of accounts.
- */
-export const OwnerAccountAccount = Schema.Struct({
-  name: Schema.String,
-  /** Server account feature gate values for this account, optionally filtering by desired gates. */
-  accountFeatureGates: Shared.JSONObject
-})
-export interface OwnerAccountAccount extends Schema.Struct.Type<typeof OwnerAccountAccount.fields> {}
-
-/** Represents an Exponent App (or Experience in legacy terms) */
-export const T3EasSimulatorAvailabilityAppByIdApp = Schema.Struct({
-  ownerAccount: OwnerAccountAccount
-})
-export interface T3EasSimulatorAvailabilityAppByIdApp extends Schema.Struct.Type<typeof T3EasSimulatorAvailabilityAppByIdApp.fields> {}
-
-export const T3EasSimulatorAvailabilityAppAppQuery = Schema.Struct({
-  /** Look up app by app id */
-  byId: T3EasSimulatorAvailabilityAppByIdApp
-})
-export interface T3EasSimulatorAvailabilityAppAppQuery extends Schema.Struct.Type<typeof T3EasSimulatorAvailabilityAppAppQuery.fields> {}
-
-/** `query T3EasSimulatorAvailability` */
-export const T3EasSimulatorAvailability = GraphQL.query("T3EasSimulatorAvailability", {
-  document: {
-    variables: [
-      { name: "appId", body: "String!" },
-      { name: "filter", body: "[String!]" }
-    ],
-    selections: [
-      { name: "app", body: ["{byId(appId:$", "appId", "){ownerAccount{name accountFeatureGates(filter:$", "filter", ")}}}"] }
-    ],
-    fragments: []
-  },
-  variables: {
-    appId: Schema.String,
-    filter: Schema.optional(Schema.NullOr(Schema.Array(Schema.String)))
-  },
-  result: Schema.Struct({
-    app: T3EasSimulatorAvailabilityAppAppQuery
-  })
-})
-export declare namespace T3EasSimulatorAvailability {
-  export type Variables = typeof T3EasSimulatorAvailability.variables.Type
-  export type Result = typeof T3EasSimulatorAvailability.result.Type
+export declare namespace CinderdeckExpoViewer {
+  export type Variables = typeof CinderdeckExpoViewer.variables.Type
+  export type Result = typeof CinderdeckExpoViewer.result.Type
 }
 
 export const CreateDeviceRunSessionDeviceRunSession = Schema.Struct({
@@ -144,14 +96,14 @@ export const CreateDeviceRunSessionDeviceRunSession = Schema.Struct({
 })
 export interface CreateDeviceRunSessionDeviceRunSession extends Schema.Struct.Type<typeof CreateDeviceRunSessionDeviceRunSession.fields> {}
 
-export const T3CreateEasSimulatorSessionDeviceRunSessionDeviceRunSessionMutation = Schema.Struct({
+export const CinderdeckCreateEasSimulatorSessionDeviceRunSessionDeviceRunSessionMutation = Schema.Struct({
   /** Create a device run session */
   createDeviceRunSession: CreateDeviceRunSessionDeviceRunSession
 })
-export interface T3CreateEasSimulatorSessionDeviceRunSessionDeviceRunSessionMutation extends Schema.Struct.Type<typeof T3CreateEasSimulatorSessionDeviceRunSessionDeviceRunSessionMutation.fields> {}
+export interface CinderdeckCreateEasSimulatorSessionDeviceRunSessionDeviceRunSessionMutation extends Schema.Struct.Type<typeof CinderdeckCreateEasSimulatorSessionDeviceRunSessionDeviceRunSessionMutation.fields> {}
 
-/** `mutation T3CreateEasSimulatorSession` */
-export const T3CreateEasSimulatorSession = GraphQL.mutation("T3CreateEasSimulatorSession", {
+/** `mutation CinderdeckCreateEasSimulatorSession` */
+export const CinderdeckCreateEasSimulatorSession = GraphQL.mutation("CinderdeckCreateEasSimulatorSession", {
   document: {
     variables: [
       { name: "input", body: "CreateDeviceRunSessionInput!" }
@@ -166,12 +118,12 @@ export const T3CreateEasSimulatorSession = GraphQL.mutation("T3CreateEasSimulato
   },
   result: Schema.Struct({
     /** Mutations that create, stop, update, and delete device run sessions */
-    deviceRunSession: T3CreateEasSimulatorSessionDeviceRunSessionDeviceRunSessionMutation
+    deviceRunSession: CinderdeckCreateEasSimulatorSessionDeviceRunSessionDeviceRunSessionMutation
   })
 })
-export declare namespace T3CreateEasSimulatorSession {
-  export type Variables = typeof T3CreateEasSimulatorSession.variables.Type
-  export type Result = typeof T3CreateEasSimulatorSession.result.Type
+export declare namespace CinderdeckCreateEasSimulatorSession {
+  export type Variables = typeof CinderdeckCreateEasSimulatorSession.variables.Type
+  export type Result = typeof CinderdeckCreateEasSimulatorSession.result.Type
 }
 
 export const AgentDeviceRunSessionRemoteConfig = Schema.Struct({
@@ -205,8 +157,8 @@ export const DeviceRunSessionQuery = Schema.Struct({
 })
 export interface DeviceRunSessionQuery extends Schema.Struct.Type<typeof DeviceRunSessionQuery.fields> {}
 
-/** `query T3EasSimulatorSession` */
-export const T3EasSimulatorSession = GraphQL.query("T3EasSimulatorSession", {
+/** `query CinderdeckEasSimulatorSession` */
+export const CinderdeckEasSimulatorSession = GraphQL.query("CinderdeckEasSimulatorSession", {
   document: {
     variables: [
       { name: "id", body: "ID!" }
@@ -223,9 +175,9 @@ export const T3EasSimulatorSession = GraphQL.query("T3EasSimulatorSession", {
     deviceRunSessions: DeviceRunSessionQuery
   })
 })
-export declare namespace T3EasSimulatorSession {
-  export type Variables = typeof T3EasSimulatorSession.variables.Type
-  export type Result = typeof T3EasSimulatorSession.result.Type
+export declare namespace CinderdeckEasSimulatorSession {
+  export type Variables = typeof CinderdeckEasSimulatorSession.variables.Type
+  export type Result = typeof CinderdeckEasSimulatorSession.result.Type
 }
 
 export const NodeDeviceRunSession = Schema.Struct({
@@ -250,19 +202,19 @@ export const AppDeviceRunSessionsConnection = Schema.Struct({
 export interface AppDeviceRunSessionsConnection extends Schema.Struct.Type<typeof AppDeviceRunSessionsConnection.fields> {}
 
 /** Represents an Exponent App (or Experience in legacy terms) */
-export const T3ActiveEasSimulatorSessionsAppByIdApp = Schema.Struct({
+export const ByIdApp = Schema.Struct({
   deviceRunSessionsPaginated: AppDeviceRunSessionsConnection
 })
-export interface T3ActiveEasSimulatorSessionsAppByIdApp extends Schema.Struct.Type<typeof T3ActiveEasSimulatorSessionsAppByIdApp.fields> {}
+export interface ByIdApp extends Schema.Struct.Type<typeof ByIdApp.fields> {}
 
-export const T3ActiveEasSimulatorSessionsAppAppQuery = Schema.Struct({
+export const AppQuery = Schema.Struct({
   /** Look up app by app id */
-  byId: T3ActiveEasSimulatorSessionsAppByIdApp
+  byId: ByIdApp
 })
-export interface T3ActiveEasSimulatorSessionsAppAppQuery extends Schema.Struct.Type<typeof T3ActiveEasSimulatorSessionsAppAppQuery.fields> {}
+export interface AppQuery extends Schema.Struct.Type<typeof AppQuery.fields> {}
 
-/** `query T3ActiveEasSimulatorSessions` */
-export const T3ActiveEasSimulatorSessions = GraphQL.query("T3ActiveEasSimulatorSessions", {
+/** `query CinderdeckActiveEasSimulatorSessions` */
+export const CinderdeckActiveEasSimulatorSessions = GraphQL.query("CinderdeckActiveEasSimulatorSessions", {
   document: {
     variables: [
       { name: "appId", body: "String!" },
@@ -278,12 +230,12 @@ export const T3ActiveEasSimulatorSessions = GraphQL.query("T3ActiveEasSimulatorS
     filter: Schema.optional(Schema.NullOr(Shared.DeviceRunSessionFilterInput))
   },
   result: Schema.Struct({
-    app: T3ActiveEasSimulatorSessionsAppAppQuery
+    app: AppQuery
   })
 })
-export declare namespace T3ActiveEasSimulatorSessions {
-  export type Variables = typeof T3ActiveEasSimulatorSessions.variables.Type
-  export type Result = typeof T3ActiveEasSimulatorSessions.result.Type
+export declare namespace CinderdeckActiveEasSimulatorSessions {
+  export type Variables = typeof CinderdeckActiveEasSimulatorSessions.variables.Type
+  export type Result = typeof CinderdeckActiveEasSimulatorSessions.result.Type
 }
 
 export const EnsureDeviceRunSessionStoppedDeviceRunSession = Schema.Struct({
@@ -292,7 +244,7 @@ export const EnsureDeviceRunSessionStoppedDeviceRunSession = Schema.Struct({
 })
 export interface EnsureDeviceRunSessionStoppedDeviceRunSession extends Schema.Struct.Type<typeof EnsureDeviceRunSessionStoppedDeviceRunSession.fields> {}
 
-export const T3StopEasSimulatorSessionDeviceRunSessionDeviceRunSessionMutation = Schema.Struct({
+export const CinderdeckStopEasSimulatorSessionDeviceRunSessionDeviceRunSessionMutation = Schema.Struct({
   /**
    * Ensure a device run session is stopped. Idempotent: if the session has already
    * finished, the existing session is returned unchanged (an ERRORED session stays
@@ -300,10 +252,10 @@ export const T3StopEasSimulatorSessionDeviceRunSessionDeviceRunSessionMutation =
    */
   ensureDeviceRunSessionStopped: EnsureDeviceRunSessionStoppedDeviceRunSession
 })
-export interface T3StopEasSimulatorSessionDeviceRunSessionDeviceRunSessionMutation extends Schema.Struct.Type<typeof T3StopEasSimulatorSessionDeviceRunSessionDeviceRunSessionMutation.fields> {}
+export interface CinderdeckStopEasSimulatorSessionDeviceRunSessionDeviceRunSessionMutation extends Schema.Struct.Type<typeof CinderdeckStopEasSimulatorSessionDeviceRunSessionDeviceRunSessionMutation.fields> {}
 
-/** `mutation T3StopEasSimulatorSession` */
-export const T3StopEasSimulatorSession = GraphQL.mutation("T3StopEasSimulatorSession", {
+/** `mutation CinderdeckStopEasSimulatorSession` */
+export const CinderdeckStopEasSimulatorSession = GraphQL.mutation("CinderdeckStopEasSimulatorSession", {
   document: {
     variables: [
       { name: "id", body: "ID!" }
@@ -318,13 +270,13 @@ export const T3StopEasSimulatorSession = GraphQL.mutation("T3StopEasSimulatorSes
   },
   result: Schema.Struct({
     /** Mutations that create, stop, update, and delete device run sessions */
-    deviceRunSession: T3StopEasSimulatorSessionDeviceRunSessionDeviceRunSessionMutation
+    deviceRunSession: CinderdeckStopEasSimulatorSessionDeviceRunSessionDeviceRunSessionMutation
   })
 })
-export declare namespace T3StopEasSimulatorSession {
-  export type Variables = typeof T3StopEasSimulatorSession.variables.Type
-  export type Result = typeof T3StopEasSimulatorSession.result.Type
+export declare namespace CinderdeckStopEasSimulatorSession {
+  export type Variables = typeof CinderdeckStopEasSimulatorSession.variables.Type
+  export type Result = typeof CinderdeckStopEasSimulatorSession.result.Type
 }
 
 /** Every operation in ExpoApi.graphql. */
-export const ExpoApiGraphQLGroup = GraphQLGroup.make(T3ExpoViewer, T3EasSimulatorAvailability, T3CreateEasSimulatorSession, T3EasSimulatorSession, T3ActiveEasSimulatorSessions, T3StopEasSimulatorSession)
+export const ExpoApiGraphQLGroup = GraphQLGroup.make(CinderdeckExpoViewer, CinderdeckCreateEasSimulatorSession, CinderdeckEasSimulatorSession, CinderdeckActiveEasSimulatorSessions, CinderdeckStopEasSimulatorSession)

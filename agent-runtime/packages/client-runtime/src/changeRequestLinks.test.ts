@@ -21,17 +21,17 @@ describe("findProjectForChangeRequest", () => {
   it("matches a nested GitLab group by the whole path below the host", () => {
     const projects = [
       project({
-        canonicalKey: "gitlab.com/t3tools/platform/t3code",
+        canonicalKey: "gitlab.com/t3tools/platform/cinderdeck",
         provider: SourceControlProviderKind.make("gitlab"),
-        displayName: "t3tools/platform/t3code",
+        displayName: "t3tools/platform/cinderdeck",
         owner: "t3tools",
-        name: "t3code",
+        name: "cinderdeck",
       }),
     ];
     expect(
       findProjectForChangeRequest(projects, {
         host: "gitlab.com",
-        repository: "t3tools/platform/t3code",
+        repository: "t3tools/platform/cinderdeck",
         number: 42,
       }),
     ).toBe(projects[0]);
@@ -40,16 +40,16 @@ describe("findProjectForChangeRequest", () => {
   it("claims nothing for a lookalike host, which is what keeps a link a link", () => {
     const projects = [
       project({
-        canonicalKey: "github.com/pingdotgg/t3code",
+        canonicalKey: "github.com/pingdotgg/cinderdeck",
         provider: SourceControlProviderKind.make("github"),
         owner: "pingdotgg",
-        name: "t3code",
+        name: "cinderdeck",
       }),
     ];
     expect(
       findProjectForChangeRequest(projects, {
         host: "github.com-evil.test",
-        repository: "pingdotgg/t3code",
+        repository: "pingdotgg/cinderdeck",
         number: 1,
       }),
     ).toBeUndefined();

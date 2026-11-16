@@ -25,7 +25,7 @@ const __dirname = NodePath.dirname(NodeURL.fileURLToPath(import.meta.url));
 const mockAgentPath = NodePath.join(__dirname, "../provider/testFixtures/grok-text-mock-agent.mjs");
 
 const layerGrokTextGenerationTest = ServerConfig.ServerConfig.layerTest(process.cwd(), {
-  prefix: "t3code-grok-text-generation-test-",
+  prefix: "cinderdeck-grok-text-generation-test-",
 }).pipe(Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)));
 
 function makeAcpGrokWrapper(dir: string, env: Record<string, string>): string {
@@ -35,7 +35,7 @@ function makeAcpGrokWrapper(dir: string, env: Record<string, string>): string {
     env,
     source: execScriptSource({
       scriptPath: mockAgentPath,
-      expectedArgs: ["agent", "stdio"],
+      expectedArgs: ["--permission-mode", "default", "agent", "stdio"],
     }),
   });
 }
@@ -45,7 +45,7 @@ function withFakeAcpGrok<A, E, R>(
   effectFn: (textGeneration: TextGeneration.TextGeneration["Service"]) => Effect.Effect<A, E, R>,
 ) {
   return Effect.gen(function* () {
-    const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3code-grok-text-acp-"));
+    const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-grok-text-acp-"));
     yield* Effect.addFinalizer(() =>
       Effect.sync(() => {
         NodeFS.rmSync(tempDir, { recursive: true, force: true });
@@ -58,26 +58,32 @@ function withFakeAcpGrok<A, E, R>(
   }).pipe(Effect.scoped);
 }
 
-function readJsonRpcRequests(
-  filePath: string,
-): ReadonlyArray<{ readonly method?: string; readonly params?: Record<string, unknown> }> {
+function readJsonRpcRequests(filePath: string): ReadonlyArray<{
+  readonly id?: unknown;
+  readonly method?: string;
+  readonly params?: Record<string, unknown>;
+}> {
   return NodeFS.readFileSync(filePath, "utf8")
     .trim()
     .split("\n")
     .filter((line) => line.length > 0)
-    .map((line) => JSON.parse(line) as { method?: string; params?: Record<string, unknown> });
+    .map(
+      (line) =>
+        JSON.parse(line) as { id?: unknown; method?: string; params?: Record<string, unknown> },
+    );
 }
 
 it.layer(layerGrokTextGenerationTest)("GrokTextGeneration", (it) => {
   it.effect("uses ACP with disabled tool capabilities and forwards the requested model id", () => {
     const requestLogDir = NodeFS.mkdtempSync(
-      NodePath.join(NodeOS.tmpdir(), "t3code-grok-text-log-"),
+      NodePath.join(NodeOS.tmpdir(), "cinderdeck-grok-text-log-"),
     );
     const requestLogPath = NodePath.join(requestLogDir, "requests.ndjson");
 
     return withFakeAcpGrok(
       {
         T3_ACP_REQUEST_LOG_PATH: requestLogPath,
+        T3_ACP_REQUEST_PERMISSION: "1",
         T3_ACP_PROMPT_RESPONSE_TEXT: JSON.stringify({
           subject: "Add Grok provider",
           body: "Wire up the ACP runtime and headless text generation path.",
@@ -110,6 +116,9 @@ it.layer(layerGrokTextGenerationTest)("GrokTextGeneration", (it) => {
                 request.params?.modelId === "grok-mock-alt",
             ),
           ).toBe(true);
+          expect(requests.find((request) => request.id === 9001)).toMatchObject({
+            result: { outcome: { outcome: "cancelled" } },
+          });
         }),
     );
   });

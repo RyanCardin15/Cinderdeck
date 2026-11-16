@@ -1,18 +1,21 @@
 # Codex
 
-Use your ChatGPT plan or an existing Codex CLI login to code in T3 Code.
+Use your ChatGPT plan or an existing Codex CLI login to code in Cinderdeck.
 
 ## Connect with ChatGPT
 
 Connect during onboarding or in **Settings → Providers**. For a remote machine,
-select that environment first. T3 Code handles Codex installation; sign in on
+select that environment first. Cinderdeck handles Codex installation; sign in on
 OpenAI and allow sharing of your ChatGPT plan.
 
-Manage shared usage and credits in ChatGPT through **Manage usage** in T3 Code.
+Manage shared usage and credits in ChatGPT through **Manage usage** in Cinderdeck.
 If a request uses a feature that ChatGPT sharing does not support, use another
 provider for that request.
 
-When reconnecting, choose the same account in T3 Code and on OpenAI's sign-in
+Fast and Ultrafast speeds are unavailable with this connection. To use the speed
+options your account supports, [use an existing Codex login](#use-an-existing-codex-login).
+
+When reconnecting, choose the same account in Cinderdeck and on OpenAI's sign-in
 page. Disconnecting stops running threads but keeps their history and lets you
 reconnect later.
 
@@ -21,15 +24,48 @@ localhost page into the sign-in panel, even if that page could not load.
 
 ## Use an existing Codex login
 
-T3 Code can use your installed Codex and its existing login. Run `codex login`
+Cinderdeck can use your installed Codex and its existing login. Run `codex login`
 on the environment's machine to sign in. [Provider setup](./install.md#providers)
 covers installation and custom configuration.
+
+Running `codex login` does not change a managed ChatGPT connection. In
+**Settings > Providers**, add a Codex instance, choose **Configure manually**,
+and complete the wizard. Then select that instance from the thread's model
+picker. See [Use multiple accounts](#use-multiple-accounts).
+
+## Allow more time for provider checks
+
+If an authenticated Codex installation reports “Timed out while checking Codex
+app-server provider status,” set `T3CODE_CODEX_PROBE_TIMEOUT_MS=60000` in the
+Cinderdeck server's environment and restart it. See [Provider check timeouts](./install.md#provider-check-timeouts)
+for configuration and other providers.
+
+## Generate images
+
+Codex can generate images directly in a Cinderdeck thread when your Codex version,
+model, and account support native image generation.
+
+If Codex reports that its image tool is unavailable, image generation may be
+disabled in its configuration. In **Settings → Providers**, edit your existing
+Codex provider and add this to **Launch arguments**, keeping any other arguments:
+
+```text
+-c features.image_generation=true
+```
+
+This enables the feature for that Cinderdeck provider without changing your shared
+Codex configuration. You do not need another provider instance or a separate image
+API key. The flag does not add image support to an unsupported model or account.
+
+Launch arguments apply to Codex sessions started after you save them. Start a new
+thread with the same Codex provider and ask it to generate an image. The completed
+image appears in the thread.
 
 ## Use multiple accounts
 
 Add another ChatGPT account in **Settings → Providers**, then select the account
 from the thread's model picker. Compatible accounts can continue the same thread.
-Connecting accounts through T3 Code leaves your CLI login unchanged.
+Connecting accounts through Cinderdeck leaves your CLI login unchanged.
 
 ### Multiple CLI logins
 
@@ -52,7 +88,7 @@ Then add a second Codex instance in **Settings > Providers**:
 | Codex Work     | `~/.codex`      | Leave empty         |
 | Codex Personal | `~/.codex`      | `~/.codex_personal` |
 
-Both instances must use the same **CODEX_HOME path**. T3 Code prepares the shared
+Both instances must use the same **CODEX_HOME path**. Cinderdeck prepares the shared
 state in the shadow directory; do not populate it by copying your whole Codex
 home.
 
@@ -66,7 +102,7 @@ from the other home.
 
 ## Switch accounts in an existing thread
 
-Choose the other account from the thread's model picker. T3 Code offers compatible
+Choose the other account from the thread's model picker. Cinderdeck offers compatible
 Codex instances that share the thread's **CODEX_HOME path**. Changing accounts does
 not move the conversation into a separate Codex home.
 
@@ -91,6 +127,15 @@ Codex tools can request access to another app. Respond to the named app's reques
 in the thread on web, desktop, or mobile. Some tools offer access for one request,
 the current session, or permanently. See [Permission modes](./permission-modes.md)
 for command and file approvals.
+
+## Use Daybreak
+
+Models with cyber access programs show a Cyber Access option in the model
+options. It starts on Standard, or on Daybreak when `config.toml` in your Codex
+home sets `daybreak = true` or the model only runs under Daybreak. Your choice carries
+over to new threads. Custom models do not offer it. If Codex rejects a turn
+because your login lacks the program, switch Cyber Access back to Standard or
+sign in to Codex with an account that has it.
 
 ## Codex says I hit a usage limit
 

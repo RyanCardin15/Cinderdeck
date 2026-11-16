@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Check the owned product boundaries and local workspace dependency graph."""
 import json
+import re
 from pathlib import Path
 import sys
 import subprocess
@@ -69,6 +70,13 @@ fixture_imports = {
 server_compiler_paths = json.loads((RUNTIME / "apps/server/tsconfig.json").read_text())["compilerOptions"].get("paths", {})
 if server_compiler_paths != fixture_imports:
     errors.append("Provider fixture imports must retain their exact owned source bindings.")
+vite_fixture_imports = dict(re.findall(
+    r'"(@t3tools/[^"]+)":\s*NodeURL\.fileURLToPath\(\s*new URL\("([^"]+)",\s*import\.meta\.url\),?\s*\)',
+    (RUNTIME / "vite.config.ts").read_text(),
+))
+expected_vite_imports = {name: paths[0].replace("../../", "./", 1) for name, paths in fixture_imports.items()}
+if vite_fixture_imports != expected_vite_imports:
+    errors.append("Vite provider fixture aliases must retain their exact owned source bindings.")
 
 for license_path in (ROOT / "LICENSE", RUNTIME / "LICENSE", ROOT / "NOTICE"):
     if not license_path.is_file():

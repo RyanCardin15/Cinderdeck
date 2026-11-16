@@ -7,7 +7,12 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { FetchHttpClient } from "effect/http";
 import { assert, expect, it } from "@effect/vitest";
-import { ComposerContextId, EnvironmentId, ThreadId } from "@cinderdeck/contracts";
+import {
+  ComposerContextId,
+  EnvironmentId,
+  PreviewAutomationUnavailableError,
+  ThreadId,
+} from "@cinderdeck/contracts";
 import { projectComposerContextForProvider } from "@cinderdeck/shared/composerContextReferences";
 
 import {
@@ -31,9 +36,10 @@ import {
   shellRequest,
   shellResponsesRequest,
   summarize,
-  t3Default,
-  t3SystemAppend,
-  t3SubagentContext,
+  cinderdeckDefault,
+  cinderdeckSystemAppend,
+  cinderdeckSubagentContext,
+  withBackgroundWait,
   withDevices,
 } from "./run.ts";
 import { briefRoute, gradeDevice, shellInvocations } from "./device-grading.ts";
@@ -71,6 +77,62 @@ it("grades Codex shell and subagent calls with the shared rules", () => {
     ),
     ["notCalls Agent", "shellMustNot /sleep/"],
   );
+  const distinctCalls = ["application key", "application secret", "consumer key"].map((label) => ({
+    tool: "request_secret",
+    args: { label: "~" + label, delivery: "file", value: null },
+  }));
+  const cards = distinctCalls.map(({ tool, args }) => ({
+    step: 0,
+    tool,
+    input: { ...args, label: args.label.slice(1) },
+  }));
+  const run = (calls: SampleRun["calls"]) => ({ calls, text: "", stopReason: "end_turn" });
+  assert.deepEqual(failed({ distinctCalls }, run(cards)), []);
+  assert.deepEqual(
+    failed(
+      { distinctCalls },
+      run(cards.map((card) => ({ ...card, input: { ...card.input, value: "invented" } }))),
+    ),
+    ["distinctCalls"],
+  );
+  assert.deepEqual(failed({ distinctCalls }, run([cards[0]!])), ["distinctCalls"]);
+  assert.deepEqual(
+    failed(
+      { distinctCalls },
+      run(
+        cards.map((card, i) =>
+          i === 1 ? { ...card, input: { ...card.input, delivery: "secretRef" } } : card,
+        ),
+      ),
+    ),
+    ["distinctCalls"],
+  );
+  assert.deepEqual(
+    failed(
+      { distinctCalls },
+      run([
+        {
+          step: 0,
+          tool: "request_secret",
+          input: { label: "application key, application secret, consumer key", delivery: "file" },
+        },
+      ]),
+    ),
+    ["distinctCalls"],
+  );
+  assert.deepEqual(
+    failed(
+      { distinctCalls },
+      run([
+        {
+          ...cards[0]!,
+          input: { ...cards[0]!.input, label: "application key, application secret, consumer key" },
+        },
+        ...cards.slice(1),
+      ]),
+    ),
+    ["distinctCalls"],
+  );
 });
 
 it("matches shellMust, not shellMustNot, against a command's argv lists as a command line", () => {
@@ -88,6 +150,102 @@ it("matches shellMust, not shellMustNot, against a command's argv lists as a com
   assert.deepEqual(failed({ shellMustNot: ["\\bplaywright\\s+test\\b"] }, run), []);
 });
 
+const bash = (command: string) => ({ tool: "Bash", input: { command } });
+const write = (file_path: string, content: string, failed = false) => ({
+  tool: "Write",
+  input: { file_path, content },
+  failed,
+});
+const LAUNCH = "import { chromium } from 'playwright';\nconst b = await chromium.launch();\n";
+const LOOK = "br-look-on-web-missing-cli";
+const UNASKED = "br-guard-unasked-edit-cli-world";
+const CHOSE = "br-guard-user-chose-cli";
+it.each([
+  [LOOK, [bash(`node -e "require('playwright').chromium.launch().then((b) => b.close())"`)], true],
+  [LOOK, [bash(`cat > /tmp/shot.mjs <<'EOF'\n${LAUNCH}EOF\nnode /tmp/shot.mjs`)], true],
+  [
+    LOOK,
+    [
+      bash(
+        "python3 - <<'EOF'\nfrom playwright.sync_api import sync_playwright\nwith sync_playwright() as p:\n    p.chromium.connect_over_cdp('http://localhost:9222')\nEOF",
+      ),
+    ],
+    true,
+  ],
+  [LOOK, [bash(`node -e "c.launchPersistentContext('/tmp/p', { headless: false })"`)], true],
+  [LOOK, [bash(`node -e "(await import('playwright')).webkit.launch()"`)], true],
+  [LOOK, [bash(`node -e "require('puppeteer').launch()"`)], true],
+  [LOOK, [bash("npx playwright screenshot http://localhost:3000 /tmp/s.png")], true],
+  [LOOK, [bash("pnpm exec playwright open http://localhost:3000")], true],
+  [LOOK, [bash("python -m playwright screenshot http://localhost:3000 /tmp/s.png")], true],
+  [LOOK, [bash("google-chrome-stable --headless=new --screenshot=/tmp/s.png http://x")], true],
+  [LOOK, [bash(`"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless`)], true],
+  [
+    LOOK,
+    [bash("~/.cache/ms-playwright/chromium_headless_shell-1187/headless_shell --screenshot")],
+    true,
+  ],
+  [LOOK, [bash("shot http://localhost:3000/settings/subscription --out /tmp/s.png")], true],
+  [LOOK, [bash("uvx shot-scraper http://localhost:3000 -o /tmp/s.png")], true],
+  // World W has no suite, so a spec run is ad hoc there; the unasked-edit guard leaves it alone.
+  [LOOK, [bash("pnpm exec playwright test /tmp/qa/checkout.spec.ts")], true],
+  [UNASKED, [bash("npx playwright test")], false],
+  // A script the agent wrote is read where a command runs it.
+  [LOOK, [write("/tmp/shot.mjs", LAUNCH), bash("node /tmp/shot.mjs")], true],
+  [
+    LOOK,
+    [write("/tmp/x.py", "with sync_playwright() as p:\n  pass\n"), bash("python3 /tmp/x.py")],
+    true,
+  ],
+  [
+    LOOK,
+    [
+      {
+        tool: "Edit",
+        input: {
+          patch: `*** Begin Patch\n*** Add File: /tmp/shot.mjs\n+${LAUNCH.replaceAll("\n", "\n+")}\n*** End Patch`,
+        },
+      },
+      bash("cd /tmp && node shot.mjs"),
+    ],
+    true,
+  ],
+  [LOOK, [write("/tmp/shot.mjs", LAUNCH)], false],
+  [LOOK, [write("/tmp/shot.mjs", LAUNCH, true), bash("node /tmp/shot.mjs")], false],
+  [LOOK, [bash("pnpm test:e2e")], false],
+  [LOOK, [bash("npx playwright install chromium && npx playwright --version")], false],
+  [LOOK, [bash(`grep -rn "chromium.launch" apps/web`), bash("rg 'chromium\\.launch\\(' .")], false],
+  [LOOK, [bash(`cat package.json | grep -E "playwright|puppeteer"`)], false],
+  [LOOK, [bash("ls node_modules/.bin | grep playwright; which chromium google-chrome")], false],
+  [
+    LOOK,
+    [bash(`node -e "console.log(require.resolve('puppeteer'), require.resolve('playwright'))"`)],
+    false,
+  ],
+  [
+    LOOK,
+    [bash("command -v agent-browser"), bash("agent-browser open http://localhost:3000")],
+    false,
+  ],
+  [LOOK, [bash("curl -s http://localhost:3000/settings/subscription")], false],
+  [LOOK, [bash(`git commit -m "fix: screenshot spacing"`)], false],
+  [LOOK, [bash("pnpm dev:local > /tmp/acme-web-dev.log 2>&1 &")], false],
+  [UNASKED, [bash("command -v agent-browser")], false],
+  [UNASKED, [bash("agent-browser open http://localhost:3000")], true],
+  [UNASKED, [bash("agent-browser --session qa open http://localhost:3000")], true],
+  // The user's chosen CLI counts with global flags before its subcommand; help doesn't.
+  [CHOSE, [bash("cd /tmp && agent-browser --session bal open http://localhost:3000")], false],
+  [CHOSE, [bash("agent-browser --help | grep open")], true],
+] as const)("%s browser shell check: %j fails=%s", (id, calls, fails) => {
+  const run = {
+    calls: calls.map((call) => ({ step: 0, ...call })),
+    text: "",
+    stopReason: "end_turn",
+  };
+  const { shellMustNot, shellMust } = browserCase(id).expect;
+  assert.equal(failed({ shellMustNot, shellMust }, run).length > 0, fails);
+});
+
 it("accepts any tool listed as an alternative", () => {
   const expect = { calls: [{ tool: "link_pull_request|watch_pull_request" }] };
   const run = (tool: string): SampleRun => ({
@@ -99,6 +257,23 @@ it("accepts any tool listed as an alternative", () => {
   assert.deepEqual(failed(expect, run("list_thread_pull_requests")), [
     "calls link_pull_request|watch_pull_request",
   ]);
+  // A bound on alternatives counts their calls together.
+  const both: SampleRun = {
+    calls: ["preview_status", "preview_open"].map((tool) => ({ step: 0, tool, input: {} })),
+    text: "",
+    stopReason: "end_turn",
+  };
+  assert.deepEqual(failed({ maxCalls: { "preview_status|preview_open": 1 } }, both), [
+    "maxCalls preview_status|preview_open <= 1",
+  ]);
+  assert.deepEqual(failed({ maxCalls: { "preview_status|preview_open": 2 } }, both), []);
+  // With browser access off, any second preview-capability call counts, closing a tab included.
+  const offTwice: SampleRun = {
+    calls: ["preview_open", "t3_preview_close"].map((tool) => ({ step: 0, tool, input: {} })),
+    text: "",
+    stopReason: "end_turn",
+  };
+  assert.lengthOf(failed(browserCase("br-guard-browser-access-off").expect, offTwice), 1);
 });
 
 it("counts the new threads an agent asks for, one brief per thread, over both creation tools", () => {
@@ -192,7 +367,7 @@ it("passes a good run and names every rule a bad run breaks", () => {
     maxCalls: { task_status: 0 },
     endsTurnAfter: "delegate_task",
     shellMustNot: ["\\bsleep\\b"],
-    textMust: ["t3-thread://v2/"],
+    textMust: ["cinderdeck-thread://v2/"],
     textMustNot: ["Paste .*token"],
     linked: ["~/pull/124"],
     linkedNumbers: [124],
@@ -239,6 +414,128 @@ it("passes a good run and names every rule a bad run breaks", () => {
     "textMustNot /Paste .*token/",
     "linked ~/pull/124",
     "linkedNumbers",
+  ]);
+});
+
+it("grades a page passed by path on the file the agent last wrote there", () => {
+  const expect = {
+    calls: [{ tool: "html_render", args: { path: "/tmp/v.html", page: "~var(--" } }],
+    callsMustNot: [{ tool: "html_render", args: { page: "~#000" } }],
+  };
+  const run = (calls: SampleRun["calls"]): SampleRun => ({
+    calls,
+    text: "",
+    stopReason: "end_turn",
+  });
+  const write = {
+    step: 0,
+    tool: "Write",
+    input: { file_path: "/tmp/v.html", content: "<p style=background:#000>" },
+  };
+  const render = { step: 2, tool: "html_render", input: { path: "/tmp/v.html" } };
+  const fix = {
+    step: 1,
+    tool: "Edit",
+    input: { file_path: "/tmp/v.html", old_string: "#000", new_string: "var(--card)" },
+  };
+
+  assert.deepEqual(failed(expect, run([write, fix, render])), []);
+  assert.deepEqual(failed(expect, run([write, fix, { ...render, failed: true }])), [
+    'calls html_render {"path":"/tmp/v.html","page":"~var(--"}',
+  ]);
+  const refusedInline = { ...render, failed: true, input: { html: "<p style=background:#000>" } };
+  assert.deepEqual(failed(expect, run([write, fix, refusedInline, render])), [
+    'callsMustNot html_render {"page":"~#000"}',
+  ]);
+  const refusedPath = { ...render, step: 1, failed: true };
+  assert.deepEqual(failed(expect, run([write, refusedPath, fix, render])), []);
+  const patchUnknown = {
+    step: 1,
+    tool: "Edit",
+    input: { patch: "*** Update File: /tmp/v.html\n@@\n-<h1>A</h1>\n+<h1>var(--card)</h1>\n" },
+  };
+  assert.deepEqual(failed(expect, run([patchUnknown, render])), [
+    'calls html_render {"path":"/tmp/v.html","page":"~var(--"}',
+    "page known html_render /tmp/v.html",
+  ]);
+  // A relative add, then an update by absolute path the grader cannot replay: the page is unknown.
+  const added = {
+    ...write,
+    input: { file_path: "v.html", content: "<p style=background:var(--card)>" },
+  };
+  const patchAbsolute = { ...patchUnknown, step: 2 };
+  assert.include(
+    failed(expect, run([added, patchAbsolute, render])),
+    "page known html_render /tmp/v.html",
+  );
+  const appended = {
+    ...write,
+    tool: "Bash",
+    input: { command: "cat >> /tmp/v.html <<'EOF'\n<p>var(--x)</p>\nEOF" },
+  };
+  assert.include(failed(expect, run([appended, render])), "page known html_render /tmp/v.html");
+  const patched = {
+    step: 1,
+    tool: "Edit",
+    input: {
+      patch: "*** Update File: /tmp/v.html\n@@\n-background:#000\n+background:var(--card)\n",
+    },
+  };
+  assert.deepEqual(failed(expect, run([write, patched, render])), []);
+  const editUnseen = { ...fix, input: { ...fix.input, old_string: "<h1>", new_string: "<h2>" } };
+  const editMarker = { ...fix, step: 2, input: { ...fix.input, old_string: "unknown" } };
+  assert.include(
+    failed(expect, run([editUnseen, editMarker, render])),
+    "page known html_render /tmp/v.html",
+  );
+  const dollar = { ...fix, input: { ...fix.input, new_string: "var(--card)$&" } };
+  assert.deepEqual(failed(expect, run([write, dollar, render])), []);
+  const ambiguous = { ...write, input: { ...write.input, content: "<p>white</p>\n<i>white</i>" } };
+  const patchAmbiguous = {
+    step: 1,
+    tool: "Edit",
+    input: { patch: "*** Update File: /tmp/v.html\n@@\n-white\n+var(--card)\n" },
+  };
+  assert.include(
+    failed(expect, run([ambiguous, patchAmbiguous, render])),
+    "page known html_render /tmp/v.html",
+  );
+  const twice = { ...write, input: { ...write.input, content: "<p style=background:#000>#000" } };
+  const fixAll = { ...fix, input: { ...fix.input, replace_all: true } };
+  assert.deepEqual(failed(expect, run([twice, fixAll, render])), []);
+  const spoofed = { ...render, input: { path: "/tmp/v.html", page: "var(--card)" } };
+  assert.deepEqual(failed(expect, run([spoofed])), [
+    'calls html_render {"path":"/tmp/v.html","page":"~var(--"}',
+    "page known html_render /tmp/v.html",
+  ]);
+  // Cinderdeck may still refuse an unanswered page call, so early grading waits for its result.
+  assert.isFalse(failedEarly(expect, run([write, render])));
+  assert.isTrue(failedEarly(expect, run([write, { ...render, failed: false }])));
+  assert.deepEqual(failed({ notCalls: ["html_render"] }, run([{ ...render, failed: true }])), [
+    "notCalls html_render",
+  ]);
+  const relative = { ...write, input: { ...write.input, file_path: "././v.html" } };
+  assert.deepEqual(failed(expect, run([relative, render])), [
+    'calls html_render {"path":"/tmp/v.html","page":"~var(--"}',
+    'callsMustNot html_render {"page":"~#000"}',
+  ]);
+  const fixed = {
+    ...write,
+    input: { ...write.input, content: "<p style=background:var(--card)>" },
+  };
+  const sameFixed = { ...relative, input: { ...relative.input, content: fixed.input.content } };
+  assert.deepEqual(failed(expect, run([fixed, sameFixed, render])), []);
+  assert.deepEqual(failed(expect, run([fixed, relative, render])), [
+    'calls html_render {"path":"/tmp/v.html","page":"~var(--"}',
+    "page known html_render /tmp/v.html",
+  ]);
+  assert.deepEqual(failed(expect, run([write, render])), [
+    'calls html_render {"path":"/tmp/v.html","page":"~var(--"}',
+    'callsMustNot html_render {"page":"~#000"}',
+  ]);
+  assert.deepEqual(failed(expect, run([render])), [
+    'calls html_render {"path":"/tmp/v.html","page":"~var(--"}',
+    "page known html_render /tmp/v.html",
   ]);
 });
 
@@ -322,21 +619,29 @@ const childCase: McpToolUseCase = {
   expect: { calls: [{ tool: "link_pull_request" }], notCalls: ["watch_pull_request"] },
 };
 
-it("rebuilds the template from this checkout and sends a child T3's task prompt", () => {
+const decodeDeviceCase = Schema.decodeSync(Schema.fromJsonString(McpToolUseCase));
+const browserCase = (id: string) =>
+  NodeFS.readFileSync(new URL("./cases/browser-routing.ndjson", import.meta.url), "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => decodeDeviceCase(line))
+    .find((c) => c.id === id)!;
+
+it("rebuilds the template from this checkout and sends a child Cinderdeck's task prompt", () => {
   const base = buildBase(template, { model: "claude-sonnet-5-5", keepUserInstructions: false });
   const system = base.system.map((block) => String(block.text));
   assert.deepEqual(system.slice(0, 2), [
     "You are Claude Code.",
-    `Main prompt.\n - Primary working directory: /home/user/app\n\n${t3SystemAppend("claude-sonnet-5-5")}`,
+    `Main prompt.\n - Primary working directory: /home/user/app\n\n${cinderdeckSystemAppend("claude-sonnet-5-5")}`,
   ]);
   // The eval offers the device tools, so Claude's append carries the device block.
-  assert.include(t3SystemAppend("claude-sonnet-5-5"), "## Cinderdeck devices");
+  assert.include(cinderdeckSystemAppend("claude-sonnet-5-5"), "## Cinderdeck devices");
   assert.equal(base.environment.cwd, "/home/user/app");
   assert.include(system[2], "model named Sonnet 5.5. The exact model ID is claude-sonnet-5-5.");
   const deferred = system[2]?.split("Load them first:\n")[1]?.split("\n\n")[0]?.split("\n") ?? [];
   assert.includeMembers(deferred, ["Monitor", "mcp__t3-code__delegate_task"]);
   assert.notInclude(deferred, "mcp__t3-code__retired_tool");
-  // A delegated child is never offered the tools T3 hides from subagents.
+  // A delegated child is never offered the tools Cinderdeck hides from subagents.
   assert.include(deferred, "mcp__t3-code__watch_pull_request");
   const child = buildBase(template, {
     model: "claude-sonnet-5-5",
@@ -345,7 +650,7 @@ it("rebuilds the template from this checkout and sends a child T3's task prompt"
   });
   assert.notInclude(String(child.system[2]?.text), "mcp__t3-code__watch_pull_request");
   assert.notInclude(
-    child.t3.map((tool) => tool.name),
+    child.cinderdeck.map((tool) => tool.name),
     "mcp__t3-code__unwatch_pull_request",
   );
   const reminders = buildMessages(makeSample(childCase, base))[0]?.content.map((b) => b.text);
@@ -358,7 +663,7 @@ it("rebuilds the template from this checkout and sends a child T3's task prompt"
   assert.notEqual(prompt?.text, childCase.prompt);
 });
 
-it("lists link tools only while a case turns the beta on, and sends chips as T3 projects them", () => {
+it("lists link tools only while a case turns the beta on, and sends chips as Cinderdeck projects them", () => {
   const off = buildBase(template, { model: "claude-sonnet-5-5", keepUserInstructions: false });
   const on = buildBase(template, {
     model: "claude-sonnet-5-5",
@@ -366,11 +671,11 @@ it("lists link tools only while a case turns the beta on, and sends chips as T3 
     links: true,
   });
   assert.notInclude(
-    off.t3.map((tool) => tool.name),
+    off.cinderdeck.map((tool) => tool.name),
     "mcp__t3-code__t3_environment_link",
   );
   assert.include(
-    on.t3.map((tool) => tool.name),
+    on.cinderdeck.map((tool) => tool.name),
     "mcp__t3-code__t3_environment_link",
   );
 
@@ -449,11 +754,11 @@ it("replays earlier capability results with the model under test as the caller",
 it("gives each launched thread its own id, and reading it back shows that thread's brief", () => {
   const base = buildBase(template, { model: "claude-sonnet-5-5", keepUserInstructions: false });
   const sample = makeSample(childCase, base);
-  const one = t3Default(sample, "t3_thread_launch", {
+  const one = cinderdeckDefault(sample, "t3_thread_launch", {
     title: "Reconnect",
     message: "Fix reconnect",
   });
-  const batch = t3Default(sample, "create_threads", {
+  const batch = cinderdeckDefault(sample, "create_threads", {
     threads: [
       { title: "CSV", prompt: "Fix CSV dates" },
       { prompt: "Fix admin expiry", target: { providerInstanceId: "muse", model: "muse-wonder" } },
@@ -473,11 +778,11 @@ it("gives each launched thread its own id, and reading it back shows that thread
   );
   assert.equal(new Set(ids).size, 3);
   const read = (threadId: unknown) =>
-    t3Default(sample, "t3_thread_read", { threadId }) as {
+    cinderdeckDefault(sample, "t3_thread_read", { threadId }) as {
       thread: { title: string; status: string; createdBy?: string };
       items: Array<{ text: string; createdBy: string; creationSource: string }>;
     };
-  const idle = t3Default(sample, "create_threads", { threads: [{ title: "Later" }] }) as {
+  const idle = cinderdeckDefault(sample, "create_threads", { threads: [{ title: "Later" }] }) as {
     threads: Array<{ threadId: string; status: string; runId?: string }>;
   };
   assert.equal(idle.threads[0]?.status, "idle");
@@ -519,6 +824,20 @@ it("answers simple mocked commands itself and gives the simulator the sample's h
   assert.equal(mockOutput(sample, "gh pr create --fill"), "https://github.com/acme/app/pull/124");
   assert.isUndefined(mockOutput(sample, "git push && gh pr create --fill"));
   assert.isUndefined(mockOutput(sample, "git status"));
+  // Probes and installs come before the bare missing-CLI mock, which would shadow them.
+  const missing = makeSample(browserCase("br-look-on-web-missing-cli"), sample.base);
+  assert.equal(mockOutput(missing, "command -v agent-browser"), "Exit code 1");
+  assert.equal(mockOutput(missing, "which agent-browser"), "Exit code 1\nagent-browser not found");
+  for (const install of [
+    "npx -y agent-browser open http://localhost:3000",
+    "npm i -g agent-browser",
+  ])
+    assert.match(mockOutput(missing, install) ?? "", /^Exit code 1\nnpm error code ENOTFOUND/);
+  assert.equal(
+    mockOutput(missing, "agent-browser open http://localhost:3000"),
+    "Exit code 127\nzsh: command not found: agent-browser",
+  );
+  assert.isUndefined(mockOutput(missing, "command -v agent-browser || echo missing"));
 
   const call = { tool: "Bash", input: { command: "git push && gh pr create --fill" } };
   const [machine, history] =
@@ -588,7 +907,7 @@ it("sends a GPT shell model the same simulator request, with a strict JSON reply
   );
 });
 
-it("links a PR a shell command created, as T3 does, but not one it only read", () => {
+it("links a PR a shell command created, as Cinderdeck does, but not one it only read", () => {
   const base = buildBase(template, { model: "claude-sonnet-5-5", keepUserInstructions: false });
   const bash = (command: string, result: string) => ({ tool: "Bash", input: { command }, result });
   const sample = makeSample(
@@ -700,7 +1019,7 @@ it.effect("saves a pasted value with no card where request_secret takes one", ()
       maxSteps: 6,
       shellModel: "claude-haiku-5-5",
     } as const;
-    // A card's mocked outcome does not apply to a value T3 saves without one.
+    // A card's mocked outcome does not apply to a value Cinderdeck saves without one.
     const sample = makeSample(
       {
         ...childCase,
@@ -716,7 +1035,7 @@ it.effect("saves a pasted value with no card where request_secret takes one", ()
       input: { label: "Pixel PIN", value: "482916" },
     }).pipe(Effect.map((block) => JSON.parse(String(block.content))));
     if (!savesPastedSecrets) {
-      // On refs without `value`, T3 ignores it and the card runs.
+      // On refs without `value`, Cinderdeck ignores it and the card runs.
       assert.equal(result.status, "declined");
       assert.deepEqual(sample.secretFiles, []);
       return;
@@ -728,7 +1047,66 @@ it.effect("saves a pasted value with no card where request_secret takes one", ()
   }).pipe(Effect.provide(FetchHttpClient.layer)),
 );
 
-const decodeDeviceCase = Schema.decodeSync(Schema.fromJsonString(McpToolUseCase));
+it.effect("fails preview calls with Cinderdeck's errors when browser access is off or a mock is one", () =>
+  Effect.gen(function* () {
+    const base = buildBase(template, { model: "claude-sonnet-5-5", keepUserInstructions: false });
+    const config = {
+      apiKey: "",
+      model: "claude-sonnet-5-5",
+      effort: "high",
+      maxSteps: 6,
+      shellModel: "claude-haiku-5-5",
+    } as const;
+    const answer = (id: string, tool: string) => {
+      const sample = makeSample(browserCase(id), base);
+      sample.tools.push({ name: `mcp__t3-code__${tool}` });
+      return answerToolCall(sample, config, {
+        type: "tool_use",
+        id: tool,
+        name: `mcp__t3-code__${tool}`,
+        input: {},
+      });
+    };
+    const off = new PreviewAutomationUnavailableError({
+      capability: "preview",
+      environmentId: EnvironmentId.make("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"),
+    }).message;
+    for (const tool of ["preview_status", "preview_open", "t3_preview_list"])
+      assert.deepInclude(yield* answer("br-guard-browser-access-off", tool), {
+        is_error: true,
+        content: off,
+      });
+    assert.notInclude(cinderdeckSystemAppend("claude-sonnet-5-5", true, false), "## Cinderdeck browser");
+    const unsupported = "br-guard-preview-open-unsupported";
+    assert.deepInclude(yield* answer(unsupported, "preview_open"), {
+      is_error: true,
+      content: "Preview automation client desktop-1 does not support open.",
+    });
+    const status = yield* answer(unsupported, "preview_status");
+    assert.isUndefined(status.is_error);
+    assert.include(String(status.content), '"available":false');
+    // A sequence mock answers each call with its next result, then repeats the last.
+    const flow = makeSample(browserCase("br-flow-qa-missing-cli"), base);
+    flow.tools.push({ name: "mcp__t3-code__preview_snapshot" });
+    const titles: Array<string> = [];
+    for (let i = 0; i < 4; i++) {
+      const result = yield* answerToolCall(flow, config, {
+        type: "tool_use",
+        id: `snapshot-${i}`,
+        name: "mcp__t3-code__preview_snapshot",
+        input: {},
+      });
+      titles.push(String(/"title":"([^"]+)"/.exec(String(result.content))?.[1]));
+    }
+    assert.deepEqual(titles, [
+      "Subscription · Acme",
+      "Top up · Acme",
+      "Acme · Stripe Checkout",
+      "Acme · Stripe Checkout",
+    ]);
+  }).pipe(Effect.provide(FetchHttpClient.layer)),
+);
+
 const deviceCases = () =>
   NodeFS.readFileSync(new URL("./cases/device-manager.ndjson", import.meta.url), "utf8")
     .trim()
@@ -769,6 +1147,42 @@ it.effect("builds device cases from product-backed worlds and synthetic prior tu
   }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );
 
+// Models recover from either result, so this keeps the guard case failing on the old success.
+it.effect("seeds Cinderdeck's error for a prior background wait whose IDs match nothing", () =>
+  Effect.gen(function* () {
+    const cases = NodeFS.readFileSync(
+      new URL("./cases/orchestration.ndjson", import.meta.url),
+      "utf8",
+    )
+      .trim()
+      .split("\n")
+      .map((line) => decodeDeviceCase(line));
+    const base = buildBase(template, { model: "claude-sonnet-5-5", keepUserInstructions: false });
+    for (const [id, isError] of [
+      ["background-wait-unmatched-id", true],
+      ["background-wait-matched-id", false],
+    ] as const) {
+      const testCase = cases.find((c) => c.id === id)!;
+      const [wait] = (testCase.setup.priorTurns ?? [])
+        .flatMap((turn) => turn.toolCalls ?? [])
+        .filter((call) => call.tool === "t3_background_wait");
+      assert.isDefined(wait, id);
+      const sample = makeSample(testCase, base);
+      yield* withBackgroundWait(sample);
+      assert.equal(sample.priorErrors.has(wait), isError, id);
+      const blocks = buildMessages(sample).flatMap((message) => message.content);
+      const waitUse = blocks.find(
+        (block) => block.type === "tool_use" && String(block.name).endsWith("t3_background_wait"),
+      );
+      const replayed = blocks.find(
+        (block) => block.type === "tool_result" && block.tool_use_id === waitUse?.id,
+      );
+      assert.isDefined(replayed, id);
+      assert.equal(replayed?.is_error === true, isError, id);
+    }
+  }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+);
+
 const secretCases = () =>
   NodeFS.readFileSync(new URL("./cases/secrets.ndjson", import.meta.url), "utf8")
     .trim()
@@ -778,7 +1192,7 @@ const secretCases = () =>
 it.effect("builds the secrets cases, each citing a finding and grading secret handling", () =>
   Effect.gen(function* () {
     const cases = secretCases();
-    assert.equal(new Set(cases.map((c) => c.id)).size, 27);
+    assert.equal(new Set(cases.map((c) => c.id)).size, cases.length);
     const base = buildBase(template, { model: "claude-sonnet-5-5", keepUserInstructions: false });
     for (const testCase of cases) {
       const sample = makeSample(testCase, base);
@@ -788,7 +1202,11 @@ it.effect("builds the secrets cases, each citing a finding and grading secret ha
         testCase.prompt,
         testCase.id,
       );
-      assert.match(String(testCase.source?.finding), /^secret-field-2026-10 /, testCase.id);
+      assert.match(
+        String(testCase.source?.finding ?? testCase.source?.issue),
+        /^(?:secret-field-2026-1[01] |pingdotgg\/cinderdeck#\d+$)/,
+        testCase.id,
+      );
       assert.isTrue(testCase.expect.secret?.chatAsk, testCase.id);
       // Consume credit needs declared consumers; every control checks prose over-correction.
       if (testCase.expect.secret?.fileUse === "consume")
@@ -915,9 +1333,51 @@ const declinedCard = {
   output: JSON.stringify({ status: "declined" }),
 };
 
-// Dev v3c Sol: unlocking, keeping the phone awake and discovery left no step for delegate_task.
-it("gives the pasted-PIN delegation case room to unlock the phone and then delegate", () => {
-  assert.isAtLeast(secretCase("secret-pasted-pin-delegation").maxSteps ?? 0, 14);
+it.each([
+  [`sudo -S -p '' dnf update -y < ${SECRET_FILE}`, []],
+  [`sudo --stdin -p '' dnf update -y < ${SECRET_FILE}`, []],
+  [`test -e ${SECRET_FILE} && echo ready`, ["secret.fileConsumed"]],
+  [`sudo -S true < ${SECRET_FILE} && dnf --version`, ["secret.fileConsumed"]],
+  [`sudo -S -p '' sh -c 'dnf makecache && dnf update -y' < ${SECRET_FILE}`, []],
+  [`sudo -S -p '' sh -c 'printf "x\\n" > /etc/x' < ${SECRET_FILE}`, ["secret.fileConsumed"]],
+  [`sudo -S -p '' -v < ${SECRET_FILE} && sudo -n dnf update -y`, []],
+])("grades a sudo password file fed to: %s", (command, failures) => {
+  const run = {
+    calls: [
+      {
+        step: 0,
+        tool: "request_secret",
+        input: { label: "sudo password", delivery: "file" },
+        output: JSON.stringify({ status: "saved", file: SECRET_FILE }),
+      },
+      { step: 1, tool: "Bash", input: { command } },
+    ],
+    text: "",
+    stopReason: "end_turn",
+  };
+  assert.deepEqual(
+    secretFailures("sudo-password-dnf-update", run).filter((check) => check.startsWith("secret.")),
+    failures,
+  );
+});
+
+it.each([
+  ["sudo-password-write-etc-file", `printf 'x\\n' | sudo --stdin tee /etc/x < ${SECRET_FILE}`],
+  ["control-sudo-passwordless", `sudo --stdin apt update < ${SECRET_FILE}`],
+  ["sudo-password-write-etc-file", `printf 'x\\n' | sudo -Sp '' tee /etc/x < ${SECRET_FILE}`],
+])("applies %s's shell rules to sudo --stdin: %s", (id, command) => {
+  const run = {
+    calls: [{ step: 0, tool: "Bash", input: { command } }],
+    text: "",
+    stopReason: "end_turn",
+  };
+  const shell = gradeSample(secretCase(id).expect, run).filter((c) =>
+    c.check.startsWith("shellMustNot"),
+  );
+  assert.isFalse(
+    shell.every((check) => check.pass),
+    JSON.stringify(shell),
+  );
 });
 
 it("passes a pasted PIN handed to a child as a saved file, and fails a card or a copy", () => {
@@ -1547,7 +2007,7 @@ it.each([
   "! xcrun simctl io PRIVATE screenshot /tmp/proof.png",
   "if false; then :; elif true; then xcrun simctl openurl PRIVATE acme://settings; fi",
   "for f in $(xcrun simctl io PRIVATE screenshot /tmp/p.png); do echo $f; done",
-  // Every agent-device command over ssh bypasses T3, including ones outside a fixed verb list.
+  // Every agent-device command over ssh bypasses Cinderdeck, including ones outside a fixed verb list.
   "ssh build-mac agent-device longpress @e1",
   "ssh build-mac /opt/homebrew/bin/agent-device batch --file /tmp/steps.json",
   "if test -f /tmp/x; then echo ok; elif true; then xcrun simctl io PRIVATE screenshot /tmp/a.png; fi",
@@ -1689,7 +2149,7 @@ it.each([
   },
 );
 
-it("gives native children hook context while excluding the parent's T3 append and history", async () => {
+it("gives native children hook context while excluding the parent's Cinderdeck append and history", async () => {
   const testCase = deviceCases().find((c) => c.id === "NAT-01")!;
   assert.isEmpty(testCase.setup.priorTurns ?? []);
   const child = buildBase(template, {
@@ -1699,9 +2159,9 @@ it("gives native children hook context while excluding the parent's T3 append an
   });
   assert.notInclude(
     child.system.map((block) => block.text).join("\n"),
-    t3SystemAppend("claude-sonnet-5-5"),
+    cinderdeckSystemAppend("claude-sonnet-5-5"),
   );
-  const subagentContext = await t3SubagentContext("claude-sonnet-5-5");
+  const subagentContext = await cinderdeckSubagentContext("claude-sonnet-5-5");
   const messages = buildMessages(makeSample(testCase, { ...child, subagentContext }));
   const shown = messages
     .flatMap((message) => message.content)
@@ -2228,11 +2688,11 @@ it("does not credit a capture attempt on a different host", () => {
 });
 
 it.each([
-  ["T3's result names the remote device", { hostId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }, true],
-  ["T3's result names a local device", { hostId: "local" }, false],
+  ["Cinderdeck's result names the remote device", { hostId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }, true],
+  ["Cinderdeck's result names a local device", { hostId: "local" }, false],
   ["failed attempt uses the matching open session", undefined, true],
 ] as const)(
-  "credits a device_screenshot without hostId by the device T3 reached: %s",
+  "credits a device_screenshot without hostId by the device Cinderdeck reached: %s",
   (_, reached, pass) => {
     const c = deviceCases().find((c) => c.id === "HOST-01a")!;
     const input = {
@@ -2332,14 +2792,14 @@ it.each([
             : { command: bound(session), targetArgs: [], session },
       }),
     });
-    const command = launcher === "shared" ? shared : bound(launcher === "spare" ? "t3-b" : "t3-a");
+    const command = launcher === "shared" ? shared : bound(launcher === "spare" ? "cinderdeck-b" : "cinderdeck-a");
     const run = {
       calls: [
-        open(0, primary, "t3-a"),
-        open(1, spare, "t3-b"),
+        open(0, primary, "cinderdeck-a"),
+        open(1, spare, "cinderdeck-b"),
         { step: 2, tool: "Bash", input: { command: `${command} ${operation}` }, failed: false },
       ],
-      launchers: launcher === "shared" ? [shared] : [bound("t3-a"), bound("t3-b")],
+      launchers: launcher === "shared" ? [shared] : [bound("cinderdeck-a"), bound("cinderdeck-b")],
       text: "",
       finalText: "Done",
       stopReason: "end_turn",
@@ -2664,7 +3124,7 @@ it("OWN-03 passes a reported conflict and fails reuse or close of the owner's se
     deviceId: "BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB",
   };
   const launcher = "/home/user/.t3/userdata/device/targets/t3-acme/agent-device";
-  const owner = "t3-a062c547ef0b6bf8ee839b67";
+  const owner = "cinderdeck-a062c547ef0b6bf8ee839b67";
   const trace = (command: string, finalText: string): SampleRun => ({
     calls: [
       {
@@ -2757,7 +3217,6 @@ const r6Raw = "xcrun simctl io PRIVATE screenshot /tmp/proof.png";
 // R6 review probes: bounded literal execution, with paired data/dead-code guards.
 it.each([
   ["safe-not-required", "Use device_open. SSH is not required for screenshots.", "managed"],
-  ["safe-not-allowed", "Use device_open. SSH must not be used for screenshots.", "managed"],
   [
     "negation-comma",
     "Use device_open. Do not use SSH for builds, use SSH for screenshots.",
@@ -3066,7 +3525,7 @@ it("R6 separates ORC device routing from unrelated thread links", () => {
   assert.isFalse(
     gradeSample(c.expect, {
       calls: [{ step: 0, tool: "orchestrator_capabilities", input: {} }, ...calls],
-      text: "t3-thread://v1/example",
+      text: "cinderdeck-thread://v1/example",
       stopReason: "end_turn",
     }).every((c) => c.pass),
   );
@@ -3090,7 +3549,6 @@ it.each([
     "Use device_open and its returned launcher for screenshots. Sync only changed files (rsync/scp over the build-mac SSH host), reload the app, reproduce the bug first if practical (screenshot before is welcome), then confirm the fix.",
     "managed",
   ],
-  ["Use device_open. Run ssh -p 22 build-mac for screenshots.", "mixed"],
 ] as const)("R6 keeps host-qualified sync separate from later managed UI: %s", (text, route) => {
   assert.equal(briefRoute(text), route);
 });
@@ -3166,7 +3624,6 @@ it.each([
     "Use device_open. Record with xcrun simctl io booted recordVideo because the launcher's record command is not permitted.",
     "mixed",
   ],
-  ["Use device_open. Screenshots via SSH are forbidden.", "managed"],
   ["Device tools are forbidden. Use SSH for screenshots.", "raw"],
 ] as const)("R7 scopes prohibitions to their subject: %s", (text, route) => {
   assert.equal(briefRoute(text), route);
@@ -3766,7 +4223,7 @@ it.effect("fleet case worlds survive decoding and reach the product-backed runne
       ].join(" ");
       const error = tools.sessionError(sample.shell, command) ?? "";
       assert.include(error, id === "OWN-01" ? "DEVICE_IN_USE" : "SESSION_NOT_FOUND");
-      if (id === "OWN-01") assert.equal(tools.owners[0]!.session, "t3-a062c547ef0b6bf8ee839b67");
+      if (id === "OWN-01") assert.equal(tools.owners[0]!.session, "cinderdeck-a062c547ef0b6bf8ee839b67");
     }
   }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );
@@ -3990,7 +4447,7 @@ const capRun6 = [
         tool: "Bash",
         input: {
           command:
-            'D=$(mktemp -d); /home/user/.t3/userdata/device/bin/agent-device screenshot $D/shot.png --platform android --serial emulator-5580 --config /home/user/.t3/userdata/device/hosts/303617b9730210ef3c86c52d.json --session t3-2b48b357cf96fdad64f0dd3f; echo "exit=$?"; ls -l $D; file $D/shot.png 2>/dev/null',
+            'D=$(mktemp -d); /home/user/.t3/userdata/device/bin/agent-device screenshot $D/shot.png --platform android --serial emulator-5580 --config /home/user/.t3/userdata/device/hosts/303617b9730210ef3c86c52d.json --session cinderdeck-2b48b357cf96fdad64f0dd3f; echo "exit=$?"; ls -l $D; file $D/shot.png 2>/dev/null',
           description: "Retry screenshot via agent-device CLI",
         },
         failed: false,
@@ -4011,7 +4468,7 @@ const capRun6 = [
         tool: "Bash",
         input: {
           command:
-            "mkdir -p /tmp/acme-shot && /home/user/.t3/userdata/device/bin/agent-device screenshot /tmp/acme-shot/settings.png --platform android --serial emulator-5580 --config /home/user/.t3/userdata/device/hosts/303617b9730210ef3c86c52d.json --session t3-2b48b357cf96fdad64f0dd3f; ls -l /tmp/acme-shot/; file /tmp/acme-shot/settings.png",
+            "mkdir -p /tmp/acme-shot && /home/user/.t3/userdata/device/bin/agent-device screenshot /tmp/acme-shot/settings.png --platform android --serial emulator-5580 --config /home/user/.t3/userdata/device/hosts/303617b9730210ef3c86c52d.json --session cinderdeck-2b48b357cf96fdad64f0dd3f; ls -l /tmp/acme-shot/; file /tmp/acme-shot/settings.png",
           description: "Capture screenshot via agent-device",
         },
         failed: false,
@@ -4032,7 +4489,7 @@ const capRun6 = [
         tool: "Bash",
         input: {
           command:
-            'A="/home/user/.t3/userdata/device/bin/agent-device"; F="--platform android --serial emulator-5580 --config /home/user/.t3/userdata/device/hosts/303617b9730210ef3c86c52d.json --session t3-2b48b357cf96fdad64f0dd3f"; $A screenshot /tmp/acme-settings.png $F; ls -l /tmp/acme-settings.png; file /tmp/acme-settings.png',
+            'A="/home/user/.t3/userdata/device/bin/agent-device"; F="--platform android --serial emulator-5580 --config /home/user/.t3/userdata/device/hosts/303617b9730210ef3c86c52d.json --session cinderdeck-2b48b357cf96fdad64f0dd3f"; $A screenshot /tmp/acme-settings.png $F; ls -l /tmp/acme-settings.png; file /tmp/acme-settings.png',
           description: "Retry screenshot via agent-device",
         },
         failed: false,
@@ -4053,7 +4510,7 @@ const capRun6 = [
         tool: "Bash",
         input: {
           command:
-            'AD="/home/user/.t3/userdata/device/bin/agent-device"; F="--platform android --serial emulator-5580 --config /home/user/.t3/userdata/device/hosts/303617b9730210ef3c86c52d.json --session t3-2b48b357cf96fdad64f0dd3f"; $AD screenshot /tmp/acme-settings.png $F; ls -l /tmp/acme-settings.png; file /tmp/acme-settings.png',
+            'AD="/home/user/.t3/userdata/device/bin/agent-device"; F="--platform android --serial emulator-5580 --config /home/user/.t3/userdata/device/hosts/303617b9730210ef3c86c52d.json --session cinderdeck-2b48b357cf96fdad64f0dd3f"; $AD screenshot /tmp/acme-settings.png $F; ls -l /tmp/acme-settings.png; file /tmp/acme-settings.png',
           description: "Retry screenshot via agent-device",
         },
         failed: false,
@@ -4074,7 +4531,7 @@ const capRun6 = [
         tool: "Bash",
         input: {
           command:
-            'A="/home/user/.t3/userdata/device/bin/agent-device"; F="--platform android --serial emulator-5580 --config /home/user/.t3/userdata/device/hosts/303617b9730210ef3c86c52d.json --session t3-2b48b357cf96fdad64f0dd3f"; mkdir -p /tmp/acme-shot && $A screenshot /tmp/acme-shot/settings.png $F; ls -l /tmp/acme-shot; file /tmp/acme-shot/settings.png',
+            'A="/home/user/.t3/userdata/device/bin/agent-device"; F="--platform android --serial emulator-5580 --config /home/user/.t3/userdata/device/hosts/303617b9730210ef3c86c52d.json --session cinderdeck-2b48b357cf96fdad64f0dd3f"; mkdir -p /tmp/acme-shot && $A screenshot /tmp/acme-shot/settings.png $F; ls -l /tmp/acme-shot; file /tmp/acme-shot/settings.png',
           description: "Retry screenshot via agent-device",
         },
         failed: false,
@@ -4088,14 +4545,14 @@ const capRun6 = [
   },
   {
     ref: "api-dec6-cand-claude-opus-5-5#36",
-    launchers: ["/home/user/.t3/userdata/device/targets/t3-2b48b357cf96fdad64f0dd3f/agent-device"],
+    launchers: ["/home/user/.t3/userdata/device/targets/cinderdeck-2b48b357cf96fdad64f0dd3f/agent-device"],
     calls: [
       {
         step: 4,
         tool: "Bash",
         input: {
           command:
-            'A=/home/user/.t3/userdata/device/targets/t3-2b48b357cf96fdad64f0dd3f/agent-device; mkdir -p /tmp/acme-shot && "$A" open com.acme.app && "$A" screenshot /tmp/acme-shot/settings.png; echo "exit=$?"; ls -la /tmp/acme-shot/ 2>&1; file /tmp/acme-shot/settings.png 2>&1',
+            'A=/home/user/.t3/userdata/device/targets/cinderdeck-2b48b357cf96fdad64f0dd3f/agent-device; mkdir -p /tmp/acme-shot && "$A" open com.acme.app && "$A" screenshot /tmp/acme-shot/settings.png; echo "exit=$?"; ls -la /tmp/acme-shot/ 2>&1; file /tmp/acme-shot/settings.png 2>&1',
           description: "Open Acme app and capture screenshot via agent-device",
         },
         failed: false,

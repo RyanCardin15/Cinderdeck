@@ -9,12 +9,13 @@ import {
   type OrchestrationV2TurnItem,
   type ThreadId,
 } from "@cinderdeck/contracts";
+import type { ToolCallVisibility } from "@cinderdeck/contracts/settings";
 import {
   resolveT3McpSummaryAction,
   resolveT3McpToolDefinition,
-  type T3McpToolDefinition,
-  type T3McpToolSummaryAction,
-} from "@cinderdeck/shared/t3McpToolPresentation";
+  type CinderdeckMcpToolDefinition,
+  type CinderdeckMcpToolSummaryAction,
+} from "@cinderdeck/shared/cinderdeckMcpToolPresentation";
 import { classifyMarkdownImageSource } from "@cinderdeck/client-runtime/markdown-images";
 import { resolveMediaSource } from "@cinderdeck/client-runtime/media-source";
 import { sourceControlClients } from "@cinderdeck/client-runtime/source-control-clients";
@@ -25,9 +26,9 @@ import { toolOutputIndicatesFailure } from "@cinderdeck/shared/toolOutput";
 
 import {
   summarizeT3ToolCalls,
-  t3ToolResultIndicatesFailure,
-  type T3ToolSummaryCall,
-} from "@cinderdeck/client-runtime/t3ToolSummary";
+  cinderdeckToolResultIndicatesFailure,
+  type CinderdeckToolSummaryCall,
+} from "@cinderdeck/client-runtime/cinderdeckToolSummary";
 
 export type WorkLogToolLifecycleStatus = RuntimeItemStatus | "stopped" | "idle";
 
@@ -165,7 +166,7 @@ function workEntryToolOutput(
 }
 
 function resolveT3McpToolPresentation(
-  definition: T3McpToolDefinition | null,
+  definition: CinderdeckMcpToolDefinition | null,
   status: string | undefined,
   data?: unknown,
 ) {
@@ -237,7 +238,7 @@ export function resolveWorkEntryToolPresentation(
   const status = entry.toolLifecycleStatus ?? fallbackStatus;
   return resolveT3McpToolPresentation(
     definition,
-    definition && t3ToolResultIndicatesFailure(workEntryToolOutput(entry)) ? "failed" : status,
+    definition && cinderdeckToolResultIndicatesFailure(workEntryToolOutput(entry)) ? "failed" : status,
     entry.toolData,
   );
 }
@@ -272,7 +273,7 @@ function workEntryIndicatesToolFailureFromOutput(
   if (!workLogEntryIsToolLike(entry) || entry.itemType === "reasoning") return false;
   if (
     resolveT3McpToolDefinition(workEntryToolName(entry)) &&
-    t3ToolResultIndicatesFailure(workEntryToolOutput(entry))
+    cinderdeckToolResultIndicatesFailure(workEntryToolOutput(entry))
   ) {
     return true;
   }
@@ -316,6 +317,23 @@ export function workEntryDisplayIndicatesToolFailure(entry: WorkLogPresentationE
     entry,
     false,
   ));
+}
+
+const HIDEABLE_TOOL_CALL_ITEM_TYPES: ReadonlySet<WorkLogPresentationEntry["itemType"]> = new Set([
+  "command_execution",
+  "file_change",
+  "file_search",
+  "web_search",
+  "dynamic_tool",
+]);
+
+export function workEntryHiddenByToolCallVisibility(
+  entry: WorkLogPresentationEntry,
+  visibility: ToolCallVisibility,
+): boolean {
+  if (visibility === "showAll" || !HIDEABLE_TOOL_CALL_ITEM_TYPES.has(entry.itemType)) return false;
+  if (visibility !== "hideSuccessful") return true;
+  return entry.toolLifecycleStatus === "completed" && !workEntryDisplayIndicatesToolFailure(entry);
 }
 
 function workLogEntryIsLocalCodeSearch(entry: WorkLogPresentationEntry): boolean {
@@ -394,6 +412,13 @@ export function workEntryViewedImagePath(entry: WorkLogPresentationEntry): strin
     isWorkspaceImagePreviewPath(detail)
     ? detail
     : null;
+}
+
+/** Distinct images the agent opened across a tool group, in viewing order. */
+export function workEntriesViewedImagePaths(
+  entries: ReadonlyArray<WorkLogPresentationEntry>,
+): string[] {
+  return [...new Set(entries.flatMap((entry) => workEntryViewedImagePath(entry) ?? []))];
 }
 
 export interface ViewedImageAsset {
@@ -479,7 +504,7 @@ function toolGroupActionLabel(action: ToolGroupAction, count: number): string {
   }
 }
 
-function t3ToolSummaryCall(entry: WorkLogPresentationEntry): T3ToolSummaryCall {
+function cinderdeckToolSummaryCall(entry: WorkLogPresentationEntry): CinderdeckToolSummaryCall {
   return {
     input: workEntryToolInput(entry),
     output: workEntryToolOutput(entry),
@@ -494,7 +519,7 @@ function t3ToolSummaryCall(entry: WorkLogPresentationEntry): T3ToolSummaryCall {
   };
 }
 
-function summaryActionPriority(action: ToolGroupAction | T3McpToolSummaryAction): number {
+function summaryActionPriority(action: ToolGroupAction | CinderdeckMcpToolSummaryAction): number {
   switch (action) {
     case "command":
     case "edit":
@@ -525,6 +550,7 @@ function summaryActionPriority(action: ToolGroupAction | T3McpToolSummaryAction)
     case "project-delete":
     case "project-clone":
     case "environment-update":
+    case "theme-set":
     case "attachment-prepare":
     case "attachment-discard":
     case "attachment-send":
@@ -550,35 +576,35 @@ export function summarizeToolGroup(entries: ReadonlyArray<WorkLogPresentationEnt
   }
   entries = toolEntries;
   const groups = new Map<
-    ToolGroupAction | T3McpToolSummaryAction,
+    ToolGroupAction | CinderdeckMcpToolSummaryAction,
     {
       action: ToolGroupAction;
-      t3Action: T3McpToolSummaryAction | null;
+      cinderdeckAction: CinderdeckMcpToolSummaryAction | null;
       entries: WorkLogPresentationEntry[];
     }
   >();
   const sources = new Map<string, ToolActivitySource>();
   for (const entry of entries) {
-    const t3Action = resolveT3McpSummaryAction(
+    const cinderdeckAction = resolveT3McpSummaryAction(
       workEntryToolName(entry),
-      t3ToolSummaryCall(entry).input,
+      cinderdeckToolSummaryCall(entry).input,
     );
-    if (entry.toolSource && t3Action === null) {
+    if (entry.toolSource && cinderdeckAction === null) {
       sources.set(entry.toolSource.key, entry.toolSource);
       continue;
     }
     const action = toolGroupAction(entry);
-    const key = t3Action ?? action;
+    const key = cinderdeckAction ?? action;
     const group = groups.get(key);
     if (group) group.entries.push(entry);
-    else groups.set(key, { action, t3Action, entries: [entry] });
+    else groups.set(key, { action, cinderdeckAction, entries: [entry] });
   }
   const summaries = [...groups].map(([action, group], index) => ({
     index,
     count: group.entries.length,
     priority: summaryActionPriority(action),
-    ...(group.t3Action
-      ? summarizeT3ToolCalls(group.t3Action, group.entries.map(t3ToolSummaryCall))
+    ...(group.cinderdeckAction
+      ? summarizeT3ToolCalls(group.cinderdeckAction, group.entries.map(cinderdeckToolSummaryCall))
       : {
           label: toolGroupActionLabel(
             group.action,

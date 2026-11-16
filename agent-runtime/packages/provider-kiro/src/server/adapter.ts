@@ -52,7 +52,7 @@ import {
 } from "./acpSupport.ts";
 
 export const KIRO_PROVIDER = ProviderDriverKind.make("kiro");
-/** T3's slug for "Kiro default", and Kiro's documented default model id. */
+/** Cinderdeck's slug for "Kiro default", and Kiro's documented default model id. */
 const KIRO_DEFAULT_MODEL = "default";
 const KIRO_COMPACT_METHOD = "_kiro/session/compact";
 const KIRO_STEER_METHOD = "_session/steer";
@@ -93,25 +93,37 @@ const KiroProviderCapabilitiesV2 = {
 const KiroCompactResult = Schema.Struct({ success: Schema.Boolean });
 const decodeKiroCompactResult = Schema.decodeUnknownOption(KiroCompactResult);
 
-/** Kiro answers a `/compact` prompt as chat, so T3 compacts with Kiro's own request. */
-const compactKiroSession = (
-  runtime: AcpSessionRuntime.AcpSessionRuntime["Service"],
-  sessionId: string,
-) =>
-  runtime.request(KIRO_COMPACT_METHOD, { sessionId }).pipe(
-    Effect.flatMap((result) =>
-      Option.exists(decodeKiroCompactResult(result), (decoded) => decoded.success)
-        ? Effect.void
-        : Effect.fail(
-            new EffectAcpErrors.AcpRequestError({
-              code: -32603,
-              errorMessage: "Kiro could not compact the conversation.",
-              method: KIRO_COMPACT_METHOD,
-              data: result,
-            }),
-          ),
+const decodeKiroExtensionMethods = Schema.decodeUnknownOption(
+  Schema.Struct({ kiro: Schema.Struct({ extensionMethods: Schema.Array(Schema.String) }) }),
+);
+
+/**
+ * Kiro answers a `/compact` prompt as chat, so Cinderdeck compacts with Kiro's own request,
+ * on deployments whose `initialize` result lists it among Kiro's extension methods.
+ */
+const kiroCompactSession = {
+  supported: (
+    initializeResult: AcpSessionRuntime.AcpSessionRuntimeStartResult["initializeResult"],
+  ) =>
+    Option.exists(decodeKiroExtensionMethods(initializeResult.agentCapabilities?._meta), (meta) =>
+      meta.kiro.extensionMethods.includes(KIRO_COMPACT_METHOD),
     ),
-  );
+  compact: (runtime: AcpSessionRuntime.AcpSessionRuntime["Service"], sessionId: string) =>
+    runtime.request(KIRO_COMPACT_METHOD, { sessionId }).pipe(
+      Effect.flatMap((result) =>
+        Option.exists(decodeKiroCompactResult(result), (decoded) => decoded.success)
+          ? Effect.void
+          : Effect.fail(
+              new EffectAcpErrors.AcpRequestError({
+                code: -32603,
+                errorMessage: "Kiro could not compact the conversation.",
+                method: KIRO_COMPACT_METHOD,
+                data: result,
+              }),
+            ),
+      ),
+    ),
+};
 
 const KiroSteerResult = Schema.Struct({ queued: Schema.Literal(true), messageId: Schema.String });
 const decodeKiroSteerResult = Schema.decodeUnknownOption(KiroSteerResult);
@@ -240,7 +252,7 @@ const applyKiroModel = Effect.fn("KiroAdapterV2.applyKiroModel")(function* (
 });
 
 /**
- * Bound on waiting for Kiro to advertise the model T3 just wrote. Kiro 2.27.0
+ * Bound on waiting for Kiro to advertise the model Cinderdeck just wrote. Kiro 2.27.0
  * sent it 40-90 ms after the write's result.
  */
 const KIRO_MODEL_ADVERT_BOUND = "2 seconds";
@@ -541,7 +553,7 @@ function makeKiroAcpAdapterFlavor(options: KiroAdapterV2Options): AcpAdapterV2Fl
     capabilities: KiroProviderCapabilitiesV2,
     // Kiro V3 loads the user's hooks only when the client opts in. `v2` makes
     // Kiro run them itself; `enabled` alone hands them to the client as
-    // `_kiro/hooks/*` requests, which T3 does not answer.
+    // `_kiro/hooks/*` requests, which Cinderdeck does not answer.
     clientCapabilitiesMeta: { kiro: { hooks: { enabled: true, v2: true } } },
     makeRuntime,
     promptFailure: kiroPromptFailure,
@@ -558,7 +570,7 @@ function makeKiroAcpAdapterFlavor(options: KiroAdapterV2Options): AcpAdapterV2Fl
     // there would put the agent's own model back.
     ownedModelOptionIds: ["reasoningEffort", KIRO_AGENT_CONFIG_ID],
     // With Autopilot off (Supervised) Kiro asks the user to accept a turn's
-    // changes before it ends. T3's runtime policy answers its per-tool prompts
+    // changes before it ends. Cinderdeck's runtime policy answers its per-tool prompts
     // either way, and a runtime-mode change reopens the session to reapply it.
     sessionConfigForPolicy: (policy) => [
       { id: KIRO_AUTOPILOT_CONFIG_ID, value: kiroAutopilotValue(policy) },
@@ -568,7 +580,7 @@ function makeKiroAcpAdapterFlavor(options: KiroAdapterV2Options): AcpAdapterV2Fl
     cancelAfterPromptStarts: { isStart: isKiroPromptActivity, bound: KIRO_CANCEL_HOLD_BOUND },
     permissionDisposition: kiroPermissionDisposition,
     approvalOptions: kiroApprovalOptions,
-    compactSession: compactKiroSession,
+    compactSession: kiroCompactSession,
     steering: kiroSteering,
     forkFromTurn: kiroForkFromTurn,
     // Kiro V3 advertises `promptCapabilities.image`; the shared adapter reads it.

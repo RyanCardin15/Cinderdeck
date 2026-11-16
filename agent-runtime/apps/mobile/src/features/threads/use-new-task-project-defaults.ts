@@ -4,7 +4,7 @@ import type { EnvironmentProject } from "@cinderdeck/client-runtime/state/shell"
 import type { ProjectReadFileResult } from "@cinderdeck/contracts";
 import { DEFAULT_SERVER_SETTINGS, T3_PROJECT_FILE_NAME } from "@cinderdeck/contracts";
 import { resolveNewThreadEnvMode, resolveProjectSettings } from "@cinderdeck/shared/projectSettings";
-import { parseT3ProjectFile } from "@cinderdeck/shared/t3ProjectFile";
+import { parseT3ProjectFile } from "@cinderdeck/shared/cinderdeckProjectFile";
 
 import { useEnvironmentServerConfig } from "../../state/entities";
 import { useEnvironmentPresentation } from "../../state/presentation";
@@ -35,7 +35,7 @@ export function useNewTaskProjectDefaults(project: EnvironmentProject | null) {
     sessionError: fileAccessSession.error,
   });
   const fileAccessPending = hasWorkspace && fileAccess.isPending;
-  const t3ProjectFileQuery = useEnvironmentQuery(
+  const cinderdeckProjectFileQuery = useEnvironmentQuery(
     fileAccess.canReadFiles && hasWorkspace
       ? projectEnvironment.readFile({
           environmentId: project.environmentId,
@@ -47,16 +47,16 @@ export function useNewTaskProjectDefaults(project: EnvironmentProject | null) {
         })
       : null,
   );
-  const t3ProjectFileData = t3ProjectFileQuery.data as ProjectReadFileResult | null;
-  const t3ProjectFile =
-    t3ProjectFileData === null || t3ProjectFileData.exists === false || t3ProjectFileData.truncated
+  const cinderdeckProjectFileData = cinderdeckProjectFileQuery.data as ProjectReadFileResult | null;
+  const cinderdeckProjectFile =
+    cinderdeckProjectFileData === null || cinderdeckProjectFileData.exists === false || cinderdeckProjectFileData.truncated
       ? null
-      : parseT3ProjectFile(t3ProjectFileData.contents);
+      : parseT3ProjectFile(cinderdeckProjectFileData.contents);
   const projectSettings = resolveProjectSettings(
     serverConfig?.settings ?? DEFAULT_SERVER_SETTINGS,
     project?.id ?? null,
     project,
-    t3ProjectFile,
+    cinderdeckProjectFile,
   );
   const projectHasThreads = useProjectHasThreads(project);
   const defaultWorkspaceMode = isScratch
@@ -70,7 +70,7 @@ export function useNewTaskProjectDefaults(project: EnvironmentProject | null) {
   // While t3.json loads, the environment default is provisional; t3.json may replace it.
   const defaultWorkspaceModeSettled =
     projectSettings.sources.defaultThreadEnvMode !== "environment" ||
-    (!t3ProjectFileQuery.isPending && !fileAccessPending);
+    (!cinderdeckProjectFileQuery.isPending && !fileAccessPending);
   return {
     serverConfig,
     isScratch,

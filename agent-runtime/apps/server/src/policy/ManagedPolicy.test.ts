@@ -20,7 +20,7 @@ it.layer(NodeServices.layer)("ManagedPolicy.load", (it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const dir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-managed-policy-" });
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-managed-policy-" });
       const file = path.join(dir, "policy.json");
       if (contents !== undefined) yield* fs.writeFileString(file, contents);
       return yield* ManagedPolicy.load(file);
@@ -39,7 +39,7 @@ it.layer(NodeServices.layer)("ManagedPolicy.load", (it) => {
         JSON.stringify({
           schemaVersion: 1,
           organization: "Example Corp",
-          supportUrl: "https://it.example/t3",
+          supportUrl: "https://it.example/cinderdeck",
           settings: {
             "storageCleanup.logsAfterDays": { value: 30, locked: true },
             defaultRuntimeMode: { value: "approval-required", locked: false },
@@ -48,7 +48,7 @@ it.layer(NodeServices.layer)("ManagedPolicy.load", (it) => {
       );
       assert.deepEqual(policy.summary, {
         organization: "Example Corp",
-        supportUrl: "https://it.example/t3",
+        supportUrl: "https://it.example/cinderdeck",
         lockedSettings: ["storageCleanup.logsAfterDays"],
       });
     }),
@@ -142,6 +142,11 @@ it.layer(NodeServices.layer)("ManagedPolicy.load", (it) => {
               },
             },
           }),
+          // Startup reads OTLP endpoints before the policy, and environment variables outrank them.
+          JSON.stringify({
+            ...base,
+            settings: { "observability.otlpTracesUrl": { value: "", locked: true } },
+          }),
         ],
         (contents) =>
           loadFrom(contents).pipe(
@@ -149,7 +154,7 @@ it.layer(NodeServices.layer)("ManagedPolicy.load", (it) => {
             Effect.map((error) => error.reason),
           ),
       );
-      assert.lengthOf(reasons, 13);
+      assert.lengthOf(reasons, 14);
       assert.include(reasons[3], "storageCleanup.logsAfterDayz");
       assert.include(reasons[6], "adds entries users could not remove");
       assert.include(reasons[7], "adds entries users could not remove");
@@ -158,6 +163,7 @@ it.layer(NodeServices.layer)("ManagedPolicy.load", (it) => {
       assert.include(reasons[10], 'lock "worktreeCleanup" too');
       assert.include(reasons[11], 'lock "providerInstances.codex" as a whole');
       assert.include(reasons[12], "holds a credential");
+      assert.include(reasons[13], "a policy cannot override");
     }),
   );
 
@@ -187,7 +193,11 @@ it.layer(NodeServices.layer)("ManagedPolicy.load", (it) => {
       ]);
       // The host variable that replaces Codex's launch arguments is ignored too.
       const host = { PATH: "/usr/bin", T3CODE_CODEX_LAUNCH_ARGS: "-c mcp_servers.x.command=sh" };
-      assert.deepEqual(providerHostEnvironment(policy.summary, host), { PATH: "/usr/bin" });
+      const managedHost = providerHostEnvironment(policy.summary, host);
+      assert.deepEqual(managedHost, { PATH: "/usr/bin" });
+      // A PATH refresh after launch reaches drivers that hold the managed copy.
+      host.PATH = "/opt/new/bin:/usr/bin";
+      assert.strictEqual(managedHost.PATH, "/opt/new/bin:/usr/bin");
       assert.strictEqual(providerHostEnvironment(undefined, host), host);
     }),
   );
@@ -440,14 +450,14 @@ it.layer(NodeServices.layer)("ManagedPolicy.load", (it) => {
         const base = { schemaVersion: 1, organization: "Example Corp" };
         const updates = {
           mode: "auto" as const,
-          feedUrl: "https://updates.example/t3",
+          feedUrl: "https://updates.example/cinderdeck",
           allowNightly: false,
         };
         const policy = yield* loadFrom(JSON.stringify({ ...base, limits: { updates } }));
         const { feedUrl: _feedUrl, ...clientUpdates } = updates;
         assert.deepEqual(policy.summary?.limits, { updates: clientUpdates });
         for (const invalid of [
-          { mode: "auto", feedUrl: "http://updates.example/t3" },
+          { mode: "auto", feedUrl: "http://updates.example/cinderdeck" },
           { mode: "manual" },
           { mode: "sometimes" },
           { mode: "auto", pinVersion: "1.2.3" },

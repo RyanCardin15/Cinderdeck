@@ -1,6 +1,6 @@
 import type { ComposerContextRecord, EnvironmentId } from "@cinderdeck/contracts";
 import { imageMimeType } from "@cinderdeck/shared/image";
-import type { FilePreviewItem } from "../components/FilePreviewModal.types";
+import type { FilePreviewItem } from "../components/ui/FilePreviewModal.types";
 import { composerImageGallery } from "./composerImageGallery";
 import type { DraftComposerAttachment } from "./composerImages";
 

@@ -55,7 +55,7 @@ final class T3NativeVideoPresentation: NSObject, AVPlayerViewControllerDelegate,
       DispatchQueue.main.async {
         guard let self else { return }
         self.playbackError = item.error ?? NSError(
-          domain: "T3NativeVideo",
+          domain: "CinderdeckNativeVideo",
           code: 1,
           userInfo: [NSLocalizedDescriptionKey: "This video couldn't be played on this device."]
         )
@@ -67,13 +67,13 @@ final class T3NativeVideoPresentation: NSObject, AVPlayerViewControllerDelegate,
     ) { [weak self] _ in self?.controller.player?.pause() }
   }
 
-  func present(from presenter: UIViewController, sources: T3PresentationSources, sourceIdentifier: String) {
+  func present(from presenter: UIViewController, sources: CinderdeckPresentationSources, sourceIdentifier: String) {
     let audioSession = AVAudioSession.sharedInstance()
     previousAudioSession = AudioSessionConfiguration(audioSession)
     do {
       try audioSession.setCategory(.playback, mode: .moviePlayback)
     } catch {
-      NSLog("T3 video audio session: %@", error.localizedDescription)
+      NSLog("Cinderdeck video audio session: %@", error.localizedDescription)
     }
     // AVKit exposes programmatic inline-to-full-screen entry through this selector.
     // This is the same guarded entry point used by expo-video's enterFullscreen().

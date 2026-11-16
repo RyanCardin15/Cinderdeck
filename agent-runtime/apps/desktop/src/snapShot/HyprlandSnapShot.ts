@@ -15,7 +15,7 @@ export { isHyprlandCaptureSession } from "./linuxCaptureSession.ts";
 export const HYPRLAND_CAPTURE_EXECUTABLE = "t3-hyprland-snap-shot";
 export type HyprlandCapturePaths = { readonly bundle: string; readonly dataHome: string };
 export function hyprlandCaptureExecutable(paths: HyprlandCapturePaths) {
-  return NodePath.join(paths.dataHome, "t3code", "hyprland-capture", HYPRLAND_CAPTURE_EXECUTABLE);
+  return NodePath.join(paths.dataHome, "cinderdeck", "hyprland-capture", HYPRLAND_CAPTURE_EXECUTABLE);
 }
 
 function hyprlandCaptureBinding(appId: string, lua: boolean): string {
@@ -96,7 +96,7 @@ export class HyprlandCaptureSetup {
       const bundle = await regularFile(this.paths.bundle);
       if (!bundle)
         throw new Error(
-          "The Hyprland capture helper is missing from this build. Update or reinstall T3 Code.",
+          "The Hyprland capture helper is missing from this build. Update or reinstall Cinderdeck.",
         );
       if (!installed.equals(bundle))
         return {
@@ -171,13 +171,13 @@ export async function captureHyprlandWindow(
   let state = await setup.state();
   if (state.status === "update-required") {
     await setup.perform("install-hyprland-helper").catch((cause: unknown) => {
-      throw new CaptureSetupRequiredError(state.message, { cause });
+      throw new CaptureSetupRequiredError({ state: state.message, cause });
     });
     state = await setup.state();
   }
-  if (state.status !== "ready") throw new CaptureSetupRequiredError(state.message);
+  if (state.status !== "ready") throw new CaptureSetupRequiredError({ state: state.message });
   const executable = hyprlandCaptureExecutable(paths);
-  const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-hyprland-capture-"));
+  const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "cinderdeck-hyprland-capture-"));
   const cleanup = () => NodeFSP.rm(directory, { recursive: true, force: true });
   let retained = false;
   try {

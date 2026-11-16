@@ -23,7 +23,7 @@ import {
 import type * as ProviderAdapter from "@cinderdeck/provider-core/server/ProviderAdapter";
 
 export const FX_DRIVER_KIND = ProviderDriverKind.make("fx");
-/** T3's slug for "Default": the model `fx status` reports, never an fx model id. */
+/** Cinderdeck's slug for "Default": the model `fx status` reports, never an fx model id. */
 export const FX_DEFAULT_MODEL_SLUG = "default";
 const FX_MODEL_CONFIG_ID = "model";
 const FX_MODE_CONFIG_ID = "mode";
@@ -56,6 +56,8 @@ export const FX_SUPPORTED_RUNTIME_MODES = [
 ] as const satisfies ReadonlyArray<RuntimeMode>;
 /** fx 0.0.13 answers a cancelled prompt with `stopReason: cancelled`. */
 export const FX_ACP_CANCEL_BEHAVIOR = "wait-for-prompt" as const;
+/** fx inherits the user's `~/.fx/mcp.json` servers only when session setup asks for them. */
+export const FX_SESSION_META = { fx: { profileMcpServers: true } };
 
 /**
  * Supervised runs fx's `ask` mode and Auto its automatic review. An explicit

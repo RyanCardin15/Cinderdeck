@@ -8,7 +8,7 @@ export { NATIVE_METRICS_TIMEOUT_MS } from "./native-layout-metrics";
 
 const nativeControls = requireOptionalNativeModule<{
   readonly supportsWorkspaceColumns?: boolean;
-  readonly ViewPrototypes?: { readonly T3NativeControls_LayoutMetrics?: unknown };
+  readonly ViewPrototypes?: { readonly CinderdeckNativeControls_LayoutMetrics?: unknown };
 }>("T3NativeControls");
 export const NATIVE_WORKSPACE_COLUMNS_SUPPORTED =
   Platform.OS === "ios" && Platform.isPad && nativeControls?.supportsWorkspaceColumns === true;
@@ -26,7 +26,7 @@ export function useNativeWorkspaceColumnsReady() {
   const metricsDeadline = useNativeLayoutMetricsDeadline();
   const waiting =
     !(Platform.OS === "ios" && Platform.isPad) &&
-    !!nativeControls?.ViewPrototypes?.T3NativeControls_LayoutMetrics &&
+    !!nativeControls?.ViewPrototypes?.CinderdeckNativeControls_LayoutMetrics &&
     metrics === null;
   // Without metrics by the deadline, use the compact navigator rather than staying blank.
   const timedOut = useDeadlinePassed(waiting ? metricsDeadline : null);

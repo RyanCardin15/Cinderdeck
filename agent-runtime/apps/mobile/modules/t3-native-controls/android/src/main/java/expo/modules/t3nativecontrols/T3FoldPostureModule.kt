@@ -20,9 +20,9 @@ import kotlinx.coroutines.launch
 
 class T3FoldPostureModule : Module() {
   override fun definition() = ModuleDefinition {
-    Name("T3FoldPosture")
+    Name("CinderdeckFoldPosture")
 
-    View(T3FoldPostureView::class) {
+    View(CinderdeckFoldPostureView::class) {
       Events("onHingeChange")
     }
   }
@@ -32,7 +32,7 @@ class T3FoldPostureModule : Module() {
  * Reports a vertical hinge, in this view's dp coordinates, while the device is bent like a book.
  * The hinge sensor is only registered while a vertical fold is on screen.
  */
-class T3FoldPostureView(
+class CinderdeckFoldPostureView(
   context: Context,
   appContext: AppContext
 ) : ExpoView(context, appContext), SensorEventListener {

@@ -142,6 +142,24 @@ const layerWakeups = Wakeups.layer({
             }),
         ).pipe(Effect.asVoid),
       ),
+      // A window left visible beside another app never fires visibilitychange when refocused.
+      Stream.callback<"application-focused">((queue) =>
+        Effect.acquireRelease(
+          Effect.sync(() => {
+            const listener = () => {
+              if (document.visibilityState === "visible") {
+                Queue.offerUnsafe(queue, "application-focused");
+              }
+            };
+            window.addEventListener("focus", listener);
+            return listener;
+          }),
+          (listener) =>
+            Effect.sync(() => {
+              window.removeEventListener("focus", listener);
+            }),
+        ).pipe(Effect.asVoid),
+      ),
       managedRelayAccountChanges(appAtomRegistry).pipe(
         Stream.map(() => "credentials-changed" as const),
       ),
@@ -248,7 +266,7 @@ export const provisionDesktopSshEnvironment = Effect.fn(
       }
       return new ConnectionBlockedError({
         reason: "configuration",
-        detail: `${descriptor.label} runs T3 Code ${descriptor.serverVersion}, but this desktop is ${APP_VERSION}, and that server could not accept its pairing. Restart the T3 server on ${descriptor.label} so it runs ${APP_VERSION}, then retry.`,
+        detail: `${descriptor.label} runs Cinderdeck ${descriptor.serverVersion}, but this desktop is ${APP_VERSION}, and that server could not accept its pairing. Restart the Cinderdeck server on ${descriptor.label} so it runs ${APP_VERSION}, then retry.`,
       });
     },
   });
@@ -313,13 +331,15 @@ const ANALYTICS_DEVICE_ID_KEY = "t3code:analytics-device-id";
 
 // Lives as long as this browser profile's site data. Storage can be blocked, which only drops the id.
 const analyticsDevice = {
-  id: Effect.try(() => {
-    const existing = window.localStorage.getItem(ANALYTICS_DEVICE_ID_KEY);
-    if (existing) return existing;
-    const created = randomUUID();
-    window.localStorage.setItem(ANALYTICS_DEVICE_ID_KEY, created);
-    return created;
-  }).pipe(Effect.option),
+  id: Effect.sync(
+    Option.liftThrowable(() => {
+      const existing = window.localStorage.getItem(ANALYTICS_DEVICE_ID_KEY);
+      if (existing) return existing;
+      const created = randomUUID();
+      window.localStorage.setItem(ANALYTICS_DEVICE_ID_KEY, created);
+      return created;
+    }),
+  ),
 };
 
 const layerCapabilities = Layer.effectContext(
@@ -336,7 +356,7 @@ const layerCapabilities = Layer.effectContext(
         if (session === null) {
           return yield* new ConnectionBlockedError({
             reason: "authentication",
-            detail: "Sign in to T3 Connect to connect this environment.",
+            detail: "Sign in to Cinderdeck Connect to connect this environment.",
           });
         }
         const token = yield* session.readClerkToken().pipe(
@@ -351,7 +371,7 @@ const layerCapabilities = Layer.effectContext(
         if (token === null) {
           return yield* new ConnectionBlockedError({
             reason: "authentication",
-            detail: "The T3 Connect session is unavailable.",
+            detail: "The Cinderdeck Connect session is unavailable.",
           });
         }
         return token;

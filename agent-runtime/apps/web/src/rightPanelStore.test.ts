@@ -61,7 +61,7 @@ describe("rightPanelStore", () => {
     const store = useRightPanelStore.getState();
     const pr = pullRequestSurface({
       projectId: "project-a",
-      repository: "pingdotgg/t3code",
+      repository: "pingdotgg/cinderdeck",
       number: 42,
     });
     store.openFile(refA, "src/app.ts");
@@ -238,7 +238,7 @@ describe("rightPanelStore", () => {
   const completedDiff = { kind: "diff", turnId: RunId.make("turn-1") } as const;
   const linkedPullRequest = pullRequestSurface({
     projectId: "project-a",
-    repository: "pingdotgg/t3code",
+    repository: "pingdotgg/cinderdeck",
     number: 42,
   });
 
@@ -576,7 +576,7 @@ describe("rightPanelStore", () => {
   it("upgrades the legacy singleton pull request surface to a reference-keyed tab", () => {
     const id = pullRequestSurfaceId({
       projectId: "project-a",
-      repository: "pingdotgg/t3code",
+      repository: "pingdotgg/cinderdeck",
       number: 4909,
     });
     expect(
@@ -590,7 +590,7 @@ describe("rightPanelStore", () => {
                 id: "pull-request",
                 kind: "pull-request",
                 projectId: "project-a",
-                repository: "pingdotgg/t3code",
+                repository: "pingdotgg/cinderdeck",
                 number: 4909,
               },
             ],
@@ -607,7 +607,7 @@ describe("rightPanelStore", () => {
               id,
               kind: "pull-request",
               projectId: "project-a",
-              repository: "pingdotgg/t3code",
+              repository: "pingdotgg/cinderdeck",
               number: 4909,
             },
           ],
@@ -620,7 +620,7 @@ describe("rightPanelStore", () => {
   it("drops the pull-request list's shared panel so a restart opens the page fresh", () => {
     const id = pullRequestSurfaceId({
       projectId: "project-a",
-      repository: "pingdotgg/t3code",
+      repository: "pingdotgg/cinderdeck",
       number: 4909,
     });
     const panelState = {
@@ -631,7 +631,7 @@ describe("rightPanelStore", () => {
           id,
           kind: "pull-request" as const,
           projectId: "project-a",
-          repository: "pingdotgg/t3code",
+          repository: "pingdotgg/cinderdeck",
           number: 4909,
         },
       ],
@@ -991,11 +991,11 @@ describe("rightPanelStore", () => {
   });
 
   it("tracks one surface per pull request", () => {
-    const first = { projectId: "project-a", repository: "pingdotgg/t3code", number: 4909 };
-    const second = { projectId: "project-a", repository: "pingdotgg/t3code", number: 4910 };
+    const first = { projectId: "project-a", repository: "pingdotgg/cinderdeck", number: 4909 };
+    const second = { projectId: "project-a", repository: "pingdotgg/cinderdeck", number: 4910 };
     useRightPanelStore.getState().openPullRequest(refA, first);
     useRightPanelStore.getState().openPullRequest(refA, second);
-    const url = "https://gitlab.example.com/pingdotgg/t3code/-/merge_requests/4909";
+    const url = "https://gitlab.example.com/pingdotgg/cinderdeck/-/merge_requests/4909";
     useRightPanelStore.getState().openPullRequest(refA, { ...first, url });
     useRightPanelStore.getState().openPullRequest(refA, first);
 
@@ -1009,10 +1009,49 @@ describe("rightPanelStore", () => {
       selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refA),
     ).toMatchObject({ url });
     expect(state.surfaces[1]).not.toHaveProperty("url");
+    expect(state.surfaces[0]).not.toHaveProperty("revealUrl");
+  });
+
+  it("holds a clicked link until the panel settles it, and a later link replaces it", async () => {
+    const pr = { projectId: "project-a", repository: "pingdotgg/cinderdeck", number: 4909 };
+    const id = pullRequestSurfaceId(pr);
+    const url = "https://github.com/RyanCardin15/Cinderdeck/pull/4909";
+    const surface = () =>
+      selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refA);
+    const comment = (n: number) => `${url}#issuecomment-${n}`;
+    const store = useRightPanelStore.getState();
+    store.openPullRequest(refA, { ...pr, url: comment(1), revealUrl: comment(1) });
+    expect(surface()).toMatchObject({ url: comment(1), revealUrl: comment(1) });
+    store.openPullRequest(refA, { ...pr, url });
+    expect(surface()).not.toHaveProperty("revealUrl");
+    store.openPullRequest(refA, { ...pr, url: comment(2), revealUrl: comment(2) });
+    // A host read started for an earlier link settles only that link.
+    store.settlePullRequestReveal(refA, id, comment(1));
+    expect(surface()).toMatchObject({ revealUrl: comment(2) });
+    store.settlePullRequestReveal(refA, id, comment(2));
+    expect(surface()).toMatchObject({ url: comment(2) });
+    expect(surface()).not.toHaveProperty("revealUrl");
+    // Reopening a closed tab hands back its surface, whose url still names the comment.
+    store.openPullRequest(refA, { ...pr, url: comment(2) });
+    expect(surface()).not.toHaveProperty("revealUrl");
+    store.openPullRequest(refA, { ...pr, url: comment(3), revealUrl: comment(3) });
+    await reloadRightPanelStore();
+    expect(surface()).toMatchObject({ url: comment(3) });
+    expect(surface()).not.toHaveProperty("revealUrl");
+    store.openPullRequest(refA, { ...pr, url: comment(4), revealUrl: comment(4) });
+    store.closeSurface(refA, id);
+    await reopenClosedView(useClosedViewStore.getState().entries[0]!, {
+      workspaceAvailable: true,
+      openPreview: () => {
+        throw new Error("A PR tab must not create a browser session");
+      },
+    });
+    expect(surface()).toMatchObject({ url: comment(4) });
+    expect(surface()).not.toHaveProperty("revealUrl");
   });
 
   it("restores each environment, thread and PR surface's detail tab after reload and URL reopen", async () => {
-    const pr = { projectId: "project-a", repository: "pingdotgg/t3code", number: 4909 };
+    const pr = { projectId: "project-a", repository: "pingdotgg/cinderdeck", number: 4909 };
     const otherPr = { ...pr, projectId: "project-b" };
     const otherEnvironment = scopeThreadRef("env-2" as EnvironmentId, refA.threadId);
     const selections = [
@@ -1085,13 +1124,13 @@ describe("rightPanelStore", () => {
     const fromServerA = {
       environmentId: "server-a",
       projectId: "project-a",
-      repository: "pingdotgg/t3code",
+      repository: "pingdotgg/cinderdeck",
       number: 1,
     };
     const fromServerB = {
       environmentId: "server-b",
       projectId: "project-b",
-      repository: "pingdotgg/t3code",
+      repository: "pingdotgg/cinderdeck",
       number: 2,
     };
 

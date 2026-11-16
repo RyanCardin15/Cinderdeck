@@ -4,10 +4,39 @@ import {
   ProjectId,
   type PullRequestListEntry,
   type PullRequestListInput,
+  PullRequestUnavailableError,
+  PullRequestOperationError,
   type PullRequestListResult,
   type PullRequestSummary,
 } from "@cinderdeck/contracts";
+import * as Cause from "effect/Cause";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { describe, expect, it, vi } from "vite-plus/test";
+
+const listAnswers = vi.hoisted(() => new Map<string, unknown>());
+
+vi.mock("@effect/atom-react", async (importOriginal) => {
+  const { AtomRegistry } = await import("effect/reactivity");
+  const registry = AtomRegistry.make();
+  return {
+    ...(await importOriginal<typeof import("@effect/atom-react")>()),
+    useAtomValue: (atom: Atom.Atom<unknown>) => registry.get(atom),
+  };
+});
+vi.mock("@cinderdeck/client-runtime/state/pull-requests", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@cinderdeck/client-runtime/state/pull-requests")>();
+  return {
+    ...actual,
+    createPullRequestEnvironmentAtoms: (
+      ...args: Parameters<typeof actual.createPullRequestEnvironmentAtoms>
+    ) => ({
+      ...actual.createPullRequestEnvironmentAtoms(...args),
+      list: ({ environmentId }: { readonly environmentId: string }) =>
+        listAnswers.get(environmentId),
+    }),
+  };
+});
 
 import {
   newestPullRequestObservation,
@@ -15,11 +44,43 @@ import {
   observePullRequestChecks,
   observePullRequestMetadata,
   newestPullRequestSummary,
+  newestDisplayedPullRequestSummary,
   rememberPullRequestListAnswer,
   restorePullRequestList,
   restoredPullRequestList,
   threadPullRequestLinkToSummary,
+  observeFailedPullRequestList,
+  usePullRequestList,
 } from "./pullRequests";
+
+it("observes both typed list failures without changing their status or replaying cached timestamps", () => {
+  const listResult: PullRequestListResult = {
+    viewers: {},
+    providers: [],
+    entries: [],
+    errors: [],
+    truncated: false,
+    nextCursors: {},
+  };
+  using clock = vi.spyOn(Date, "now").mockReturnValue(100);
+  for (const error of [
+    new PullRequestUnavailableError({ reason: "cli-unauthenticated", listResult }),
+    new PullRequestOperationError({ operation: "list", detail: "HTTP 403", listResult }),
+  ]) {
+    clock.mockReturnValue(100);
+    const failure = AsyncResult.failure<PullRequestListResult, unknown>(Cause.fail(error));
+    expect(observeFailedPullRequestList(failure)).toEqual({ value: listResult, observedAt: 100 });
+    clock.mockReturnValue(200);
+    expect(observeFailedPullRequestList(failure)?.observedAt).toBe(100);
+    expect(failure._tag).toBe("Failure");
+    expect(observeFailedPullRequestList({ ...failure, waiting: true })).toBeUndefined();
+  }
+  expect(
+    observeFailedPullRequestList(
+      AsyncResult.failure(Cause.fail(new PullRequestUnavailableError({ reason: "cli-missing" }))),
+    ),
+  ).toBeUndefined();
+});
 
 function summary(overrides: Partial<PullRequestSummary> = {}): PullRequestSummary {
   return {
@@ -94,6 +155,15 @@ describe("pull request summary cache", () => {
     const older = summary({ updatedAt: "2026-09-11T00:00:00Z", observedAt: 999 });
     expect(newestPullRequestSummary(older, reopened)).toBe(reopened);
     expect(newestPullRequestSummary(reopened, older)).toBe(reopened);
+    const edited = summary({ title: "Accepted title" });
+    expect(newestPullRequestSummary(summary(), edited)).toBe(edited);
+    const loaded = summary();
+    expect(newestDisplayedPullRequestSummary(loaded, false, edited, loaded, [])).toBe(loaded);
+    expect(newestDisplayedPullRequestSummary(summary(), true, edited, loaded, [])).toBe(edited);
+    const titleEdit = { reference: loaded, title: "Pending title" };
+    expect(newestDisplayedPullRequestSummary(loaded, true, null, loaded, [titleEdit])?.title).toBe(
+      "Pending title",
+    );
   });
 
   it("reuses saved thread state while detail is stale and lets newer detail replace it", () => {
@@ -217,11 +287,11 @@ describe("pull request list answers across a reload", () => {
       provider: SourceControlProviderKind.make("github"),
       host: "github.com",
       projectId: ProjectId.make("project-1"),
-      projectTitle: "t3code",
-      repository: "pingdotgg/t3code",
+      projectTitle: "cinderdeck",
+      repository: "pingdotgg/cinderdeck",
       number,
       title: `Pull request ${number}`,
-      url: `https://github.com/pingdotgg/t3code/pull/${number}`,
+      url: `https://github.com/RyanCardin15/Cinderdeck/pull/${number}`,
       author: { login: "octocat", name: null, avatarUrl: null },
       headBranch: `feat/branch-${number}`,
       baseBranch: "main",
@@ -249,9 +319,9 @@ describe("pull request list answers across a reload", () => {
           detail: null,
         },
       ],
-      errors: [{ projectId: ProjectId.make("project-1"), projectTitle: "t3code", message: "boom" }],
+      errors: [{ projectId: ProjectId.make("project-1"), projectTitle: "cinderdeck", message: "boom" }],
       truncated: true,
-      nextCursors: { "pingdotgg/t3code": "cursor-1" },
+      nextCursors: { "pingdotgg/cinderdeck": "cursor-1" },
     }) as PullRequestListResult;
   const local = EnvironmentId.make("env-local");
   const remote = EnvironmentId.make("env-remote");
@@ -308,7 +378,7 @@ describe("pull request list answers across a reload", () => {
     rememberPullRequestListAnswer(storage, { environmentId: local, input }, answer(rows));
     const searched = { ...input, query: "fix" };
     rememberPullRequestListAnswer(storage, { environmentId: local, input: searched }, answer(rows));
-    const continued = { ...input, cursors: { "pingdotgg/t3code": "cursor-1" } };
+    const continued = { ...input, cursors: { "pingdotgg/cinderdeck": "cursor-1" } };
     rememberPullRequestListAnswer(
       storage,
       { environmentId: local, input: continued },
@@ -456,15 +526,40 @@ describe("pull request list answers across a reload", () => {
     }
   });
 
+  it("names the environment whose list failed while the others' rows still show", () => {
+    listAnswers.set(local, Atom.make(AsyncResult.success(answer([listEntry(1)]))));
+    listAnswers.set(
+      remote,
+      Atom.make(
+        AsyncResult.failure(
+          Cause.fail(
+            new Error("Relay could not reach the environment endpoint (endpoint_request_failed)."),
+          ),
+        ),
+      ),
+    );
+
+    const view = usePullRequestList([
+      { environmentId: local, input },
+      { environmentId: remote, input },
+    ]);
+
+    expect(view.data?.entries.map((row) => [row.environmentId, row.number])).toEqual([[local, 1]]);
+    expect(view.error).toEqual({
+      environmentId: remote,
+      message: "Relay could not reach the environment endpoint (endpoint_request_failed).",
+    });
+  });
+
   it("removes the composite snapshots it replaced", () => {
     const storage = makeStorage();
     storage.held.set("t3.pullRequests.list:env-local,env-remote", "{}");
     storage.held.set("t3.pullRequests.list:env-local", "{}");
-    storage.held.set("t3.other", "kept");
+    storage.held.set("cinderdeck.other", "kept");
     rememberPullRequestListAnswer(storage, { environmentId: local, input }, answer([]));
     expect(
       [...storage.held.keys()].filter((key) => key.startsWith("t3.pullRequests.list:")),
     ).toEqual([]);
-    expect(storage.held.get("t3.other")).toBe("kept");
+    expect(storage.held.get("cinderdeck.other")).toBe("kept");
   });
 });

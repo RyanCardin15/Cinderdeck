@@ -12,6 +12,8 @@ import * as HostProcess from "@cinderdeck/shared/HostProcess";
 import { resolveSelfInvocation } from "@cinderdeck/shared/nodeRuntime";
 import * as Clock from "effect/Clock";
 import * as Console from "effect/Console";
+import * as Config from "effect/Config";
+import * as Option from "effect/Option";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -38,7 +40,7 @@ const wallClock = Clock.Clock.defaultValue();
 const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 const decodeJson = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown));
 
-// Kiro broadcasts T3 never reads. They carry the account's governance flags,
+// Kiro broadcasts Cinderdeck never reads. They carry the account's governance flags,
 // the full text of Kiro's bundled steering documents, its powers, the user's
 // hooks, the session roster and memory sync state; the client ignores every
 // one of them (no handler is registered).
@@ -120,7 +122,7 @@ function makeWireTee() {
     };
   };
   // Kiro settles every turn through the session/prompt response, so it is
-  // done once each prompt T3 sent has been answered.
+  // done once each prompt Cinderdeck sent has been answered.
   const kiroHasPendingWork = () => {
     const pending = new Set<string>();
     for (const wireMessage of wire) {
@@ -152,13 +154,13 @@ function wireToEntries(wire: ReadonlyArray<WireMessage>): {
   readonly droppedFrames: number;
 } {
   const entries: Array<ProviderReplayEntry> = [];
-  const t3Requests = new Map<string, string>();
+  const cinderdeckRequests = new Map<string, string>();
   const agentRequests = new Map<string, string>();
   let droppedFrames = 0;
   for (const wireMessage of wire) {
     if (wireMessage.direction === "respawn") {
       // JSON-RPC ids restart with the process.
-      t3Requests.clear();
+      cinderdeckRequests.clear();
       agentRequests.clear();
       entries.push({ type: "runtime_exit", status: "success" });
       continue;
@@ -172,7 +174,7 @@ function wireToEntries(wire: ReadonlyArray<WireMessage>): {
       }
       const isRequest = message.id !== undefined && message.id !== null;
       if (isRequest) {
-        (direction === "outgoing" ? t3Requests : agentRequests).set(
+        (direction === "outgoing" ? cinderdeckRequests : agentRequests).set(
           String(message.id),
           message.method,
         );
@@ -189,10 +191,10 @@ function wireToEntries(wire: ReadonlyArray<WireMessage>): {
       });
       continue;
     }
-    const pending = direction === "outgoing" ? agentRequests : t3Requests;
+    const pending = direction === "outgoing" ? agentRequests : cinderdeckRequests;
     const method = pending.get(String(message.id));
     if (method === undefined) {
-      // A response to a request T3 never saw; T3's protocol drops it, so replay
+      // A response to a request Cinderdeck never saw; Cinderdeck's protocol drops it, so replay
       // never sees it either.
       droppedFrames += 1;
       continue;
@@ -212,7 +214,7 @@ function wireToEntries(wire: ReadonlyArray<WireMessage>): {
   return { entries, droppedFrames };
 }
 
-const T3_INSTRUCTIONS_BODY = /<t3_code_instructions>\n[\s\S]*?\n<\/t3_code_instructions>/u;
+const CINDERDECK_INSTRUCTIONS_BODY = /<t3_code_instructions>\n[\s\S]*?\n<\/t3_code_instructions>/u;
 // A turn on another model sends its own runtime info, which the filter below
 // keeps; its model stays pinned and the linking guidance does not.
 const PULL_REQUEST_LINKING_BODY = /<pull_request_linking>\n[\s\S]*?\n<\/pull_request_linking>/u;
@@ -223,8 +225,8 @@ function normalizeOutboundFrame(frame: Record<string, unknown>, runtimeInstructi
   if (params === undefined) return frame;
   switch (frame.method) {
     case "initialize":
-      // Pin what T3 advertises (fs and terminal capabilities decide whether
-      // Kiro routes file and shell work through T3); the rest is <any>.
+      // Pin what Cinderdeck advertises (fs and terminal capabilities decide whether
+      // Kiro routes file and shell work through Cinderdeck); the rest is <any>.
       return {
         ...frame,
         params: Object.fromEntries(
@@ -255,7 +257,7 @@ function normalizeOutboundFrame(frame: Record<string, unknown>, runtimeInstructi
                   ...part,
                   text: part.text
                     .replace(
-                      T3_INSTRUCTIONS_BODY,
+                      CINDERDECK_INSTRUCTIONS_BODY,
                       "<t3_code_instructions>\n<any>\n</t3_code_instructions>",
                     )
                     .replace(
@@ -407,7 +409,17 @@ const KIRO_RECORDING_SETTINGS = Schema.decodeSync(KiroSettings)({
   binaryPath: process.env.T3_KIRO_BIN ?? "kiro-cli",
 });
 
+const RecorderEnv = Config.all({
+  T3_KIRO_VERSION: Config.String("T3_KIRO_VERSION").pipe(
+    Config.option,
+    Config.map(Option.getOrUndefined),
+  ),
+  HOME: Config.String("HOME").pipe(Config.option, Config.map(Option.getOrUndefined)),
+  USER: Config.String("USER").pipe(Config.option, Config.map(Option.getOrUndefined)),
+});
+
 const recordScenario = Effect.fn("recordKiroScenario")(function* (fixtureName: string) {
+  const recorderEnv = yield* RecorderEnv;
   const fixture = ORCHESTRATOR_REPLAY_FIXTURES.find((candidate) => candidate.name === fixtureName);
   const variant = fixture?.providers.find((provider) => provider.driver === KIRO_PROVIDER);
   if (fixture === undefined || variant === undefined) {
@@ -544,17 +556,17 @@ const recordScenario = Effect.fn("recordKiroScenario")(function* (fixtureName: s
     scenario: fixtureName,
     metadata: {
       generatedBy: "live-kiro-recorder",
-      kiroVersion: process.env.T3_KIRO_VERSION ?? "unknown",
+      kiroVersion: recorderEnv.T3_KIRO_VERSION ?? "unknown",
       normalization:
-        "Session ids are fixed sess_ UUIDs and other UUIDs (message and request ids) are numbered in first-seen order, the workspace is <workspace>, HOME is /home/kiro-replay and the recording user is kiro-replay. T3-owned prompt text, MCP servers and initialize params other than clientCapabilities and _meta are <any>. Kiro's log directory, user-scoped commands and agents, and the _kiro/* broadcasts T3 ignores (governance, steering documents, powers, tools, hooks, MCP status, session roster, memory sync) are removed. Timestamps are kept as recorded.",
+        "Session ids are fixed sess_ UUIDs and other UUIDs (message and request ids) are numbered in first-seen order, the workspace is <workspace>, HOME is /home/kiro-replay and the recording user is kiro-replay. T3-owned prompt text, MCP servers and initialize params other than clientCapabilities and _meta are <any>. Kiro's log directory, user-scoped commands and agents, and the _kiro/* broadcasts Cinderdeck ignores (governance, steering documents, powers, tools, hooks, MCP status, session roster, memory sync) are removed. Timestamps are kept as recorded.",
       droppedFrames,
     },
     entries: [
       ...normalizeEntries({
         entries,
         workspace: realWorkspace,
-        home: process.env.HOME ?? "",
-        user: process.env.USER ?? "",
+        home: recorderEnv.HOME ?? "",
+        user: recorderEnv.USER ?? "",
         runtimeInstructions: buildRuntimeInstructions({
           harness: "Kiro",
           model: variant.modelSelection.model,

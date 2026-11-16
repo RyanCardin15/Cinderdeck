@@ -6,6 +6,7 @@ import {
   ProviderInstanceId,
   ScheduledTaskId,
   type ScheduledTask,
+  ThreadId,
 } from "@cinderdeck/contracts";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -21,7 +22,9 @@ import {
   defaultScheduledTaskProjectId,
   matchesScheduledTaskScope,
   scheduleFromDraft,
+  scheduleLabel,
   taskToDraft,
+  unbindDraftFromThread,
 } from "./scheduledTasksSettings.logic";
 
 const laptopId = EnvironmentId.make("laptop");
@@ -35,7 +38,7 @@ function member(id: string, environmentId: EnvironmentId): SidebarProjectGroupMe
   return {
     id: ProjectId.make(id),
     environmentId,
-    title: "T3 Code",
+    title: "Cinderdeck",
     workspaceRoot: `/repos/${id}`,
     physicalProjectKey: `${environmentId}:/repos/${id}`,
     environmentLabel:
@@ -77,7 +80,7 @@ function group(
 }
 
 const sameIdElsewhere = member("first", serverId);
-const groups = [group("t3code", [first, second, third]), group("other", [other, sameIdElsewhere])];
+const groups = [group("cinderdeck", [first, second, third]), group("other", [other, sameIdElsewhere])];
 const tasks = [first, second, third, other, sameIdElsewhere].map((project, index) => ({
   id: `task-${index}`,
   environmentId: project.environmentId,
@@ -88,12 +91,12 @@ describe("scheduled task settings scope", () => {
   it.each<{ search: SettingsScopeSearch; expected: string[] }>([
     { search: {}, expected: ["task-0", "task-1", "task-2", "task-3", "task-4"] },
     { search: { machine: laptopId }, expected: ["task-0", "task-1"] },
-    { search: { project: "t3code" }, expected: ["task-0", "task-1", "task-2"] },
-    { search: { project: "t3code", machine: serverId }, expected: ["task-2"] },
-    { search: { project: "t3code", checkout: second.physicalProjectKey }, expected: ["task-1"] },
+    { search: { project: "cinderdeck" }, expected: ["task-0", "task-1", "task-2"] },
+    { search: { project: "cinderdeck", machine: serverId }, expected: ["task-2"] },
+    { search: { project: "cinderdeck", checkout: second.physicalProjectKey }, expected: ["task-1"] },
     { search: { project: "missing" }, expected: [] },
     { search: { machine: "removed" }, expected: [] },
-    { search: { project: "t3code", checkout: "removed" }, expected: [] },
+    { search: { project: "cinderdeck", checkout: "removed" }, expected: [] },
     { search: { project: "other", machine: laptopId }, expected: [] },
   ])("lists only matching tasks for $search", ({ search, expected }) => {
     const scope = resolveSettingsScope(search, groups, environments);
@@ -112,7 +115,7 @@ describe("scheduled task settings scope", () => {
       archivedAt,
     });
     const all = resolveSettingsScope({}, groups, environments);
-    const scoped = resolveSettingsScope({ project: "t3code" }, groups, environments);
+    const scoped = resolveSettingsScope({ project: "cinderdeck" }, groups, environments);
     expect(
       defaultScheduledTaskProjectId([project("a", null, null), project("b", at, null)], all),
     ).toBe("b");
@@ -131,7 +134,7 @@ describe("scheduled task settings scope", () => {
     ).toBe(true);
     expect(
       matchesScheduledTaskScope(
-        resolveSettingsScope({ project: "t3code" }, groups, environments),
+        resolveSettingsScope({ project: "cinderdeck" }, groups, environments),
         laptopId,
         removedProject,
       ),
@@ -167,6 +170,41 @@ describe("editing scheduled task branch settings", () => {
     const draft = taskToDraft(legacyTask);
     expect(draft.baseRef).toBe("release");
     expect(draft.startFromOrigin).toBe(false);
+  });
+});
+
+describe("fixed-time scheduled tasks", () => {
+  it("pads a stored single-digit hour so the time input shows it", () => {
+    const draft = taskToDraft({
+      ...legacyTask,
+      schedule: { type: "fixed_time", timeOfDay: "9:05" },
+    });
+    expect(draft.timeOfDay).toBe("09:05");
+  });
+
+  it("keeps a fixed run time and rejects a cleared one", () => {
+    const draft = taskToDraft({
+      ...legacyTask,
+      schedule: { type: "fixed_time", timeOfDay: "14:30" },
+    });
+    expect(scheduleFromDraft(draft)).toEqual({ type: "fixed_time", timeOfDay: "14:30" });
+    // A native time input reports "" when it is cleared or only partly filled.
+    expect(scheduleFromDraft({ ...draft, timeOfDay: "" })).toBeNull();
+  });
+});
+
+describe("scheduled task destination", () => {
+  it("unbinding leaves the shared checkout for a new worktree from the remote", () => {
+    const rootBound = taskToDraft({
+      ...legacyTask,
+      threadId: ThreadId.make("thread:bound"),
+      workspaceStrategy: { type: "root" },
+    });
+    expect(unbindDraftFromThread(rootBound)).toMatchObject({
+      threadId: "",
+      workspaceMode: "worktree",
+      startFromOrigin: true,
+    });
   });
 });
 
@@ -379,4 +417,13 @@ it("rejects dedupe templates without a request placeholder", () => {
   const draft = taskToDraft({ ...legacyTask, schedule: { type: "webhook", signature: null } });
   expect(scheduleFromDraft({ ...draft, replayKey: "literal" })).toBeNull();
   expect(scheduleFromDraft({ ...draft, coalesceKey: "{{body.bad" })).toBeNull();
+});
+
+it("appends the server zone only to fixed-time schedule labels", () => {
+  expect(scheduleLabel({ type: "fixed_time", timeOfDay: "16:31" }, "Etc/UTC")).toBe(
+    "Daily at 16:31 UTC",
+  );
+  expect(scheduleLabel({ type: "fixed_time", timeOfDay: "09:00" })).toBe("Daily at 09:00");
+  expect(scheduleLabel({ type: "interval", everyMs: 60_000 }, "Etc/UTC")).toBe("Every 1 min");
+  expect(scheduleLabel({ type: "webhook", signature: null }, "Etc/UTC")).toBe("On webhook");
 });

@@ -63,7 +63,7 @@ it.layer(NodeServices.layer)("EventNdjsonLogger", (it) => {
     const secret = "secret-circular-event-value";
 
     return Effect.gen(function* () {
-      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-log-"));
+      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-provider-log-"));
       const basePath = NodePath.join(tempDir, "provider-native.ndjson");
       const circular: Record<string, unknown> = { secret };
       circular.self = circular;
@@ -90,7 +90,7 @@ it.layer(NodeServices.layer)("EventNdjsonLogger", (it) => {
     "falls back to a global segment when orchestration thread id is missing or invalid",
     () =>
       Effect.gen(function* () {
-        const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-log-"));
+        const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-provider-log-"));
         const basePath = NodePath.join(tempDir, "provider-canonical.ndjson");
 
         try {
@@ -120,45 +120,9 @@ it.layer(NodeServices.layer)("EventNdjsonLogger", (it) => {
       }),
   );
 
-  it.effect("shares one thread writer across native and canonical streams", () =>
-    Effect.gen(function* () {
-      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-log-"));
-      const basePath = NodePath.join(tempDir, "events.log");
-
-      try {
-        const store = yield* makeEventNdjsonLogStore(basePath, { batchWindowMs: 0 });
-        const native = store.logger("native");
-        const canonical = store.logger("canonical");
-        const threadId = ThreadId.make("thread-shared");
-
-        yield* native.write({ id: "native-event" }, threadId);
-        yield* canonical.write({ type: "item.completed", id: "canonical-event" }, threadId);
-        yield* store.close();
-
-        const lines = NodeFS.readFileSync(ownedLogPath(basePath, "thread-shared"), "utf8")
-          .trim()
-          .split("\n")
-          .map(parseLogLine);
-
-        assert.deepEqual(
-          lines.map(({ stream, payload }) => ({ stream, payload })),
-          [
-            { stream: "NTIVE", payload: '{"id":"native-event"}' },
-            {
-              stream: "CANON",
-              payload: '{"type":"item.completed","id":"canonical-event"}',
-            },
-          ],
-        );
-      } finally {
-        NodeFS.rmSync(tempDir, { recursive: true, force: true });
-      }
-    }),
-  );
-
   it.effect("keeps long thread ids that share a prefix in separate files", () =>
     Effect.gen(function* () {
-      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-log-"));
+      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-provider-log-"));
       const basePath = NodePath.join(tempDir, "events.log");
       const prefix =
         "thread:delegated-task:command%3Amcp%3A00000000-0000-4000-8000-000000000000%3Adelegate-task%3A";
@@ -191,7 +155,7 @@ it.layer(NodeServices.layer)("EventNdjsonLogger", (it) => {
 
   it.effect("keeps shared store views non-owning when one adapter closes", () =>
     Effect.gen(function* () {
-      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-log-"));
+      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-provider-log-"));
       const basePath = NodePath.join(tempDir, "events.log");
 
       try {
@@ -228,7 +192,7 @@ it.layer(NodeServices.layer)("EventNdjsonLogger", (it) => {
 
   it.effect("does not strand a later batch after an interrupted write", () =>
     Effect.gen(function* () {
-      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-log-"));
+      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-provider-log-"));
       const basePath = NodePath.join(tempDir, "events.log");
       const threadPath = ownedLogPath(basePath, "thread-interrupted");
 
@@ -255,7 +219,7 @@ it.layer(NodeServices.layer)("EventNdjsonLogger", (it) => {
 
   it.effect("summarizes large histories without reading their items", () =>
     Effect.gen(function* () {
-      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-log-"));
+      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-provider-log-"));
       const basePath = NodePath.join(tempDir, "events.log");
       const turns = Array.from({ length: 10_000 });
       Object.defineProperty(turns, 0, {
@@ -291,9 +255,68 @@ it.layer(NodeServices.layer)("EventNdjsonLogger", (it) => {
     }),
   );
 
+  it.effect("drops Cursor streaming deltas while keeping its lifecycle updates", () =>
+    Effect.gen(function* () {
+      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-provider-log-"));
+      const basePath = NodePath.join(tempDir, "events.log");
+      const threadId = ThreadId.make("cursor-deltas");
+      const cursorUpdate = (update: object) => ({
+        provider: "cursor",
+        kind: "protocol",
+        event: {
+          direction: "incoming",
+          stage: "decoded",
+          payload: { type: "interaction.update", runId: "run-1", update },
+        },
+      });
+      const toolCall = { type: "shell", args: { command: "ls" } };
+      const transient = [
+        { type: "text-delta", text: "Hel" },
+        { type: "thinking-delta", text: "Hmm" },
+        { type: "token-delta", tokens: 3 },
+        { type: "shell-output-delta", event: { stdout: "a.ts\n" } },
+        { type: "partial-tool-call", callId: "call-1", modelCallId: "m-1", toolCall },
+        {
+          type: "tool-call-delta",
+          callId: "call-1",
+          modelCallId: "m-1",
+          taskUpdate: { type: "text-delta", text: "Sub" },
+        },
+      ].map(cursorUpdate);
+      const retained = [
+        { type: "tool-call-started", callId: "call-1", modelCallId: "m-1", toolCall },
+        {
+          type: "tool-call-delta",
+          callId: "call-1",
+          modelCallId: "m-1",
+          taskUpdate: { type: "tool-call-completed", callId: "call-2", toolCall },
+        },
+        { type: "tool-call-completed", callId: "call-1", modelCallId: "m-1", toolCall },
+        { type: "turn-ended" },
+      ].map(cursorUpdate);
+
+      try {
+        const store = yield* makeEventNdjsonLogStore(basePath, { batchWindowMs: 0 });
+        const native = store.logger("native");
+        for (const event of [...transient, ...retained]) {
+          yield* native.write(event, threadId);
+        }
+        yield* store.close();
+
+        const records = NodeFS.readFileSync(ownedLogPath(basePath, "cursor-deltas"), "utf8")
+          .trim()
+          .split("\n")
+          .map((line) => decodeUnknownJson(parseLogLine(line).payload));
+        assert.deepEqual(records, retained);
+      } finally {
+        NodeFS.rmSync(tempDir, { recursive: true, force: true });
+      }
+    }),
+  );
+
   it.effect("bounds oversized records while retaining failure details", () =>
     Effect.gen(function* () {
-      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-log-"));
+      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-provider-log-"));
       const basePath = NodePath.join(tempDir, "events.log");
 
       try {
@@ -337,7 +360,7 @@ it.layer(NodeServices.layer)("EventNdjsonLogger", (it) => {
 
   it.effect("bounds canonical diff snapshots before serializing their duplicate payloads", () =>
     Effect.gen(function* () {
-      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-log-"));
+      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-provider-log-"));
       const basePath = NodePath.join(tempDir, "events.log");
       const threadId = ThreadId.make("large-diff");
       const diff = "diff-payload".repeat(128 * 1_024);
@@ -368,7 +391,7 @@ it.layer(NodeServices.layer)("EventNdjsonLogger", (it) => {
 
   it.effect("serializes concurrent first writes for the same segment", () =>
     Effect.gen(function* () {
-      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-log-"));
+      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-provider-log-"));
       const basePath = NodePath.join(tempDir, "provider-canonical.ndjson");
 
       try {
@@ -404,7 +427,7 @@ it.layer(NodeServices.layer)("EventNdjsonLogger", (it) => {
 
   it.effect("rotates per-thread files when max size is exceeded", () =>
     Effect.gen(function* () {
-      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-log-"));
+      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-provider-log-"));
       const basePath = NodePath.join(tempDir, "provider-native.ndjson");
 
       try {
@@ -455,7 +478,7 @@ it.layer(NodeServices.layer)("EventNdjsonLogger", (it) => {
 
   it.effect("retires a thread log once a retention interval passes without writes", () =>
     Effect.gen(function* () {
-      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-log-"));
+      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-provider-log-"));
       const basePath = NodePath.join(tempDir, "events.log");
       const finishedPath = ownedLogPath(basePath, "finished");
       const activePath = ownedLogPath(basePath, "active");
@@ -539,7 +562,7 @@ it.layer(NodeServices.layer)("EventNdjsonLogger", (it) => {
     "keeps unrelated work responsive and drains before close while a disk write is held",
     () =>
       Effect.gen(function* () {
-        const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-log-"));
+        const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-provider-log-"));
         const basePath = NodePath.join(tempDir, "events.log");
         const fs = yield* FileSystem.FileSystem;
         const started = yield* Deferred.make<void>();

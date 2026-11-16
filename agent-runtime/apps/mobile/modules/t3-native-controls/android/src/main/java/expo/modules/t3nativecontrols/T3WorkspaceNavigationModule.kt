@@ -66,48 +66,48 @@ import expo.modules.kotlin.views.ExpoView
 
 class T3WorkspaceNavigationModule : Module() {
   override fun definition() = ModuleDefinition {
-    Name("T3WorkspaceNavigation")
-    View(T3WorkspaceNavigationView::class) {
-      Prop("tabs") { view: T3WorkspaceNavigationView, value: List<String> -> view.tabs = value }
-      Prop("selectedTab") { view: T3WorkspaceNavigationView, value: String ->
+    Name("CinderdeckWorkspaceNavigation")
+    View(CinderdeckWorkspaceNavigationView::class) {
+      Prop("tabs") { view: CinderdeckWorkspaceNavigationView, value: List<String> -> view.tabs = value }
+      Prop("selectedTab") { view: CinderdeckWorkspaceNavigationView, value: String ->
         view.selectedTab = value
       }
-      Prop("floating") { view: T3WorkspaceNavigationView, value: Boolean ->
+      Prop("floating") { view: CinderdeckWorkspaceNavigationView, value: Boolean ->
         view.floating = value
         view.clipToPadding = !value
         view.clipChildren = !value
       }
-      Prop("rail") { view: T3WorkspaceNavigationView, value: Boolean -> view.rail = value }
-      Prop("dark") { view: T3WorkspaceNavigationView, value: Boolean -> view.dark = value }
-      Prop("textScale") { view: T3WorkspaceNavigationView, value: Float -> view.textScale = value }
-      Prop("newEnabled") { view: T3WorkspaceNavigationView, value: Boolean ->
+      Prop("rail") { view: CinderdeckWorkspaceNavigationView, value: Boolean -> view.rail = value }
+      Prop("dark") { view: CinderdeckWorkspaceNavigationView, value: Boolean -> view.dark = value }
+      Prop("textScale") { view: CinderdeckWorkspaceNavigationView, value: Float -> view.textScale = value }
+      Prop("newEnabled") { view: CinderdeckWorkspaceNavigationView, value: Boolean ->
         view.newEnabled = value
       }
-      Prop("safeAreaTop") { view: T3WorkspaceNavigationView, value: Float ->
+      Prop("safeAreaTop") { view: CinderdeckWorkspaceNavigationView, value: Float ->
         view.safeAreaTop = value
       }
-      Prop("safeAreaBottom") { view: T3WorkspaceNavigationView, value: Float ->
+      Prop("safeAreaBottom") { view: CinderdeckWorkspaceNavigationView, value: Float ->
         view.safeAreaBottom = value
       }
-      Prop("headerHeight") { view: T3WorkspaceNavigationView, value: Float ->
+      Prop("headerHeight") { view: CinderdeckWorkspaceNavigationView, value: Float ->
         view.headerHeight = value
       }
-      Prop("containerColor") { view: T3WorkspaceNavigationView, value: Int ->
+      Prop("containerColor") { view: CinderdeckWorkspaceNavigationView, value: Int ->
         view.containerColor = value
       }
-      Prop("selectedColor") { view: T3WorkspaceNavigationView, value: Int ->
+      Prop("selectedColor") { view: CinderdeckWorkspaceNavigationView, value: Int ->
         view.selectedColor = value
       }
-      Prop("indicatorColor") { view: T3WorkspaceNavigationView, value: Int ->
+      Prop("indicatorColor") { view: CinderdeckWorkspaceNavigationView, value: Int ->
         view.indicatorColor = value
       }
-      Prop("unselectedColor") { view: T3WorkspaceNavigationView, value: Int ->
+      Prop("unselectedColor") { view: CinderdeckWorkspaceNavigationView, value: Int ->
         view.unselectedColor = value
       }
-      Prop("actionColor") { view: T3WorkspaceNavigationView, value: Int ->
+      Prop("actionColor") { view: CinderdeckWorkspaceNavigationView, value: Int ->
         view.actionColor = value
       }
-      Prop("actionContentColor") { view: T3WorkspaceNavigationView, value: Int ->
+      Prop("actionContentColor") { view: CinderdeckWorkspaceNavigationView, value: Int ->
         view.actionContentColor = value
       }
       Events("onTabSelected", "onNewThread", "onOverlayChange")
@@ -116,7 +116,7 @@ class T3WorkspaceNavigationModule : Module() {
 }
 
 /** One Material3 selection surface moves from below the list to its leading edge. */
-class T3WorkspaceNavigationView(
+class CinderdeckWorkspaceNavigationView(
   context: Context,
   appContext: AppContext
 ) : ExpoView(context, appContext) {

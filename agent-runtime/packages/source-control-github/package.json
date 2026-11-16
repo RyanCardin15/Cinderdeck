@@ -13,11 +13,12 @@
     }
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "effect-tsgo tsrs --noEmit",
     "test": "vp test run --config ../../vite.config.ts --dir .",
     "generate": "graphqlgen"
   },
   "dependencies": {
+    "@effect/platform-node": "catalog:",
     "@cinderdeck/contracts": "workspace:*",
     "@cinderdeck/provider-core": "workspace:*",
     "@cinderdeck/shared": "workspace:*",
@@ -26,7 +27,6 @@
   },
   "devDependencies": {
     "@effect/graphql-generator": "catalog:",
-    "@effect/platform-node": "catalog:",
     "@effect/vitest": "catalog:",
     "@cinderdeck/source-control-testing": "workspace:*",
     "@types/node": "catalog:",

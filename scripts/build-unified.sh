@@ -47,7 +47,7 @@ runtime (.build/runtime-cache) when the runtime sources, ignored .env
 files, toolchains, build environment and Git metadata it embeds are unchanged.
 
 Environment:
-  CINDERDECK_NODE_BINARY       Absolute Node 26.12.1 executable for runtime builds.
+  CINDERDECK_NODE_BINARY       Absolute Node 26.13.1 executable for runtime builds.
   CINDERDECK_SIGNING_IDENTITY  Same as --signing-identity; no automatic identity creation.
   CINDERDECK_SIGNING_KEYCHAIN  Existing signing keychain; default login.keychain-db.
   CINDERDECK_RUNTIME_CACHE     Set to 0 to behave like --no-runtime-cache.

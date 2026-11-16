@@ -20,7 +20,7 @@ it.layer(NodeServices.layer)("writeFileStringAtomically", (it) => {
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-atomic-write-" });
+        const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-atomic-write-" });
         const destination = path.join(root, "settings.json");
         const first = path.join(root, "link-0");
         yield* fs.writeFileString(destination, "before");
@@ -44,11 +44,27 @@ it.layer(NodeServices.layer)("writeFileStringAtomically", (it) => {
       }),
   );
 
+  it.effect("streams iterable contents across write batches", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-atomic-write-" });
+      const filePath = path.join(root, "cache.json");
+      yield* fs.writeFileString(filePath, "a much longer previous document");
+      const chunks = ["é".repeat(700_000), "🙂".repeat(400_000), "end"];
+
+      yield* writeFileStringAtomically({ filePath, contents: chunks.values() });
+
+      assert.strictEqual(yield* fs.readFileString(filePath), chunks.join(""));
+      assert.deepStrictEqual(yield* fs.readDirectory(root), ["cache.json"]);
+    }),
+  );
+
   it.effect("keeps a symlinked file linked and rewrites its destination", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-atomic-write-" });
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-atomic-write-" });
       const destination = path.join(root, "dotfiles", "settings.json");
       const link = path.join(root, "home", "settings.json");
       yield* fs.makeDirectory(path.dirname(destination), { recursive: true });
@@ -63,11 +79,26 @@ it.layer(NodeServices.layer)("writeFileStringAtomically", (it) => {
     }),
   );
 
+  it.effect.each(HostProcess.Platform.defaultValue() === "linux" ? [255] : [])(
+    "saves a file whose name is %i bytes long",
+    (length) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-atomic-write-" });
+        const filePath = path.join(root, `${"s".repeat(length - 5)}.json`);
+
+        yield* writeFileStringAtomically({ filePath, contents: "after" });
+
+        assert.strictEqual(yield* fs.readFileString(filePath), "after");
+      }),
+  );
+
   it.effect("keeps a dangling symlink linked and creates its destination", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-atomic-write-" });
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-atomic-write-" });
       const destination = path.join(root, "dotfiles", "settings.json");
       const link = path.join(root, "home", "settings.json");
       yield* fs.makeDirectory(path.dirname(link), { recursive: true });
@@ -84,7 +115,7 @@ it.layer(NodeServices.layer)("writeFileStringAtomically", (it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-atomic-write-" });
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-atomic-write-" });
       const first = path.join(root, "first.json");
       const second = path.join(root, "second.json");
       yield* fs.symlink(second, first);
@@ -104,7 +135,7 @@ it.layer(NodeServices.layer)("writeFileStringAtomically", (it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-atomic-write-" });
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-atomic-write-" });
       const destination = path.join(root, "dotfiles", "config", "settings.json");
       const linkedState = path.join(root, "dotfiles", "state");
       const home = path.join(root, "home");
@@ -127,7 +158,7 @@ it.layer(NodeServices.layer)("writeFileStringAtomically", (it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-atomic-write-" });
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-atomic-write-" });
       const filePath = path.join(root, "settings.json");
       yield* fs.writeFileString(filePath, "before");
       const firstAttempt = yield* Deferred.make<void>();

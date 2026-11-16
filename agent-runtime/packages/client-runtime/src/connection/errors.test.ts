@@ -50,13 +50,13 @@ describe("mapManagedRelayError", () => {
     expect(mapConnectRefusal("managed_endpoint_allocation_not_ready")).toMatchObject({
       _tag: "ConnectionTransientError",
       reason: "endpoint-unavailable",
-      detail: "The environment's T3 Connect tunnel is still being set up.",
+      detail: "The environment's Cinderdeck Connect tunnel is still being set up.",
       traceId: "trace-connect-refused",
     });
     expect(mapConnectRefusal("endpoint_provider_not_managed")).toMatchObject({
       _tag: "ConnectionBlockedError",
       reason: "permission",
-      detail: expect.stringContaining("turn T3 Connect on"),
+      detail: expect.stringContaining("turn Cinderdeck Connect on"),
     });
     expect(mapConnectRefusal(undefined)).toMatchObject({
       _tag: "ConnectionBlockedError",
@@ -93,7 +93,10 @@ describe("mapRemoteDpopEnvironmentError", () => {
       message: "Failed to fetch remote environment endpoint.",
       cause: new TypeError("Failed to fetch"),
     }),
-    new RemoteEnvironmentAuthTimeoutError("https://environment.example.test", 10_000),
+    new RemoteEnvironmentAuthTimeoutError({
+      requestUrl: "https://environment.example.test",
+      timeoutMs: 10_000,
+    }),
   ])("suggests another network when the relay endpoint cannot be reached: $_tag", (error) => {
     const mapped = mapRemoteDpopEnvironmentError(error);
     expect(mapped).toMatchObject({

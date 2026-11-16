@@ -25,7 +25,7 @@ vi.mock("node:child_process", () => ({
 
 describe("runOnce", () => {
   it("collects the scenario reports when HOME has no .cache, then removes its report dir", () => {
-    const home = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-render-metrics-"));
+    const home = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-render-metrics-"));
     vi.stubEnv("HOME", home);
     vi.stubEnv("TMPDIR", home);
     vi.stubEnv("USERPROFILE", home);

@@ -31,7 +31,7 @@ describe("resolveThreadReferenceCopyTarget", () => {
         ...thread,
         openPanelPullRequestUrl: null,
         pullRequests: [crossRepositoryPullRequest],
-        linkedPullRequestUrl: "https://github.com/t3/pr/12",
+        linkedPullRequestUrl: "https://github.com/cinderdeck/pr/12",
       }),
     ).toBeNull();
   });
@@ -40,18 +40,18 @@ describe("resolveThreadReferenceCopyTarget", () => {
     expect(
       resolveThreadReferenceCopyTarget({
         ...thread,
-        openPanelPullRequestUrl: "https://github.com/t3/pr/14",
+        openPanelPullRequestUrl: "https://github.com/cinderdeck/pr/14",
         pullRequests: [crossRepositoryPullRequest],
-        linkedPullRequestUrl: "https://github.com/t3/pr/12",
+        linkedPullRequestUrl: "https://github.com/cinderdeck/pr/12",
       }),
     ).toMatchObject({
       kind: "pull-request",
-      value: "https://github.com/t3/pr/14",
+      value: "https://github.com/cinderdeck/pr/14",
       successTitle: "PR link copied",
     });
   });
 
-  it.each([null, "https://github.com/t3/pr/12"])(
+  it.each([null, "https://github.com/cinderdeck/pr/12"])(
     "copies a native cross-repository link before the fallback URL %s",
     (linkedPullRequestUrl) => {
       expect(
@@ -72,9 +72,9 @@ describe("resolveThreadReferenceCopyTarget", () => {
       resolveThreadReferenceCopyTarget({
         ...thread,
         pullRequests: [{ ...crossRepositoryPullRequest, source: "stack-dismissed" }],
-        linkedPullRequestUrl: "https://github.com/t3/pr/12",
+        linkedPullRequestUrl: "https://github.com/cinderdeck/pr/12",
       }),
-    ).toMatchObject({ kind: "pull-request", value: "https://github.com/t3/pr/12" });
+    ).toMatchObject({ kind: "pull-request", value: "https://github.com/cinderdeck/pr/12" });
   });
 
   it("copies a thread chip that pastes back as the same thread on its machine", () => {
@@ -99,7 +99,7 @@ describe("resolveThreadReferenceCopyTarget", () => {
       ],
     });
     // The plain text opens the thread anywhere and pastes back as the copied record's chip.
-    expect(target!.value).toBe("https://app.t3.codes/threads/env-1/thread-1");
+    expect(target!.value).toBe("https://app.cinderdeck.codes/threads/env-1/thread-1");
     expect(threadLinkContextReferences(target!.value, pasted!.records, () => undefined)).toEqual({
       text: `[Fix the login flow](t3-context://v1/thread/${pasted!.records[0]!.contextId})`,
       records: pasted!.records,
@@ -108,8 +108,8 @@ describe("resolveThreadReferenceCopyTarget", () => {
 
   it("links through the build's hosted app", () => {
     expect(
-      resolveThreadReferenceCopyTarget({ ...thread, hostedAppUrl: "https://preview.t3.codes" })
+      resolveThreadReferenceCopyTarget({ ...thread, hostedAppUrl: "https://preview.cinderdeck.codes" })
         ?.value,
-    ).toBe("https://preview.t3.codes/threads/env-1/thread-1");
+    ).toBe("https://preview.cinderdeck.codes/threads/env-1/thread-1");
   });
 });

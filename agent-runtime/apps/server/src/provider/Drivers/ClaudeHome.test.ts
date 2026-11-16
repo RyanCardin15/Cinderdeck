@@ -65,7 +65,7 @@ it.layer(NodeServices.layer)("ClaudeHome", (it) => {
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const homePath = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-claude-home-" });
+        const homePath = yield* fileSystem.makeTempDirectoryScoped({ prefix: "cinderdeck-claude-home-" });
         const host = {
           CLAUDE_CODE_ENTRYPOINT: "claude-desktop",
           CLAUDECODE: "1",
@@ -81,7 +81,7 @@ it.layer(NodeServices.layer)("ClaudeHome", (it) => {
         ];
 
         expect(yield* mergeClaudeProcessEnvironment({ homePath }, undefined, host)).toEqual({
-          CLAUDE_CODE_ENTRYPOINT: "t3-code",
+          CLAUDE_CODE_ENTRYPOINT: "cinderdeck-code",
           KEEP: "1",
         });
         expect(yield* mergeClaudeProcessEnvironment({ homePath }, instance, host)).toEqual({

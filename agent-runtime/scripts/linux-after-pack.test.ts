@@ -9,11 +9,11 @@ import { removeSharedWriteAccess } from "./linux-after-pack.ts";
 
 describe.skipIf(HostProcess.Platform.defaultValue() === "win32")("removeSharedWriteAccess", () => {
   it("removes group and other write access from the packed app only", async () => {
-    const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-after-pack-"));
+    const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "cinderdeck-after-pack-"));
     try {
       const appOutDir = NodePath.join(root, "app");
       const modes = {
-        "app/t3code": [0o777, 0o755],
+        "app/cinderdeck": [0o777, 0o755],
         "app/resources.pak": [0o666, 0o644],
         "app/chrome-sandbox": [0o4777, 0o4755],
         "app/resources/app.asar": [0o644, 0o644],

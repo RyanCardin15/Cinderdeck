@@ -1,6 +1,9 @@
 import type { EnvironmentId, RunId, ThreadId } from "@cinderdeck/contracts";
 import { assistantCitationsToPlainText } from "@cinderdeck/shared/assistantCitations";
-import { isAttachmentOnlyBootstrapPrompt } from "@cinderdeck/shared/composerContextReferences";
+import {
+  isAttachmentOnlyBootstrapPrompt,
+  replaceComposerContextReferences,
+} from "@cinderdeck/shared/composerContextReferences";
 
 export const REMOVE_QUEUED_MESSAGE_ACCESSIBILITY_LABEL = "Remove queued message";
 
@@ -38,7 +41,9 @@ export function resolveThreadQueueRowControls(input: {
     // Editing and sending keep the original text so quoted citations stay linked.
     displayText: isAttachmentOnlyBootstrapPrompt(input.text)
       ? ""
-      : assistantCitationsToPlainText(input.text),
+      : assistantCitationsToPlainText(
+          replaceComposerContextReferences(input.text, (reference) => reference.label),
+        ).trim(),
     isEditing,
   };
 }

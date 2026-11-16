@@ -155,7 +155,7 @@ function makeRegistry(input: {
           ? Layer.mock(ServerSettings.ServerSettingsService)(input.settings)
           : ServerSettings.ServerSettingsService.layerTest(),
         ServerConfig.layerTest(process.cwd(), {
-          prefix: "t3-source-control-registry-test-",
+          prefix: "cinderdeck-source-control-registry-test-",
         }).pipe(Layer.provide(NodeServices.layer)),
       ),
     ),
@@ -283,7 +283,7 @@ it.effect(
           url,
         );
       }
-    }).pipe(Effect.scoped),
+    }),
 );
 
 it.effect("does not refine a context whose server address is empty", () =>

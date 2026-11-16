@@ -59,24 +59,28 @@ exit 7
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const key = `${yield* HostProcess.Platform}-${yield* HostProcess.Architecture}`;
-  const stem = `t3-${VERSION}-${key}`;
+  const stem = `cinderdeck-${VERSION}-${key}`;
   const archiveName = `${stem}.tar.gz`;
   yield* fs.makeDirectory(path.join(root, "release", stem, "node_modules/native"), {
     recursive: true,
   });
-  yield* fs.writeFileString(path.join(root, "release", stem, "t3"), executable);
-  yield* fs.chmod(path.join(root, "release", stem, "t3"), 0o755);
+  yield* fs.writeFileString(path.join(root, "release", stem, "cinderdeck"), executable);
+  yield* fs.chmod(path.join(root, "release", stem, "cinderdeck"), 0o755);
   const tar = yield* run("tar", ["-czf", archiveName, stem], {
     cwd: path.join(root, "release"),
-    env: { PATH: process.env.PATH },
+    env: { PATH: (yield* HostProcess.Environment).PATH },
   });
   assert.equal(tar.exitCode, 0, tar.stderr);
   const archive = yield* fs.readFile(path.join(root, "release", archiveName));
   let checksum = NodeCrypto.createHash("sha256").update(archive).digest("hex");
   const requests: Array<string> = [];
+  const failures: Array<number> = [];
   const server = NodeHttp.createServer((request, response) => {
     requests.push(request.url ?? "");
-    if (request.url === `/v${VERSION}/SHA256SUMS`) {
+    const failure = failures.shift();
+    if (failure !== undefined) {
+      response.writeHead(failure).end("upstream timed out");
+    } else if (request.url === `/v${VERSION}/SHA256SUMS`) {
       response.end(`${checksum}  ${archiveName}\n`);
     } else if (request.url === `/v${VERSION}/${archiveName}`) {
       response.writeHead(200, { "Content-Length": archive.length }).end(archive);
@@ -101,6 +105,9 @@ exit 7
     corruptChecksum: () => {
       checksum = "0".repeat(64);
     },
+    failNextRequests: (...statuses: Array<number>) => {
+      failures.push(...statuses);
+    },
   };
 });
 
@@ -111,7 +118,7 @@ it.layer(NodeServices.layer)("build-npm-launcher", (it) => {
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-npm-launcher-test-" });
+        const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-npm-launcher-test-" });
         const output = yield* buildNpmLauncher({
           version: VERSION,
           outputDir: path.join(root, "out"),
@@ -120,9 +127,9 @@ it.layer(NodeServices.layer)("build-npm-launcher", (it) => {
         const manifest = yield* decodeManifest(
           yield* fs.readFileString(path.join(output.packageDir, "package.json")),
         );
-        assert.equal(manifest.name, "t3");
+        assert.equal(manifest.name, "cinderdeck");
         assert.equal(manifest.version, VERSION);
-        assert.deepStrictEqual(manifest.bin, { t3: "./bin/t3.mjs" });
+        assert.deepStrictEqual(manifest.bin, { cinderdeck: "./bin/cinderdeck.mjs" });
         assert.isUndefined(manifest.dependencies);
         assert.isUndefined(manifest.optionalDependencies);
         assert.isAbove(npmReleaseDatabaseMigration(manifest) ?? 0, 0);
@@ -131,20 +138,22 @@ it.layer(NodeServices.layer)("build-npm-launcher", (it) => {
         yield* fs.makeDirectory(installed);
         const unpack = yield* run("tar", ["-xzf", output.tarball, "-C", installed], {
           cwd: root,
-          env: { PATH: process.env.PATH },
+          env: { PATH: (yield* HostProcess.Environment).PATH },
         });
         assert.equal(unpack.exitCode, 0, unpack.stderr);
         const packageDir = path.join(installed, "package");
 
         const release = yield* serveFakeRelease(root);
+        // regression: #32897
+        release.failNextRequests(504, 524);
         const home = path.join(root, "home");
         const env = {
-          PATH: process.env.PATH,
+          PATH: (yield* HostProcess.Environment).PATH,
           T3CODE_HOME: home,
           T3CODE_TEST_CALLS: path.join(root, "calls"),
           T3CODE_RELEASE_BASE_URL: release.baseUrl,
         };
-        const launcher = path.join(packageDir, "bin/t3.mjs");
+        const launcher = path.join(packageDir, "bin/cinderdeck.mjs");
         const first = yield* run(process.execPath, [launcher, "serve", "a b"], {
           cwd: root,
           env,
@@ -175,7 +184,7 @@ it.layer(NodeServices.layer)("build-npm-launcher", (it) => {
           ["--version|", `serve a b|${launcher}`, `--version|${launcher}`],
         );
 
-        yield* fs.writeFileString(path.join(versionDir, "t3"), "#!/t3-test-missing-loader\n");
+        yield* fs.writeFileString(path.join(versionDir, "cinderdeck"), "#!/t3-test-missing-loader\n");
         for (const _attempt of [1, 2]) {
           const cached = yield* run(process.execPath, [launcher, "serve"], { cwd: root, env });
           assert.equal(cached.exitCode, 1, cached.stderr);
@@ -187,7 +196,7 @@ it.layer(NodeServices.layer)("build-npm-launcher", (it) => {
           );
         }
 
-        const ipcServer = path.join(home, "runtime/versions", VERSION, "t3");
+        const ipcServer = path.join(home, "runtime/versions", VERSION, "cinderdeck");
         yield* fs.writeFileString(
           ipcServer,
           `#!${process.execPath}\nprocess.on("SIGTERM", () => process.exit(23));\nprocess.on("message", (m) => process.send({ reply: m }));\nprocess.send({ args: process.argv.slice(2) });\n`,
@@ -227,10 +236,10 @@ it.layer(NodeServices.layer)("build-npm-launcher", (it) => {
         const staleDir = path.join(staleHome, "runtime/versions", VERSION);
         const peerDir = path.join(root, "peer-runtime");
         yield* fs.makeDirectory(staleDir, { recursive: true });
-        yield* fs.writeFileString(path.join(staleDir, "t3"), "");
+        yield* fs.writeFileString(path.join(staleDir, "cinderdeck"), "");
         yield* fs.makeDirectory(peerDir);
-        yield* fs.writeFileString(path.join(peerDir, "t3"), '#!/bin/sh\necho "peer $*"\nexit 7\n');
-        yield* fs.chmod(path.join(peerDir, "t3"), 0o755);
+        yield* fs.writeFileString(path.join(peerDir, "cinderdeck"), '#!/bin/sh\necho "peer $*"\nexit 7\n');
+        yield* fs.chmod(path.join(peerDir, "cinderdeck"), 0o755);
         yield* fs.writeFileString(path.join(peerDir, ".install-complete"), `${VERSION}\n`);
         yield* fs.writeFileString(path.join(peerDir, "sidecar"), "peer sidecar");
         const peerChecks = path.join(root, "peer-checks.txt");
@@ -245,7 +254,7 @@ const { readFileSync, renameSync, rmSync } = fs;
 let checking = false;
 let published = false;
 const checkPeer = () => {
-  const child = spawnSync(dir + "/t3", ["--version"], { encoding: "utf8" });
+  const child = spawnSync(dir + "/cinderdeck", ["--version"], { encoding: "utf8" });
   let sidecar;
   try {
     sidecar = readFileSync(dir + "/sidecar", "utf8");
@@ -306,7 +315,7 @@ fs.readFileSync = (file, ...rest) => {
         const staleOnlyHome = path.join(root, "stale-only-home");
         const staleOnlyDir = path.join(staleOnlyHome, "runtime/versions", VERSION);
         yield* fs.makeDirectory(staleOnlyDir, { recursive: true });
-        yield* fs.writeFileString(path.join(staleOnlyDir, "t3"), "incomplete");
+        yield* fs.writeFileString(path.join(staleOnlyDir, "cinderdeck"), "incomplete");
         yield* fs.makeDirectory(`${staleOnlyDir}.lock`);
         const locked = yield* run(process.execPath, [launcher, "--version"], {
           cwd: root,
@@ -314,7 +323,7 @@ fs.readFileSync = (file, ...rest) => {
         });
         assert.equal(locked.exitCode, 1);
         assert.include(locked.stderr, `delete ${staleOnlyDir}.lock`);
-        assert.equal(yield* fs.readFileString(path.join(staleOnlyDir, "t3")), "incomplete");
+        assert.equal(yield* fs.readFileString(path.join(staleOnlyDir, "cinderdeck")), "incomplete");
 
         // Without a peer, the stale folder is replaced by our own download.
         yield* fs.remove(`${staleOnlyDir}.lock`, { recursive: true });
@@ -354,7 +363,7 @@ fs.readFileSync = (file, ...rest) => {
           "#!/bin/sh\nkill -TERM $$\n",
           '#!/bin/sh\ntrap \'echo caught > "$T3CODE_TEST_TERM"; exit 42\' TERM\necho ready > "$T3CODE_TEST_READY"\nwhile :; do :; done\n',
         ]) {
-          const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-npm-validation-test-" });
+          const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-npm-validation-test-" });
           const output = yield* buildNpmLauncher({
             version: VERSION,
             outputDir: path.join(root, "out"),
@@ -374,13 +383,13 @@ syncBuiltinESMExports();
 `,
           );
           const env = {
-            PATH: process.env.PATH,
+            PATH: (yield* HostProcess.Environment).PATH,
             T3CODE_HOME: home,
             T3CODE_RELEASE_BASE_URL: release.baseUrl,
             T3CODE_TEST_READY: path.join(root, "probe-ready"),
             T3CODE_TEST_TERM: path.join(root, "probe-term"),
           };
-          const launcher = path.join(output.packageDir, "bin/t3.mjs");
+          const launcher = path.join(output.packageDir, "bin/cinderdeck.mjs");
           const failed = yield* run(
             process.execPath,
             ["--import", probeTimeoutHook, launcher, "serve"],
@@ -401,6 +410,82 @@ syncBuiltinESMExports();
             assert.include(failed.stderr, "musl");
           }
         }
+      }),
+  );
+
+  it.effect.skipIf(HostProcess.Platform.defaultValue() === "win32")(
+    "kills a runtime that ignores the forwarded SIGTERM, and its providers, so the launcher exits",
+    () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const root = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-npm-launcher-test-" });
+        const output = yield* buildNpmLauncher({
+          version: VERSION,
+          outputDir: path.join(root, "out"),
+        });
+        const hostPath = (yield* HostProcess.Environment).PATH;
+        const installed = path.join(root, "installed");
+        yield* fs.makeDirectory(installed);
+        const unpack = yield* run("tar", ["-xzf", output.tarball, "-C", installed], {
+          cwd: root,
+          env: { PATH: hostPath },
+        });
+        assert.equal(unpack.exitCode, 0, unpack.stderr);
+
+        const home = path.join(root, "home");
+        const versionDir = path.join(home, "runtime/versions", VERSION);
+        yield* fs.makeDirectory(versionDir, { recursive: true });
+        yield* fs.writeFileString(path.join(versionDir, ".install-complete"), `${VERSION}\n`);
+        // Stands in for a runtime whose exit is stuck behind blocked filesystem calls, with a
+        // provider it never gets to stop. Both give up on their own well inside the project
+        // timeout so an unescalated stop fails descriptively.
+        const stuck = "runtime ignored SIGTERM and was still running 30s later";
+        const orphaned = "provider outlived the runtime by 30s";
+        const provider = `process.on("SIGTERM", () => {}); setTimeout(() => { console.log(${JSON.stringify(orphaned)}); process.exit(0); }, 30_000);`;
+        yield* fs.writeFileString(
+          path.join(versionDir, "cinderdeck"),
+          `#!${process.execPath}
+const provider = require("node:child_process").spawn(process.execPath, ["-e", ${JSON.stringify(provider)}], { stdio: "inherit" });
+process.on("SIGTERM", () => setTimeout(() => { console.log(${JSON.stringify(stuck)}); process.exit(0); }, 30_000));
+setInterval(() => {}, 1 << 30);
+console.log(process.pid, provider.pid);
+`,
+        );
+        yield* fs.chmod(path.join(versionDir, "cinderdeck"), 0o755);
+
+        const launcher = NodeChildProcess.spawn(
+          process.execPath,
+          [path.join(installed, "package/bin/cinderdeck.mjs"), "serve"],
+          { cwd: root, env: { PATH: hostPath, T3CODE_HOME: home }, stdio: "pipe" },
+        );
+        let pids: Array<number> = [];
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => {
+            for (const pid of [...pids, launcher.pid]) {
+              try {
+                if (pid !== undefined) process.kill(pid, "SIGKILL");
+              } catch {}
+            }
+          }),
+        );
+        let stdout = "";
+        const started = Promise.withResolvers<void>();
+        launcher.stdout.setEncoding("utf8");
+        launcher.stdout.on("data", (chunk: string) => {
+          stdout += chunk;
+          if (stdout.includes("\n")) started.resolve();
+        });
+        // The runtime and provider inherit this pipe, so it closes only once all three are gone.
+        const closed = NodeEvents.EventEmitter.once(launcher.stdout, "close");
+        yield* Effect.promise(() => started.promise);
+        pids = stdout.trim().split(" ").map(Number);
+        assert.isTrue(pids.length === 2 && pids.every(Number.isInteger), stdout);
+
+        launcher.kill("SIGTERM");
+        yield* Effect.promise(() => closed);
+        assert.notInclude(stdout, stuck, "the launcher waited on a runtime that ignored SIGTERM");
+        assert.notInclude(stdout, orphaned, "the runtime's provider outlived the launcher");
       }),
   );
 });

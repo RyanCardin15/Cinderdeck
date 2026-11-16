@@ -17,7 +17,7 @@ import * as GitHubRequestPolicy from "./GitHubRequestPolicy.ts";
 
 const DEFAULT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 /** Added to the answer, never sent: names the credential an errored answer was given to. */
-const CREDENTIAL_SOURCE_HEADER = "x-t3code-credential-source";
+const CREDENTIAL_SOURCE_HEADER = "x-cinderdeck-credential-source";
 const isCredentialSource = Schema.is(GitHubCredentials.GitHubCredentialSource);
 
 /** One client serves all hosts; each call must supply its target. */
@@ -43,10 +43,31 @@ function queryHash(query: string): string {
   return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
+/**
+ * Whether every error is a NOT_FOUND on a lookup: a root field (with its list items),
+ * `repository.pullRequest` or `repository.issueOrPullRequest`. A NOT_FOUND deeper down is one
+ * field GitHub could not resolve.
+ */
 export const isNotFoundOnly = (error: unknown): boolean =>
   GraphQLClientError.isGraphQLClientError(error) &&
   error.reason._tag === "ResponseError" &&
-  error.reason.errors.every((graphQlError) => graphQlError["type"] === "NOT_FOUND");
+  error.reason.errors.every(
+    ({ type, path }) =>
+      type === "NOT_FOUND" &&
+      (path === undefined ||
+        path.slice(1).every((segment) => typeof segment === "number") ||
+        (path.length === 2 &&
+          path[0] === "repository" &&
+          (path[1] === "pullRequest" || path[1] === "issueOrPullRequest"))),
+  );
+
+/** GitHub's message for each error in an answer, with the field it names. */
+export const describeErrors = (error: GraphQLClientError.GraphQLClientError) =>
+  error.reason._tag === "ResponseError"
+    ? error.reason.errors.map(({ message, path }) =>
+        path === undefined || path.length === 0 ? message : `${message} (at ${path.join(".")})`,
+      )
+    : [];
 
 /** Share REST's credentials/slots/quota/pause; leave non-rate-limit errors to each lookup. */
 export class GitHubGraphQlAuth extends GraphQLMiddleware.Service<
@@ -234,6 +255,7 @@ const fromClientError = (
   const context = {
     host: normalizeHost(target.host),
     operation: target.operation,
+    githubErrors: describeErrors(error),
   };
   const credential = Option.filter(
     Headers.get(reason.headers ?? Headers.empty, CREDENTIAL_SOURCE_HEADER),
@@ -247,7 +269,6 @@ const fromClientError = (
     : new GitHubRequestPolicy.GitHubApiResponseError({
         ...context,
         status: reason.status ?? 200,
-        githubErrors: reason.errors.map((graphQlError) => graphQlError.message),
         githubErrorTypes: reason.errors.map((graphQlError) =>
           typeof graphQlError["type"] === "string" ? graphQlError["type"] : null,
         ),

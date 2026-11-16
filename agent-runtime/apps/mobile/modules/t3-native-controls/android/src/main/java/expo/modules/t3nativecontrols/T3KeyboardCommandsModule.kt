@@ -12,8 +12,8 @@ class T3KeyboardCommandsModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("T3KeyboardCommands")
 
-    View(T3KeyboardCommandsView::class) {
-      Prop("enabledCommands") { view: T3KeyboardCommandsView, commands: List<String> ->
+    View(CinderdeckKeyboardCommandsView::class) {
+      Prop("enabledCommands") { view: CinderdeckKeyboardCommandsView, commands: List<String> ->
         view.enabledCommands = commands.toSet()
       }
       Events("onCommand")
@@ -21,7 +21,7 @@ class T3KeyboardCommandsModule : Module() {
   }
 }
 
-class T3KeyboardCommandsView(
+class CinderdeckKeyboardCommandsView(
   context: Context,
   appContext: AppContext
 ) : ExpoView(context, appContext) {

@@ -123,7 +123,7 @@ describe("DesktopObservability", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-desktop-backend-output-log-test-",
+        prefix: "cinderdeck-desktop-backend-output-log-test-",
       });
       const layerEnvironment = layerEnvironmentFor(baseDir, false);
       const logPath = yield* Effect.gen(function* () {
@@ -201,7 +201,7 @@ describe("DesktopObservability", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-desktop-backend-output-snapshot-test-",
+        prefix: "cinderdeck-desktop-backend-output-snapshot-test-",
       });
       const layerEnvironment = layerEnvironmentFor(baseDir, false);
       const logPath = yield* Effect.gen(function* () {
@@ -241,7 +241,7 @@ describe("DesktopObservability", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-desktop-backend-output-bound-test-",
+        prefix: "cinderdeck-desktop-backend-output-bound-test-",
       });
       const layerEnvironment = layerEnvironmentFor(baseDir, false);
       const logPath = yield* Effect.gen(function* () {
@@ -281,12 +281,33 @@ describe("DesktopObservability", () => {
     ),
   );
 
+  it.effect("startup prunes only canonical rotation suffixes", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const directory = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "cinderdeck-desktop-rotating-prune-test-",
+      });
+      const filePath = `${directory}/server-child.log`;
+      const retained = ["1", "3", "04", "4.0", "4e0", "0x4", "+4", "notes"];
+      for (const suffix of [...retained, "4", "50"]) {
+        yield* fileSystem.writeFileString(`${filePath}.${suffix}`, suffix);
+      }
+
+      yield* DesktopObservability.makeRotatingLogFileWriter({ filePath, maxFiles: 3 });
+
+      assert.deepEqual(
+        (yield* fileSystem.readDirectory(directory)).sort(),
+        retained.map((suffix) => `server-child.log.${suffix}`).sort(),
+      );
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("stops every export when the OpenTelemetry SDK is disabled", () => {
     const requests: Array<ExportedRequest> = [];
     return Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-desktop-observability-test-",
+        prefix: "cinderdeck-desktop-observability-test-",
       });
       const layerEnvironment = layerEnvironmentFor(baseDir);
       yield* writeObservabilitySettings(layerEnvironment, {
@@ -319,7 +340,7 @@ describe("DesktopObservability", () => {
     return Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-desktop-observability-test-",
+        prefix: "cinderdeck-desktop-observability-test-",
       });
       const layerEnvironment = layerEnvironmentFor(baseDir);
       yield* writeObservabilitySettings(layerEnvironment, {
@@ -343,12 +364,12 @@ describe("DesktopObservability", () => {
     );
   });
 
-  it.effect("describes the Node runtime and the desktop mode under semantic or t3code keys", () => {
+  it.effect("describes the Node runtime and the desktop mode under semantic or cinderdeck keys", () => {
     const requests: Array<ExportedRequest> = [];
     return Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-desktop-observability-test-",
+        prefix: "cinderdeck-desktop-observability-test-",
       });
       const layerEnvironment = layerEnvironmentFor(baseDir);
       yield* writeObservabilitySettings(layerEnvironment, {
@@ -367,7 +388,7 @@ describe("DesktopObservability", () => {
         body,
         `"key":"process.runtime.version","value":{"stringValue":"${process.versions.node}"}`,
       );
-      assert.include(body, '"key":"t3code.desktop.mode","value":{"stringValue":"development"}');
+      assert.include(body, '"key":"cinderdeck.desktop.mode","value":{"stringValue":"development"}');
       assert.notInclude(body, "service.mode");
     }).pipe(
       Effect.scoped,

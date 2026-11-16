@@ -1,5 +1,5 @@
 /**
- * Expo's GraphQL API for EAS Simulator sessions. The operations in
+ * Expo's GraphQL API for Expo Simulators sessions. The operations in
  * `ExpoApi.graphql` are the ones eas-cli's `simulator:*` commands send; their
  * client is generated from `schema/expo.graphql` (`vp run generate`).
  */
@@ -20,7 +20,7 @@ import { HttpClient } from "effect/http";
 import * as Headers from "effect/http/Headers";
 import * as HostProcess from "@cinderdeck/shared/HostProcess";
 
-import { ExpoApiGraphQLGroup, type T3EasSimulatorSession } from "./ExpoApi.graphql.ts";
+import { ExpoApiGraphQLGroup, type CinderdeckEasSimulatorSession } from "./ExpoApi.graphql.ts";
 import type { DeviceRunSessionStatus } from "../../schema/expo.graphql.ts";
 
 const EXPO_GRAPHQL_URL = "https://api.expo.dev/graphql";
@@ -152,11 +152,8 @@ export interface CreateEasSessionInput {
   readonly maxIdleTimeMinutes: number;
 }
 
-const DEVICE_RUN_SESSIONS_GATE = "device-run-sessions";
-const isFeatureGates = Schema.is(Schema.Record(Schema.String, Schema.Unknown));
-
 /** Sends every operation with the resolved credential. */
-class ExpoAuth extends GraphQLMiddleware.Service<ExpoAuth>()("t3/server/device/ExpoApi/ExpoAuth") {}
+class ExpoAuth extends GraphQLMiddleware.Service<ExpoAuth>()("cinderdeck/server/device/ExpoApi/ExpoAuth") {}
 
 const ExpoGroup = ExpoApiGraphQLGroup.middleware(ExpoAuth);
 
@@ -226,7 +223,7 @@ const toExpoApiError = (
 };
 
 const toSession = (
-  session: T3EasSimulatorSession.Result["deviceRunSessions"]["byId"],
+  session: CinderdeckEasSimulatorSession.Result["deviceRunSessions"]["byId"],
 ): EasSession => {
   const remote = session.remoteConfig;
   return {
@@ -290,7 +287,7 @@ export const makeExpoApi = (http: HttpClient.HttpClient, credential: ExpoCredent
 
   return {
     credential,
-    viewer: call("read the signed-in account", (expo) => expo.T3ExpoViewer()).pipe(
+    viewer: call("read the signed-in account", (expo) => expo.CinderdeckExpoViewer()).pipe(
       Effect.flatMap(({ meActor }) =>
         meActor === null
           ? Effect.fail(
@@ -312,21 +309,9 @@ export const makeExpoApi = (http: HttpClient.HttpClient, credential: ExpoCredent
             }),
       ),
     ),
-    availability: (appId: string) =>
-      call("check EAS Simulator access", (expo) =>
-        expo.T3EasSimulatorAvailability({ appId, filter: [DEVICE_RUN_SESSIONS_GATE] }),
-      ).pipe(
-        Effect.map(({ app }) => {
-          const gates = app.byId.ownerAccount.accountFeatureGates;
-          return {
-            account: app.byId.ownerAccount.name,
-            available: isFeatureGates(gates) && gates[DEVICE_RUN_SESSIONS_GATE] === true,
-          };
-        }),
-      ),
     create: (input: CreateEasSessionInput) =>
       call("start a simulator session", (expo) =>
-        expo.T3CreateEasSimulatorSession({
+        expo.CinderdeckCreateEasSimulatorSession({
           input: {
             appId: input.appId,
             platform: input.platform === "ios" ? "IOS" : "ANDROID",
@@ -340,12 +325,12 @@ export const makeExpoApi = (http: HttpClient.HttpClient, credential: ExpoCredent
         }),
       ).pipe(Effect.map(({ deviceRunSession }) => deviceRunSession.createDeviceRunSession.id)),
     session: (id: string) =>
-      call("read a simulator session", (expo) => expo.T3EasSimulatorSession({ id })).pipe(
+      call("read a simulator session", (expo) => expo.CinderdeckEasSimulatorSession({ id })).pipe(
         Effect.map(({ deviceRunSessions }) => toSession(deviceRunSessions.byId)),
       ),
     activeSessions: (appId: string) =>
       call("list simulator sessions", (expo) =>
-        expo.T3ActiveEasSimulatorSessions({
+        expo.CinderdeckActiveEasSimulatorSessions({
           appId,
           filter: { statuses: ["NEW", "QUEUED", "STARTING", "IN_PROGRESS"] },
         }),
@@ -353,7 +338,7 @@ export const makeExpoApi = (http: HttpClient.HttpClient, credential: ExpoCredent
         Effect.map(({ app }) => app.byId.deviceRunSessionsPaginated.edges.map(({ node }) => node)),
       ),
     stop: (id: string) =>
-      call("stop a simulator session", (expo) => expo.T3StopEasSimulatorSession({ id })).pipe(
+      call("stop a simulator session", (expo) => expo.CinderdeckStopEasSimulatorSession({ id })).pipe(
         Effect.map(({ deviceRunSession }) => deviceRunSession.ensureDeviceRunSessionStopped.status),
       ),
   };

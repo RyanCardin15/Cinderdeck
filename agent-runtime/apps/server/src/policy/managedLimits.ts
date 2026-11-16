@@ -32,7 +32,7 @@ export class ManagedPolicyRefusedError extends Schema.TaggedError<ManagedPolicyR
   "ManagedPolicyRefusedError",
   {
     organization: Schema.String,
-    /** What the policy does not allow, for example "T3 Connect". */
+    /** What the policy does not allow, for example "Cinderdeck Connect". */
     action: Schema.String,
     /** What that means for this request, for example "so the server cannot listen on 0.0.0.0". */
     detail: Schema.optionalKey(Schema.String),
@@ -72,7 +72,7 @@ export function allowsAuthPolicy(policy: PolicyDocument, authPolicy: ServerAuthP
 export const allowsRemoteClients = (policy: PolicyDocument) =>
   allowsAuthPolicy(policy, "remote-reachable");
 
-/** T3 Connect is a way for remote clients in, so a policy without `remote` turns it off too. */
+/** Cinderdeck Connect is a way for remote clients in, so a policy without `remote` turns it off too. */
 export const allowsConnect = (policy: PolicyDocument) =>
   policy.document?.limits?.connect !== false && allowsRemoteClients(policy);
 
@@ -83,7 +83,7 @@ const refuse = (policy: PolicyDocument, action: string, detail?: string) =>
     ...(detail === undefined ? {} : { detail }),
   });
 
-export const refuseConnect = (policy: PolicyDocument) => refuse(policy, "T3 Connect");
+export const refuseConnect = (policy: PolicyDocument) => refuse(policy, "Cinderdeck Connect");
 
 // Node throws ENOTDIR, outside the spawner's error mapping, when PATH ends in a file.
 const isMissingCli = (cause: unknown) =>
@@ -100,7 +100,7 @@ const NOTHING_TO_CLOSE: ReadonlySet<TailscaleStderrDiagnostic | undefined> = new
 
 /**
  * Turns off the Tailscale Serve routes that forward to the server at `target`, such as one
- * `t3 pair --tailscale` left from before the policy, and keeps every other route. Runs before the
+ * `cinderdeck pair --tailscale` left from before the policy, and keeps every other route. Runs before the
  * server binds, and fails unless a fresh read shows no route here, since `off` can exit 0 and
  * leave it. Without the CLI, or with Tailscale down or logged out, nothing forwards.
  */

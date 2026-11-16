@@ -239,7 +239,7 @@ function inboundMessage(recorded: LogicalFrame): JsonRpcMessage | undefined {
   }
 }
 
-// T3 may kill the agent after its last reply. Record the batch, including trailing
+// Cinderdeck may kill the agent after its last reply. Record the batch, including trailing
 // runtime exits, before publishing any frames.
 function flushInbound(): void {
   const messages: Array<JsonRpcMessage> = [];

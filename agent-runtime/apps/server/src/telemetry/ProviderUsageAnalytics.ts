@@ -158,7 +158,7 @@ function selectionProperties(
 
 function childKind(context: ProviderTurnAnalyticsContext | undefined) {
   if (context?.segment === "native_child") return "native";
-  return context?.origin?.subagent === true ? "t3" : undefined;
+  return context?.origin?.subagent === true ? "cinderdeck" : undefined;
 }
 
 function counters(usage: TurnTokenUsage | undefined): Properties {
@@ -385,7 +385,7 @@ export class ProviderTurnAnalytics extends Context.Reference<{
   }) => Effect.Effect<void>;
   readonly turnCompleted: (report: ProviderTurnReport) => Effect.Effect<void>;
   readonly runSettled: (report: RunSettledReport) => Effect.Effect<void>;
-}>("t3/telemetry/ProviderTurnAnalytics", {
+}>("cinderdeck/telemetry/ProviderTurnAnalytics", {
   defaultValue: () => ({
     runStarted: () => Effect.void,
     turnCompleted: () => Effect.void,

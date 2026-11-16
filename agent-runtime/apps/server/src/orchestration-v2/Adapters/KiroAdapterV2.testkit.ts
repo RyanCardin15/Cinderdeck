@@ -40,7 +40,7 @@ function layerKiroProviderAdapterRegistryReplay(
       const path = yield* Path.Path;
       const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
       const replayDir = yield* fileSystem
-        .makeTempDirectory({ prefix: `t3-orchestration-v2-kiro-replay-${transcript.scenario}-` })
+        .makeTempDirectory({ prefix: `cinderdeck-orchestration-v2-kiro-replay-${transcript.scenario}-` })
         .pipe(Effect.orDie);
       const statusPath = path.join(replayDir, "status.json");
       const scriptPath = yield* path

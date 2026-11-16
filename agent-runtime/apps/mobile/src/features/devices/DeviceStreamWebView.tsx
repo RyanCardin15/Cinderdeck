@@ -110,7 +110,7 @@ function DeviceStreamDocumentView({
     failed.current = true;
     clearBootstrapTimer();
     void onInputConnected(false);
-    webView.current?.injectJavaScript("window.T3DeviceStream?.stop(); true;");
+    webView.current?.injectJavaScript("window.CinderdeckDeviceStream?.stop(); true;");
     setError(message);
     setStatus("error");
   };
@@ -129,7 +129,7 @@ function DeviceStreamDocumentView({
       if (bootstrapTimer.current !== null) clearTimeout(bootstrapTimer.current);
       bootstrapTimer.current = null;
       active.current = false;
-      view?.injectJavaScript("window.T3DeviceStream?.stop(); true;");
+      view?.injectJavaScript("window.CinderdeckDeviceStream?.stop(); true;");
       resetInput();
     };
   }, []);
@@ -139,7 +139,7 @@ function DeviceStreamDocumentView({
   };
   const command = (button: keyof DeviceStreamRef) => {
     webView.current?.injectJavaScript(
-      `window.T3DeviceStream?.command(${JSON.stringify(button)}); true;`,
+      `window.CinderdeckDeviceStream?.command(${JSON.stringify(button)}); true;`,
     );
   };
   useImperativeHandle(ref, () => ({

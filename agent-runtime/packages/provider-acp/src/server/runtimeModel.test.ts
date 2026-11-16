@@ -361,6 +361,50 @@ describe("AcpRuntimeModel", () => {
     ).toBe(true);
   });
 
+  it("clears explicitly nulled ACP v2 tool call fields and replaces raw input", () => {
+    const toolCall = (update: Omit<EffectAcpSchema.ToolCallUpdate, "toolCallId">) => {
+      const parsed = parseSessionUpdateEvent({
+        sessionId: "session-1",
+        update: { sessionUpdate: "tool_call_update", toolCallId: "call-1", ...update },
+      } satisfies EffectAcpSchema.SessionNotification);
+      const event = parsed.events.find((candidate) => candidate._tag === "ToolCallUpdated");
+      if (!event || event._tag !== "ToolCallUpdated") {
+        throw new Error("expected a tool call update");
+      }
+      return event.toolCall;
+    };
+
+    const created = toolCall({
+      name: "old-name",
+      title: "Old title",
+      kind: "read",
+      status: "in_progress",
+      content: [{ type: "content", content: { type: "text", text: "old output" } }],
+      rawInput: { path: "old.txt", obsolete: true },
+      _meta: { old: true },
+    });
+
+    expect(
+      mergeToolCallState(created, toolCall({ rawInput: { path: "new.txt" } })).data.rawInput,
+    ).toEqual({ path: "new.txt" });
+
+    const cleared = mergeToolCallState(
+      created,
+      toolCall({
+        name: null,
+        title: null,
+        kind: null,
+        status: null,
+        content: null,
+        rawInput: null,
+        _meta: null,
+      }),
+    );
+    const { name, title, kind, content, rawInput, meta } = cleared.data;
+    expect({ name, title, kind, content, rawInput, meta }).toEqual({});
+    expect({ kind: cleared.kind, title: cleared.title, status: cleared.status }).toEqual({});
+  });
+
   it("forwards an empty ACP v1 plan to clear previous entries", () => {
     const entries = [
       [{ content: "Inspect state", priority: "high", status: "pending" }],
@@ -1271,7 +1315,7 @@ describe("extractMcpToolCallIdentity", () => {
     });
   });
 
-  it("recovers T3 identity from acp-mcp-call fallback commands", () => {
+  it("recovers Cinderdeck identity from acp-mcp-call fallback commands", () => {
     const toolCall = toolCallFromUpdate({
       sessionUpdate: "tool_call",
       toolCallId: "exec-1",
@@ -1283,13 +1327,13 @@ describe("extractMcpToolCallIdentity", () => {
     expect(
       extractMcpToolCallIdentity(toolCall, {
         embeddedTerminalCommands: [
-          '/usr/bin/node /srv/t3/bin.ts acp-mcp-call delegate_task {"task":"x"}',
+          '/usr/bin/node /srv/cinderdeck/bin.ts acp-mcp-call delegate_task {"task":"x"}',
         ],
       }),
     ).toEqual({ server: "t3-code", tool: "delegate_task", input: { task: "x" } });
   });
 
-  it("recovers T3 identity from pi-acp title-only fallback execs", () => {
+  it("recovers Cinderdeck identity from pi-acp title-only fallback execs", () => {
     const toolCall = toolCallFromUpdate({
       sessionUpdate: "tool_call",
       toolCallId: "call_JdxnvzjHHrbvyASTLVekLYWV|fc_08f5a805a7159aa6016a7ec4afad548191",
@@ -1314,7 +1358,7 @@ describe("extractMcpToolCallIdentity", () => {
     });
   });
 
-  it("recovers T3 identity from server-namespaced titles across titleless updates", () => {
+  it("recovers Cinderdeck identity from server-namespaced titles across titleless updates", () => {
     const created = toolCallFromUpdate({
       sessionUpdate: "tool_call",
       toolCallId: "chatcmpl-tool-b2a6142ee1a510a5",
@@ -1338,7 +1382,7 @@ describe("extractMcpToolCallIdentity", () => {
     });
   });
 
-  it("recovers T3 identity across the registry agents' naming conventions", () => {
+  it("recovers Cinderdeck identity across the registry agents' naming conventions", () => {
     for (const title of [
       "t3-code___delegate_task",
       "t3-code-delegate_task",
@@ -1366,7 +1410,30 @@ describe("extractMcpToolCallIdentity", () => {
     }
   });
 
-  it("recovers T3 identity from Kiro's @-scoped titles", () => {
+  it("recovers Cinderdeck identity from Hermes editor-renamed MCP tool titles", () => {
+    const identityFor = (title: string) =>
+      extractMcpToolCallIdentity(
+        toolCallFromUpdate({
+          sessionUpdate: "tool_call",
+          toolCallId: "hermes-1",
+          kind: "other",
+          title,
+          status: "pending",
+          rawInput: { title: "Chart", html: "<p>hi</p>", height: 320 },
+        }),
+      );
+
+    expect(identityFor("mcp__editor_t3_code_f6129534__html_render")).toEqual({
+      server: "t3-code",
+      tool: "html_render",
+    });
+    expect(identityFor("mcp__editor_github_1234abcd__html_render")).toEqual({
+      server: "editor_github_1234abcd",
+      tool: "html_render",
+    });
+  });
+
+  it("recovers Cinderdeck identity from Kiro's @-scoped titles", () => {
     for (const tool of ["html_render", "t3_thread_read", "delegate_task"]) {
       const toolCall = toolCallFromUpdate({
         sessionUpdate: "tool_call",
@@ -1380,7 +1447,69 @@ describe("extractMcpToolCallIdentity", () => {
     }
   });
 
-  it("does not claim an agent's own tool that shares a T3 tool name", () => {
+  // regression: #33667 OMP mounts MCP tools as xd:// devices and calls them through `write`.
+  it("recovers Cinderdeck identity from OMP xd:// device writes but not its doc reads", () => {
+    const args = {
+      html: '<svg width="320" height="120"><rect width="300" height="100" fill="#4f46e5"/></svg>',
+      title: "Static SVG",
+    };
+    const result = {
+      htmlRender: { attachmentId: "synthetic-attachment-html", title: "Static SVG", height: 136 },
+      message: "Shown to the reader above your reply.",
+    };
+    const text = JSON.stringify(result);
+    const created = toolCallFromUpdate({
+      sessionUpdate: "tool_call",
+      toolCallId: "toolu_015ATZG99gw99Rrp4htieLux",
+      title: "Rendering static SVG",
+      kind: "execute",
+      status: "pending",
+      rawInput: { path: "xd://mcp__t3_code_html_render", content: JSON.stringify(args) },
+    });
+    const completed = mergeToolCallState(
+      created,
+      toolCallFromUpdate({
+        sessionUpdate: "tool_call_update",
+        toolCallId: "toolu_015ATZG99gw99Rrp4htieLux",
+        status: "completed",
+        rawOutput: {
+          content: [{ type: "text", text }],
+          details: {
+            xdev: {
+              tool: "mcp__t3_code_html_render",
+              mode: "execute",
+              args,
+              tier: "write",
+              inner: {
+                serverName: "t3-code",
+                mcpToolName: "html_render",
+                rawContent: [{ type: "text", text }],
+                provider: "acp",
+                providerName: "ACP Client",
+                structuredContent: result,
+              },
+            },
+          },
+        },
+        content: [{ type: "content", content: { type: "text", text } }],
+      }),
+    );
+    const docRead = toolCallFromUpdate({
+      sessionUpdate: "tool_call",
+      toolCallId: "toolu_read",
+      title: "Reading html_render schema",
+      kind: "read",
+      status: "pending",
+      rawInput: { path: "xd://mcp__t3_code_html_render" },
+    });
+
+    const expected = { server: "t3-code", tool: "html_render", input: args };
+    expect(extractMcpToolCallIdentity(created), "pending write").toEqual(expected);
+    expect(extractMcpToolCallIdentity(completed), "completed write").toEqual(expected);
+    expect(extractMcpToolCallIdentity(docRead), "doc read").toBeUndefined();
+  });
+
+  it("does not claim an agent's own tool that shares a Cinderdeck tool name", () => {
     const toolCall = toolCallFromUpdate({
       sessionUpdate: "tool_call",
       toolCallId: "own-delegate-1",
@@ -1391,7 +1520,7 @@ describe("extractMcpToolCallIdentity", () => {
     expect(extractMcpToolCallIdentity(toolCall)).toBeUndefined();
   });
 
-  it("recovers T3 identity from goose _meta despite LLM-rewritten titles", () => {
+  it("recovers Cinderdeck identity from goose _meta despite LLM-rewritten titles", () => {
     // goose titles change asynchronously; only _meta.goose.toolCall is stable.
     const toolCall = toolCallFromUpdate({
       sessionUpdate: "tool_call",
@@ -1412,7 +1541,7 @@ describe("extractMcpToolCallIdentity", () => {
     });
   });
 
-  it("recovers T3 identity from qwen serverId meta regardless of prefix format", () => {
+  it("recovers Cinderdeck identity from qwen serverId meta regardless of prefix format", () => {
     // qwen-code 0.21.12 serverId asserts MCP origin even when tool prefixes change.
     const toolCall = toolCallFromUpdate({
       sessionUpdate: "tool_call",
@@ -1428,6 +1557,24 @@ describe("extractMcpToolCallIdentity", () => {
       tool: "t3_thread_send",
     });
   });
+
+  it.each(["t3-code", "t3_code", "cinderdeck", "cinderdeck-code", "deckhand"])(
+    "recognizes the app MCP server alias %s in provider metadata",
+    (serverId) => {
+      const toolCall = toolCallFromUpdate({
+        sessionUpdate: "tool_call",
+        toolCallId: "compatibility-alias",
+        kind: "other",
+        title: "unrelated display title",
+        status: "pending",
+        _meta: { toolName: "delegate_task", serverId },
+      });
+      expect(extractMcpToolCallIdentity(toolCall)).toEqual({
+        server: "t3-code",
+        tool: "delegate_task",
+      });
+    },
+  );
 
   it.each([
     { _meta: { claudeCode: { toolName: "mcp__weather__get_weather" } } },
@@ -1466,7 +1613,7 @@ describe("extractMcpToolCallIdentity", () => {
     },
   );
 
-  it("uses the asserted server instead of a misleading T3 title", () => {
+  it("uses the asserted server instead of a misleading Cinderdeck title", () => {
     const toolCall = toolCallFromUpdate({
       sessionUpdate: "tool_call",
       toolCallId: "foreign-1",
@@ -1535,12 +1682,12 @@ describe("embeddedTerminalIdsFromSessionUpdate", () => {
           toolCallId: "call_1",
           status: "in_progress",
           content: [
-            { type: "terminal", terminalId: "t3-term-9" },
+            { type: "terminal", terminalId: "cinderdeck-term-9" },
             { type: "content", content: { type: "text", text: "noise" } },
           ],
         },
       }),
-    ).toEqual({ toolCallId: "call_1", terminalIds: ["t3-term-9"] });
+    ).toEqual({ toolCallId: "call_1", terminalIds: ["cinderdeck-term-9"] });
     expect(
       embeddedTerminalIdsFromSessionUpdate({
         sessionId: "session-1",

@@ -26,15 +26,15 @@ describe("OtelEnvironment", () => {
       disabled: false,
       warnings: [specIgnored("1")],
     },
-    { name: "t3 1", env: { T3CODE_OTEL_SDK_DISABLED: "1" }, disabled: true, warnings: [T3_OFF] },
+    { name: "cinderdeck 1", env: { T3CODE_OTEL_SDK_DISABLED: "1" }, disabled: true, warnings: [T3_OFF] },
     {
-      name: "t3 false overrides spec true",
+      name: "cinderdeck false overrides spec true",
       env: { T3CODE_OTEL_SDK_DISABLED: "false", OTEL_SDK_DISABLED: "true" },
       disabled: false,
       warnings: [],
     },
     {
-      name: "unreadable t3 warns and falls through",
+      name: "unreadable cinderdeck warns and falls through",
       env: { T3CODE_OTEL_SDK_DISABLED: "maybe", OTEL_SDK_DISABLED: "true" },
       disabled: true,
       warnings: ["T3CODE_OTEL_SDK_DISABLED=maybe is not a yes or a no and was ignored", SPEC_OFF],
@@ -239,9 +239,9 @@ describe("OtelEnvironment", () => {
   );
 
   describe("resolveSignalEndpoint", () => {
-    const t3Export = {
+    const cinderdeckExport = {
       protocol: "http/json",
-      headers: { "x-key": "t3" },
+      headers: { "x-key": "cinderdeck" },
       exportIntervalMs: 5_000,
     } as const;
     const withLogs = (logs: OtelEnvironment.OtelSignal, disabled = false) => ({
@@ -259,10 +259,10 @@ describe("OtelEnvironment", () => {
       {
         name: "T3CODE_OTLP_*_URL wins over a signal the OTEL variables turned off",
         otel: withLogs(OtelEnvironment.OtelSignal.Off()),
-        t3Url: "http://t3:4318/v1/logs",
+        cinderdeckUrl: "http://cinderdeck:4318/v1/logs",
         expected: {
-          url: "http://t3:4318/v1/logs",
-          export: t3Export,
+          url: "http://cinderdeck:4318/v1/logs",
+          export: cinderdeckExport,
           source: "environment" as const,
           variable: "T3CODE_OTLP_LOGS_URL",
         },
@@ -270,7 +270,7 @@ describe("OtelEnvironment", () => {
       {
         name: "an OTEL endpoint brings its headers and protocol over the fallback",
         otel: withLogs(otelExport),
-        t3Url: " ",
+        cinderdeckUrl: " ",
         expected: {
           url: "http://otel:4318/v1/logs",
           export: {
@@ -285,47 +285,47 @@ describe("OtelEnvironment", () => {
       {
         name: "a signal the OTEL variables turned off does not fall through",
         otel: withLogs(OtelEnvironment.OtelSignal.Off()),
-        t3Url: undefined,
+        cinderdeckUrl: undefined,
         expected: undefined,
       },
       {
         name: "an unset signal takes the first non-blank fallback",
         otel: withLogs(OtelEnvironment.OtelSignal.Unset()),
-        t3Url: undefined,
+        cinderdeckUrl: undefined,
         expected: {
           url: "http://settings:4318/v1/logs",
-          export: t3Export,
+          export: cinderdeckExport,
           source: "settings" as const,
         },
       },
       {
         name: "a desktop bootstrap URL that differs from the setting wins as the desktop's own",
         otel: withLogs(OtelEnvironment.OtelSignal.Unset()),
-        t3Url: undefined,
+        cinderdeckUrl: undefined,
         bootstrapUrl: "http://desktop:4318/v1/logs",
         expected: {
           url: "http://desktop:4318/v1/logs",
-          export: t3Export,
+          export: cinderdeckExport,
           source: "bootstrap" as const,
         },
       },
       {
         name: "a desktop bootstrap URL that forwards the setting counts as the setting",
         otel: withLogs(OtelEnvironment.OtelSignal.Unset()),
-        t3Url: undefined,
+        cinderdeckUrl: undefined,
         bootstrapUrl: " http://settings:4318/v1/logs ",
         expected: {
           url: "http://settings:4318/v1/logs",
-          export: t3Export,
+          export: cinderdeckExport,
           source: "settings" as const,
         },
       },
-    ])("$name", ({ otel, t3Url, bootstrapUrl = "", expected }) => {
+    ])("$name", ({ otel, cinderdeckUrl, bootstrapUrl = "", expected }) => {
       assert.deepStrictEqual(
         OtelEnvironment.resolveSignalEndpoint(
           otel,
           "logs",
-          { url: t3Url, export: t3Export },
+          { url: cinderdeckUrl, export: cinderdeckExport },
           { bootstrapUrl, settingsUrl: "http://settings:4318/v1/logs" },
         ),
         expected,
@@ -336,19 +336,19 @@ describe("OtelEnvironment", () => {
   it.effect("an exporter of none keeps the Settings endpoint from re-enabling its signal", () =>
     Effect.gen(function* () {
       const otel = yield* load({ OTEL_LOGS_EXPORTER: "none" });
-      const t3 = {
+      const cinderdeck = {
         url: undefined,
         export: { protocol: "http/json", headers: undefined, exportIntervalMs: 10_000 },
       } as const;
       assert.strictEqual(
-        OtelEnvironment.resolveSignalEndpoint(otel, "logs", t3, {
+        OtelEnvironment.resolveSignalEndpoint(otel, "logs", cinderdeck, {
           bootstrapUrl: undefined,
           settingsUrl: "http://settings:4318/v1/logs",
         }),
         undefined,
       );
       assert.strictEqual(
-        OtelEnvironment.resolveSignalEndpoint(otel, "traces", t3, {
+        OtelEnvironment.resolveSignalEndpoint(otel, "traces", cinderdeck, {
           bootstrapUrl: undefined,
           settingsUrl: "http://settings:4318/v1/traces",
         })?.url,
@@ -367,7 +367,7 @@ describe("OtelEnvironment", () => {
           ConfigProvider.fromEnv({ env: { OTEL_RESOURCE_ATTRIBUTES: raw } }),
         );
         const otel = yield* OtelEnvironment.load.pipe(Effect.provide(layerEnv));
-        const resource = yield* OtlpResource.fromConfig({ serviceName: "t3" }).pipe(
+        const resource = yield* OtlpResource.fromConfig({ serviceName: "cinderdeck" }).pipe(
           Effect.provide(
             Layer.provide(
               OtelEnvironment.layerResourceAttributes(otel.resourceAttributes),
@@ -387,7 +387,7 @@ describe("OtelEnvironment", () => {
 });
 
 describe("isRelayTracingEnabled", () => {
-  it("defaults on and respects the T3CODE SDK override of the standard kill switch", () => {
+  it("defaults on and respects the cinderdeck SDK override of the standard kill switch", () => {
     assert.isTrue(OtelEnvironment.isRelayTracingEnabled({}));
     assert.isFalse(OtelEnvironment.isRelayTracingEnabled({ OTEL_SDK_DISABLED: "true" }));
     assert.isTrue(

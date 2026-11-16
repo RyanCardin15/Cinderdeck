@@ -9,7 +9,7 @@ import type {
   ModelSelection,
   ProjectId,
   RuntimeMode,
-  ServerConfig as T3ServerConfig,
+  ServerConfig as CinderdeckServerConfig,
 } from "@cinderdeck/contracts";
 import {
   disallowedProviderMessage,
@@ -22,6 +22,7 @@ import {
   getProviderOptionDescriptors,
 } from "@cinderdeck/shared/model";
 import { resolveModelShortName } from "@cinderdeck/client-runtime/provider-clients";
+import { resolveProvidersForCwd } from "@cinderdeck/client-runtime/providerSkills";
 
 export type ModelOption = {
   readonly key: string;
@@ -49,7 +50,7 @@ export type ModelOption = {
 };
 
 type ProviderUpdateRequired = Pick<
-  T3ServerConfig["providers"][number],
+  CinderdeckServerConfig["providers"][number],
   "driver" | "updateRequiredModels"
 >;
 
@@ -73,7 +74,7 @@ function providerDisplayLabel(provider: {
 }
 
 function isProviderEnabledForProject(
-  config: T3ServerConfig | null | undefined,
+  config: CinderdeckServerConfig | null | undefined,
   provider:
     | { readonly instanceId: ModelSelection["instanceId"]; readonly enabled: boolean }
     | undefined,
@@ -88,7 +89,7 @@ function isProviderEnabledForProject(
 }
 
 function isProjectDisabledOverride(
-  config: T3ServerConfig | null | undefined,
+  config: CinderdeckServerConfig | null | undefined,
   instanceId: ModelSelection["instanceId"],
   projectId: ProjectId | null,
 ): boolean {
@@ -102,7 +103,7 @@ function isProjectDisabledOverride(
 }
 
 function isDisabledForProject(
-  config: T3ServerConfig | null | undefined,
+  config: CinderdeckServerConfig | null | undefined,
   provider:
     | { readonly instanceId: ModelSelection["instanceId"]; readonly enabled: boolean }
     | undefined,
@@ -116,7 +117,7 @@ function isDisabledForProject(
 }
 
 function selectionDriver(
-  config: T3ServerConfig | null | undefined,
+  config: CinderdeckServerConfig | null | undefined,
   instanceId: ModelSelection["instanceId"],
 ): string | undefined {
   return (
@@ -126,7 +127,7 @@ function selectionDriver(
 }
 
 /** Whether the environment's managed policy leaves this driver out; the server refuses its turns. */
-function isDriverDisallowed(config: T3ServerConfig | null | undefined, driver: string | undefined) {
+function isDriverDisallowed(config: CinderdeckServerConfig | null | undefined, driver: string | undefined) {
   return (
     driver !== undefined &&
     isProviderDriverKind(driver) &&
@@ -159,9 +160,19 @@ function normalizeSelectionOptions(
       };
 }
 
+/** The config as a project at `cwd` sees it, with that project's own provider models. */
+export function serverConfigForCwd<C extends CinderdeckServerConfig | null | undefined>(
+  config: C,
+  cwd: string | null,
+): C {
+  if (!config) return config;
+  const providers = resolveProvidersForCwd(config.providers, cwd);
+  return providers === config.providers ? config : { ...config, providers };
+}
+
 /** Require explicit projectId or null so omissions cannot bypass project provider disablement. */
 export function isModelSelectionUnavailable(
-  config: T3ServerConfig | null | undefined,
+  config: CinderdeckServerConfig | null | undefined,
   selection: ModelSelection | null | undefined,
   projectId: ProjectId | null,
 ): boolean {
@@ -190,7 +201,7 @@ export function isModelSelectionUnavailable(
 }
 
 export function describeUnavailableModelSelection(
-  config: T3ServerConfig | null | undefined,
+  config: CinderdeckServerConfig | null | undefined,
   selection: ModelSelection,
   projectId: ProjectId | null,
 ): { readonly title: string; readonly detail: string } {
@@ -223,7 +234,7 @@ export function describeUnavailableModelSelection(
 }
 
 export function resolveSelectableModelSelection(
-  config: T3ServerConfig | null | undefined,
+  config: CinderdeckServerConfig | null | undefined,
   selection: ModelSelection | null,
   projectId: ProjectId | null,
 ): ModelSelection | null {
@@ -247,7 +258,7 @@ export function resolveSelectableModelSelection(
 }
 
 export function resolveDefaultableModelSelection(
-  config: T3ServerConfig | null | undefined,
+  config: CinderdeckServerConfig | null | undefined,
   selection: ModelSelection | null,
   projectId: ProjectId | null,
 ): ModelSelection | null {
@@ -276,8 +287,24 @@ export function resolveNewTaskModelSelection(input: {
   );
 }
 
+// Rows built after a pick on another instance carry no options for the thread's own model.
+export function withStoredThreadModelOptions(
+  selection: ModelSelection,
+  stored: ModelSelection,
+): ModelSelection {
+  if (
+    (selection.options?.length ?? 0) > 0 ||
+    !stored.options?.length ||
+    selection.instanceId !== stored.instanceId ||
+    selection.model !== stored.model
+  ) {
+    return selection;
+  }
+  return { ...selection, options: stored.options };
+}
+
 export function buildModelOptions(
-  config: T3ServerConfig | null | undefined,
+  config: CinderdeckServerConfig | null | undefined,
   fallbackModelSelection: ModelSelection | null,
   providerInstanceId: ModelSelection["instanceId"] | undefined,
   projectId: ProjectId | null,
@@ -287,7 +314,7 @@ export function buildModelOptions(
   const lockedProvider = config?.providers.find(
     (provider) => provider.instanceId === providerInstanceId,
   );
-  const matchesLockedProvider = (provider: T3ServerConfig["providers"][number]) => {
+  const matchesLockedProvider = (provider: CinderdeckServerConfig["providers"][number]) => {
     if (providerInstanceId === undefined || provider.instanceId === providerInstanceId) return true;
     if (!lockedProvider || provider.driver !== lockedProvider.driver) return false;
     const groupKey = lockedProvider.continuation?.groupKey;

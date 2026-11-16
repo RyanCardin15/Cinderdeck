@@ -37,18 +37,18 @@ type Routes = Readonly<Record<Route, boolean>>;
 /** How other devices reach this machine now. */
 interface Setup {
   readonly service: BootService.BootServiceStatus;
-  /** Null in builds without T3 Connect. Off when T3 Connect revoked the link. */
+  /** Null in builds without Cinderdeck Connect. Off when Cinderdeck Connect revoked the link. */
   readonly connect: boolean | null;
-  /** T3 Connect revoked the link; `t3 connect` links again. */
+  /** Cinderdeck Connect revoked the link; `cinderdeck connect` links again. */
   readonly connectRevoked: boolean;
   readonly lan: boolean;
-  /** An installed service with no T3CODE_LAN keeps the old default: on. */
+  /** An installed service with no T3CODE_LAN or T3CODE_HOST keeps the old default: on. */
   readonly lanFromOldDefault: boolean;
   readonly host: string | undefined;
 }
 
 /**
- * T3 Connect is on when this CLI asked for a managed link, or when the desktop or
+ * Cinderdeck Connect is on when this CLI asked for a managed link, or when the desktop or
  * web app made one: that saves the tunnel config but no CLI marker. Revoked is off.
  */
 export const connectEnabled = (link: {
@@ -79,19 +79,21 @@ const readSetup = Effect.fn("cli.up.read_setup")(function* () {
         revoked: connectRevoked,
       })
     : null;
+  // Another home's service doesn't read this home's service.env.
+  const servesThisHome = service.installed && service.otherBaseDir === undefined;
   return {
     service,
     connect,
     connectRevoked,
-    lan: Option.getOrElse(lan, () => service.installed),
-    lanFromOldDefault: Option.isNone(lan) && service.installed,
+    lan: Option.getOrElse(lan, () => servesThisHome),
+    lanFromOldDefault: Option.isNone(lan) && servesThisHome && entries.T3CODE_HOST === undefined,
     host: entries.T3CODE_HOST,
   } satisfies Setup;
 });
 
 /**
- * The routes `t3 up` starts from. With no route flag it asks about every
- * route, starting a machine with no service from T3 Connect. Any route flag
+ * The routes `cinderdeck up` starts from. With no route flag it asks about every
+ * route, starting a machine with no service from Cinderdeck Connect. Any route flag
  * means it asks nothing and keeps the routes not named as they are.
  */
 export const planRoutes = (
@@ -114,35 +116,61 @@ export const planRoutes = (
   };
 };
 
-/** A running service reads T3CODE_LAN and its T3 Connect link only when it starts. */
+/** A running service reads T3CODE_LAN and its Cinderdeck Connect link only when it starts. */
 const needsRestart = (before: Routes, after: Routes) =>
   after.lan !== before.lan || (after.connect && !before.connect);
 
 const CHOICES = {
-  connect: { title: "T3 Connect", description: "Creates a tunnel to control your PC." },
+  connect: { title: "Cinderdeck Connect", description: "Creates a tunnel to control your PC." },
   lan: { title: "Local network", description: "LAN and tailnet. Pairing code required." },
 } satisfies Record<Route, { readonly title: string; readonly description: string }>;
 
-const formatSetup = (setup: Setup) => {
+/** The commands hints name, run with the caller's --base-dir and launcher. */
+const resolveHints = Effect.fn("cli.up.resolve_hints")(function* (baseDir: Option.Option<string>) {
+  const baseDirArgs = Option.match(baseDir, {
+    onNone: () => [],
+    onSome: (dir) => ["--base-dir", dir],
+  });
+  const command = (subcommand: string, args: ReadonlyArray<string> = []) =>
+    Effect.map(resolveHostCliCommand(subcommand, [...baseDirArgs, ...args]), (r) => r.command);
+  return {
+    run: yield* command(""),
+    pair: yield* command("pair"),
+    up: yield* command("up"),
+    upNoLan: yield* command("up", ["--no-lan"]),
+    connect: yield* command("connect"),
+  };
+});
+type Hints = Effect.Success<ReturnType<typeof resolveHints>>;
+
+const formatSetup = (setup: Setup, hints: Hints) => {
   const { service } = setup;
+  // This home's access settings reach no service, so only the service is shown.
+  if (service.otherBaseDir !== undefined) {
+    return [
+      `  ${"Service".padEnd(15)}installed for another Cinderdeck home · ${service.otherBaseDir}`,
+      "",
+      `Pass \`${BootService.formatBootServiceBaseDirOption(service.otherBaseDir)}\` to manage it.`,
+    ].join("\n");
+  }
   const rows: ReadonlyArray<readonly [string, string]> = [
     [
       "Service",
       !service.supported
         ? "unavailable"
         : service.installed
-          ? `installed · t3@${service.installedVersion ?? packageJson.version}`
+          ? `installed · cinderdeck@${service.installedVersion ?? packageJson.version}`
           : "not installed",
     ],
     ...(setup.connect === null
       ? []
       : [
           [
-            "T3 Connect",
+            "Cinderdeck Connect",
             setup.connect
-              ? "on · your T3 account"
+              ? "on · your Cinderdeck account"
               : setup.connectRevoked
-                ? "off · link revoked. Run `t3 connect`."
+                ? `off · link revoked. Run \`${hints.connect}\`.`
                 : "off",
           ] as const,
         ]),
@@ -162,7 +190,7 @@ const formatSetup = (setup: Setup) => {
       ? ["Anyone on your LAN or tailnet can reach the port. A pairing code is the only lock."]
       : []),
     ...(setup.lanFromOldDefault
-      ? ["Older installs keep LAN access on. Turn it off: `t3 up --no-lan`."]
+      ? [`Older installs keep LAN access on. Turn it off: \`${hints.upNoLan}\`.`]
       : []),
   ];
   return [
@@ -171,18 +199,18 @@ const formatSetup = (setup: Setup) => {
   ].join("\n");
 };
 
-const formatNextSteps = (routes: Routes, serviceInstalled: boolean, pairCommand: string) =>
+const formatNextSteps = (routes: Routes, serviceInstalled: boolean, hints: Hints) =>
   [
     ...(routes.connect
-      ? ["On your other device, sign in to T3 Connect with the same account."]
+      ? ["On your other device, sign in to Cinderdeck Connect with the same account."]
       : []),
-    ...(routes.lan ? [`Run \`${pairCommand}\`. Use the code on your other device.`] : []),
+    ...(routes.lan ? [`Run \`${hints.pair}\`. Use the code on your other device.`] : []),
     ...(routes.connect || routes.lan
       ? []
       : [
           serviceInstalled
-            ? "Remote access is off. T3 Code still runs here in the background."
-            : "Remote access is off. Run `t3` to use T3 Code here.",
+            ? "Remote access is off. Cinderdeck still runs here in the background."
+            : `Remote access is off. Run \`${hints.run}\` to use Cinderdeck here.`,
         ]),
   ].join("\n");
 
@@ -201,12 +229,19 @@ const setUp = Effect.fn("cli.up")(function* (flags: {
     onNone: () => [],
     onSome: (dir) => ["--base-dir", dir],
   });
-  const { command: pairCommand } = yield* resolveHostCliCommand("pair", baseDirArgs);
+  const hints = yield* resolveHints(flags.baseDir);
   const before = yield* readSetup();
+  // Before any question or write: install would refuse only after both.
+  if (before.service.otherBaseDir !== undefined) {
+    return yield* new BootService.BootServiceOtherBaseDirError({
+      installedBaseDir: before.service.otherBaseDir,
+      baseDir,
+    });
+  }
   if (before.connect === null && Option.getOrElse(flags.connect, () => false)) {
     return yield* new CliError.UserError({
       cause: "connect",
-      userMessage: "T3 Connect is unavailable in this build.",
+      userMessage: "Cinderdeck Connect is unavailable in this build.",
     });
   }
 
@@ -220,7 +255,8 @@ const setUp = Effect.fn("cli.up")(function* (flags: {
   const interactive = !flags.yes && interactiveTerminal();
   let routes = plan.routes;
   if (plan.ask.length > 0 && interactive) {
-    if (before.service.installed) yield* Console.log(`Current setup\n${formatSetup(before)}\n`);
+    if (before.service.installed)
+      yield* Console.log(`Current setup\n${formatSetup(before, hints)}\n`);
     const picked = yield* Prompt.run(
       Prompt.MultiSelect({
         message: "Allow connections through:",
@@ -241,7 +277,7 @@ const setUp = Effect.fn("cli.up")(function* (flags: {
       cause: "routes",
       userMessage: `No terminal. Choose access with ${
         before.connect === null ? "--lan" : "--connect or --lan"
-      }, or use --yes for the default. See \`t3 up --help\`.`,
+      }, or use --yes for the default. See \`cinderdeck up --help\`.`,
     });
   }
   if (routes.connect && !current.connect) yield* requireConnectAllowed;
@@ -257,7 +293,7 @@ const setUp = Effect.fn("cli.up")(function* (flags: {
       yield* disconnectCloud({ clearAuthorization: false });
     }
     if (current.lan) yield* CliService.writeServiceEnv(baseDir, { T3CODE_LAN: "false" });
-    return yield* Console.log(formatNextSteps(routes, false, pairCommand));
+    return yield* Console.log(formatNextSteps(routes, false, hints));
   }
   const { installedVersion } = before.service;
   const newer =
@@ -278,7 +314,7 @@ const setUp = Effect.fn("cli.up")(function* (flags: {
     const confirmed = yield* Prompt.run(
       Prompt.Confirm({
         message: update
-          ? "Update and restart T3 Code? Running agent turns will stop."
+          ? "Update and restart Cinderdeck? Running agent turns will stop."
           : "Apply changes and restart? Running agent turns will stop.",
         initial: true,
       }),
@@ -293,7 +329,7 @@ const setUp = Effect.fn("cli.up")(function* (flags: {
     });
     if (linked === null) return;
     yield* Console.log(
-      `✓ Signed in to T3 Connect${linked.identity ? ` as ${linked.identity}` : ""}`,
+      `✓ Signed in to Cinderdeck Connect${linked.identity ? ` as ${linked.identity}` : ""}`,
     );
   }
   // A running server unlinks live; when that fails, only a restart stops its tunnel.
@@ -302,11 +338,11 @@ const setUp = Effect.fn("cli.up")(function* (flags: {
       ? (yield* disconnectCloud({ clearAuthorization: false })).status === "failed"
       : false;
   const previousLan = (yield* CliService.readServiceEnv(baseDir)).entries.T3CODE_LAN;
-  // Also with no service manager: the file records the choice that `t3 status` shows.
+  // Also with no service manager: the file records the choice that `cinderdeck status` shows.
   yield* CliService.writeServiceEnv(baseDir, { T3CODE_LAN: String(routes.lan) });
   // When the service step fails, an installed service still runs with the old
   // value, so the file goes back to match it.
-  // A new T3 Connect link is undone too, with any tunnel the failed start saved, so a
+  // A new Cinderdeck Connect link is undone too, with any tunnel the failed start saved, so a
   // rerun sees it as a change and restarts. The sign-in stays.
   const restoreServiceEnv = before.service.installed
     ? CliService.writeServiceEnv(baseDir, { T3CODE_LAN: previousLan }).pipe(
@@ -350,10 +386,10 @@ const setUp = Effect.fn("cli.up")(function* (flags: {
     yield* printServeCommand("Background service unavailable.");
   } else {
     if (newer) {
-      yield* Console.log(`Keeping installed service version t3@${installedVersion}.`);
+      yield* Console.log(`Keeping installed service version cinderdeck@${installedVersion}.`);
     }
     if (update && !interactive) {
-      yield* Console.log("Updating T3 Code. Running agent turns will stop.");
+      yield* Console.log("Updating Cinderdeck. Running agent turns will stop.");
     }
     const result = newer
       ? ({ changed: false } as const)
@@ -368,7 +404,7 @@ const setUp = Effect.fn("cli.up")(function* (flags: {
       // The old service still runs, so a foreground server would clash with it.
       yield* restoreServiceEnv;
       yield* Console.log(
-        `Service setup failed: ${result.failed} Fix that, then run \`t3 up\` again.`,
+        `Service setup failed: ${result.failed} Fix that, then run \`${hints.up}\` again.`,
       );
     } else if ("failed" in result) {
       yield* printServeCommand(`Service setup failed: ${result.failed}`);
@@ -382,15 +418,16 @@ const setUp = Effect.fn("cli.up")(function* (flags: {
         (yield* Prompt.run(
           Prompt.Confirm({
             message:
-              "The running service still has T3 Connect on. Restart it? Running agent turns will stop.",
+              "The running service still has Cinderdeck Connect on. Restart it? Running agent turns will stop.",
             initial: true,
           }),
         ).pipe(Effect.catchTags({ QuitError: () => Effect.succeed(false) })));
       if (!confirmed) {
-        yield* Console.log("Run `t3 service restart` to turn T3 Connect off.");
+        const { command } = yield* resolveHostCliCommand("service restart", baseDirArgs);
+        yield* Console.log(`Run \`${command}\` to turn Cinderdeck Connect off.`);
       } else {
         if (!interactive && !stopped) {
-          yield* Console.log("Restarting T3 Code. Running agent turns will stop.");
+          yield* Console.log("Restarting Cinderdeck. Running agent turns will stop.");
         }
         const outcome = yield* service.restart.pipe(Effect.tapError(() => rollBack));
         if (outcome === "queued") {
@@ -398,7 +435,7 @@ const setUp = Effect.fn("cli.up")(function* (flags: {
         }
         if (outcome === "skipped") {
           yield* Console.log(
-            "The installed service runs another T3 home, so it was not restarted. Pass its --base-dir.",
+            "The installed service was not restarted. Run `cinderdeck service status` to see why.",
           );
         }
         started = outcome === "restarted";
@@ -410,10 +447,10 @@ const setUp = Effect.fn("cli.up")(function* (flags: {
   const after = yield* readSetup();
   yield* Console.log(
     // From what took effect: a failed service step can undo a choice.
-    `\nThis machine\n${formatSetup(after)}\n\n${formatNextSteps(
+    `\nThis machine\n${formatSetup(after, hints)}\n\n${formatNextSteps(
       { connect: after.connect === true, lan: after.lan },
       after.service.installed,
-      pairCommand,
+      hints,
     )}`,
   );
 });
@@ -422,7 +459,7 @@ export const upCommand = Command.make("up", {
   ...projectLocationFlags,
   connect: Flag.Boolean("connect").pipe(
     Flag.withDescription(
-      "Allow access through T3 Connect with your T3 account. Turn off with --no-connect.",
+      "Allow access through Cinderdeck Connect with your Cinderdeck account. Turn off with --no-connect.",
     ),
     Flag.optional,
   ),
@@ -434,23 +471,23 @@ export const upCommand = Command.make("up", {
   ),
   yes: Flag.Boolean("yes").pipe(
     Flag.withDescription(
-      "Ask nothing. Keep the access settings; a new machine gets T3 Connect. A restart stops running agent turns.",
+      "Ask nothing. Keep the access settings; a new machine gets Cinderdeck Connect. A restart stops running agent turns.",
     ),
     Flag.withDefault(false),
   ),
   headless: headlessFlag,
 }).pipe(
-  Command.withShortDescription("Set up remote access and the T3 Code background service."),
+  Command.withShortDescription("Set up remote access and the Cinderdeck background service."),
   Command.withDescription(
-    "Set up remote access and the T3 Code background service. Access flags skip the question, and routes not named keep their settings. Without a terminal, a needed restart runs without asking and stops running agent turns.",
+    "Set up remote access and the Cinderdeck background service. Access flags skip the question, and routes not named keep their settings. Without a terminal, a needed restart runs without asking and stops running agent turns.",
   ),
   Command.withExamples([
-    { command: "t3 up", description: "Choose remote access." },
-    { command: "t3 up --connect", description: "Turn on T3 Connect. Keep other settings." },
-    { command: "t3 up --lan", description: "Allow LAN access with pairing codes." },
-    { command: "t3 up --no-lan", description: "Stop LAN access." },
-    { command: "t3 up --yes", description: "Take the defaults with no questions." },
-    { command: "t3 status --json", description: "Read the settings from a script." },
+    { command: "cinderdeck up", description: "Choose remote access." },
+    { command: "cinderdeck up --connect", description: "Turn on Cinderdeck Connect. Keep other settings." },
+    { command: "cinderdeck up --lan", description: "Allow LAN access with pairing codes." },
+    { command: "cinderdeck up --no-lan", description: "Stop LAN access." },
+    { command: "cinderdeck up --yes", description: "Take the defaults with no questions." },
+    { command: "cinderdeck status --json", description: "Read the settings from a script." },
   ]),
   Command.withHandler((flags) => runCloudCommand(flags, setUp(flags), { quietLogs: true })),
 );
@@ -459,7 +496,7 @@ export const connectCommand = Command.make("connect", {
   ...projectLocationFlags,
   headless: headlessFlag,
 }).pipe(
-  Command.withDescription("Set up T3 Connect for this machine. Same as `t3 up --connect`."),
+  Command.withDescription("Set up Cinderdeck Connect for this machine. Same as `cinderdeck up --connect`."),
   Command.withHandler((flags) =>
     runCloudCommand(
       flags,
@@ -470,7 +507,7 @@ export const connectCommand = Command.make("connect", {
   Command.withSubcommands(connectSubcommands),
 );
 
-/** `t3 status --json`, for scripts and agents. */
+/** `cinderdeck status --json`, for scripts and agents. */
 const setupJson = (setup: Setup) =>
   JSON.stringify(
     {
@@ -478,6 +515,7 @@ const setupJson = (setup: Setup) =>
         supported: setup.service.supported,
         installed: setup.service.installed,
         installedVersion: setup.service.installedVersion ?? null,
+        otherBaseDir: setup.service.otherBaseDir ?? null,
       },
       connect:
         setup.connect === null ? null : { enabled: setup.connect, revoked: setup.connectRevoked },
@@ -500,15 +538,15 @@ export const statusCommand = Command.make("status", {
 }).pipe(
   Command.withDescription("Show service setup and remote access settings."),
   Command.withExamples([
-    { command: "t3 status", description: "Show the settings." },
-    { command: "t3 status --json", description: "Print them for scripts and agents." },
+    { command: "cinderdeck status", description: "Show the settings." },
+    { command: "cinderdeck status --json", description: "Print them for scripts and agents." },
   ]),
   Command.withHandler(
     Effect.fn("cli.status")(function* (flags) {
       const config = yield* resolveCliAuthConfig(flags, yield* GlobalFlag.LogLevel, {
         quietLogs: flags.json,
       });
-      // Only what readSetup reads: no database, unlike the T3 Connect commands.
+      // Only what readSetup reads: no database, unlike the Cinderdeck Connect commands.
       const setup = yield* readSetup().pipe(
         Effect.provide(
           Layer.merge(CliService.layer(config), ServerSecretStore.layer).pipe(
@@ -516,10 +554,12 @@ export const statusCommand = Command.make("status", {
           ),
         ),
       );
+      if (flags.json) return yield* Console.log(setupJson(setup));
+      const hints = yield* resolveHints(flags.baseDir);
       yield* Console.log(
-        flags.json
-          ? setupJson(setup)
-          : `This machine\n${formatSetup(setup)}\n\nChange access: \`t3 up\`.`,
+        setup.service.otherBaseDir !== undefined
+          ? `This machine\n${formatSetup(setup, hints)}`
+          : `This machine\n${formatSetup(setup, hints)}\n\nChange access: \`${hints.up}\`.`,
       );
     }),
   ),

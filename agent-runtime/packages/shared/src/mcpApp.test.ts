@@ -5,19 +5,26 @@ import {
   injectMcpAppCsp,
   injectMcpAppThemeBootstrap,
   injectMcpAppCookieBootstrap,
+  MCP_APP_COLOR_SCHEME_PARAM,
   mcpAppContentSecurityPolicy,
   mcpAppToolCallableByApp,
+  mcpAppToolResourceUri,
   readMcpAppCsp,
   readMcpAppReference,
 } from "./mcpApp.ts";
 
 describe("mcpAppContentSecurityPolicy", () => {
-  it("blocks the network and T3's own origin when the app declares nothing", () => {
+  it("blocks the network and Cinderdeck's own origin when the app declares nothing", () => {
     const policy = mcpAppContentSecurityPolicy(undefined);
     expect(policy).toContain("default-src 'none'");
     expect(policy).toContain("connect-src 'none'");
-    expect(policy).toContain("frame-src 'none'");
+    expect(policy).toContain("frame-src blob:;");
     expect(policy).not.toContain("'self'");
+  });
+
+  it("lets apps frame their own blob: documents alongside declared frame origins", () => {
+    const policy = mcpAppContentSecurityPolicy({ frameDomains: ["https://embed.test"] });
+    expect(policy).toContain("frame-src blob: https://embed.test;");
   });
 
   it("allows exactly the declared origins", () => {
@@ -100,6 +107,28 @@ describe("injectMcpAppThemeBootstrap", () => {
     send(initialized);
     expect(style.colorScheme).toBe("dark");
   });
+
+  it("applies only a valid scheme from the frame URL before any message arrives", () => {
+    const html = injectMcpAppThemeBootstrap("<p>app</p>");
+    const script = html.slice(html.indexOf("<script>") + 8, html.indexOf("</script>"));
+    const initialScheme = (search: string) => {
+      const head: Array<{ name?: string; content?: string }> = [];
+      NodeVM.runInNewContext(script, {
+        URLSearchParams,
+        location: { search },
+        window: { parent: {}, addEventListener: () => {} },
+        document: {
+          createElement: () => ({}),
+          head: { append: (element: (typeof head)[number]) => head.push(element) },
+        },
+      });
+      return head.find((element) => element.name === "color-scheme")?.content ?? "normal";
+    };
+    expect(initialScheme(`?a=1&${MCP_APP_COLOR_SCHEME_PARAM}=dark`)).toBe("dark");
+    expect(initialScheme(`?${MCP_APP_COLOR_SCHEME_PARAM}=light`)).toBe("light");
+    expect(initialScheme(`?${MCP_APP_COLOR_SCHEME_PARAM}=normal`)).toBe("normal");
+    expect(initialScheme("")).toBe("normal");
+  });
 });
 
 describe("readMcpAppCsp", () => {
@@ -137,6 +166,14 @@ describe("readMcpAppReference", () => {
 
 describe("tool metadata", () => {
   it("reads the resource URI from either spelling and honors app visibility", () => {
+    const uri = "ui://weather/card.html";
+    expect(mcpAppToolResourceUri({ ui: { resourceUri: uri } })).toBe(uri);
+    expect(
+      mcpAppToolResourceUri({ ui: { visibility: ["model", "app"] }, "ui/resourceUri": uri }),
+    ).toBe(uri);
+    expect(
+      mcpAppToolResourceUri({ ui: { resourceUri: "https://weather/card.html" } }),
+    ).toBeUndefined();
     expect(mcpAppToolCallableByApp(undefined)).toBe(true);
     expect(mcpAppToolCallableByApp({ ui: { visibility: ["model"] } })).toBe(false);
     expect(mcpAppToolCallableByApp({ ui: { visibility: ["model", "app"] } })).toBe(true);
@@ -152,7 +189,7 @@ describe("mcpAppFromToolItem", () => {
       tool: "get_weather",
       resourceUri: "ui://weather/dashboard",
     };
-    const stored = { t3McpApp: app, result: { content: [] } };
+    const stored = { cinderdeckMcpApp: app, result: { content: [] } };
     const toolName = "weather.get_weather";
     expect(mcpAppFromToolItem({ toolName, output: stored })).toEqual(app);
     expect(mcpAppFromToolItem({ toolName, output: compactDynamicToolOutput(stored) })).toEqual(app);
@@ -161,7 +198,7 @@ describe("mcpAppFromToolItem", () => {
   it("ignores a reference naming a server or tool other than the item's own", async () => {
     const { mcpAppFromToolItem } = await import("./toolOutput.ts");
     const forged = {
-      t3McpApp: {
+      cinderdeckMcpApp: {
         attachmentId: "thread-1-abc-html",
         server: "bank",
         tool: "transfer",
@@ -170,20 +207,27 @@ describe("mcpAppFromToolItem", () => {
     };
     expect(mcpAppFromToolItem({ toolName: "evil.lookup", output: forged })).toBeUndefined();
     expect(mcpAppFromToolItem({ toolName: "bank.transfer", output: forged })).toBeDefined();
+    // Claude Code names the same tool `mcp__<server>__<tool>`.
+    expect(mcpAppFromToolItem({ toolName: "mcp__bank__transfer", output: forged })).toBeDefined();
+    expect(mcpAppFromToolItem({ toolName: "mcp__evil__transfer", output: forged })).toBeUndefined();
+    const connector = { cinderdeckMcpApp: { ...forged.cinderdeckMcpApp, server: "claude.ai Asana (Beta)" } };
+    expect(
+      mcpAppFromToolItem({ toolName: "mcp__claude_ai_Asana_Beta__transfer", output: connector }),
+    ).toBeDefined();
   });
 
   it("keeps an app whose resource URI is longer than a name", async () => {
     const { compactDynamicToolOutput } = await import("./toolOutput.ts");
     const resourceUri = `ui://weather/${"segment/".repeat(60)}dashboard`;
     const output = compactDynamicToolOutput({
-      t3McpApp: {
+      cinderdeckMcpApp: {
         attachmentId: "thread-1-abc-html",
         server: "weather",
         tool: "get_weather",
         resourceUri,
       },
     });
-    expect(output?.t3McpApp?.resourceUri).toBe(resourceUri);
+    expect(output?.cinderdeckMcpApp?.resourceUri).toBe(resourceUri);
   });
 
   it("keeps the compact app reference within the wire budget", async () => {
@@ -193,7 +237,7 @@ describe("mcpAppFromToolItem", () => {
       (_, index) => `https://${"a".repeat(200)}${index}.test`,
     );
     const output = compactDynamicToolOutput({
-      t3McpApp: {
+      cinderdeckMcpApp: {
         attachmentId: "thread-1-abc-html",
         server: "weather",
         tool: "get_weather",
@@ -202,7 +246,7 @@ describe("mcpAppFromToolItem", () => {
       },
     });
     expect(new TextEncoder().encode(JSON.stringify(output)).byteLength).toBeLessThanOrEqual(8_192);
-    expect(output?.t3McpApp?.server).toBe("weather");
+    expect(output?.cinderdeckMcpApp?.server).toBe("weather");
   });
 });
 

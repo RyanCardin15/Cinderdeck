@@ -12,6 +12,7 @@ import { Button } from "../ui/button";
 import {
   Dialog,
   DialogDescription,
+  DialogAction,
   DialogFooter,
   DialogHeader,
   DialogPanel,
@@ -69,8 +70,8 @@ export function RelayClientInstallDialog() {
           </DialogTitle>
           <DialogDescription>
             {isInstalling
-              ? "Cinderdeck is preparing this environment for secure access through T3 Connect."
-              : "Cinderdeck needs the relay client to make this environment available through T3 Connect."}
+              ? "Cinderdeck is preparing this environment for secure access through Cinderdeck Connect."
+              : "Cinderdeck needs the relay client to make this environment available through Cinderdeck Connect."}
           </DialogDescription>
         </DialogHeader>
         <DialogPanel scrollFade={false}>
@@ -112,9 +113,9 @@ export function RelayClientInstallDialog() {
             >
               Cancel
             </Button>
-            <Button onClick={() => respondToRelayClientInstallConfirmation(true)}>
+            <DialogAction onClick={() => respondToRelayClientInstallConfirmation(true)}>
               Download and install
-            </Button>
+            </DialogAction>
           </DialogFooter>
         ) : null}
       </DialogPopup>

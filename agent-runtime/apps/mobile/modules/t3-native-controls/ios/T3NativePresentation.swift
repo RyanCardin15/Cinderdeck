@@ -1,32 +1,39 @@
 import ExpoModulesCore
 import UIKit
 
-final class T3PresentationSources {
+final class CinderdeckPresentationSources {
   private class Entry {
     weak var view: UIView?
     init(_ view: UIView) { self.view = view }
   }
 
-  private var entries: [String: Entry] = [:]
+  /// The same file embedded twice registers twice; removing one copy keeps the other.
+  private var entries: [String: [Entry]] = [:]
 
   func register(_ view: UIView, identifier: String) {
-    entries[identifier] = Entry(view)
+    var list = (entries[identifier] ?? []).filter { $0.view != nil && $0.view !== view }
+    list.append(Entry(view))
+    entries[identifier] = list
   }
 
   func remove(_ view: UIView, identifier: String) {
-    if entries[identifier]?.view == nil || entries[identifier]?.view === view {
-      entries.removeValue(forKey: identifier)
-    }
+    let list = (entries[identifier] ?? []).filter { $0.view != nil && $0.view !== view }
+    entries[identifier] = list.isEmpty ? nil : list
   }
 
   func view(for identifier: String) -> UIView? {
-    // Use the child bounds, not the wrapper's potentially stretched layout bounds.
-    entries[identifier]?.view?.subviews.first
+    let views = (entries[identifier] ?? []).compactMap(\.view)
+    // Prefer an on-screen copy, the latest first; use the child bounds, not the wrapper's stretched ones.
+    let source = views.last(where: { view in
+      guard let window = view.window else { return false }
+      return window.bounds.intersects(view.convert(view.bounds, to: window))
+    }) ?? views.last
+    return source?.subviews.first
   }
 }
 
-final class T3PresentationSourceView: ExpoView {
-  weak var sources: T3PresentationSources?
+final class CinderdeckPresentationSourceView: ExpoView {
+  weak var sources: CinderdeckPresentationSources?
   var identifier = "" {
     didSet {
       sources?.remove(self, identifier: oldValue)
@@ -39,7 +46,7 @@ final class T3PresentationSourceView: ExpoView {
   }
 }
 
-final class T3ContextSheetSizeView: ExpoView {
+final class CinderdeckContextSheetSizeView: ExpoView {
   var contentHeight: CGFloat = 0 {
     didSet { updateSheet() }
   }

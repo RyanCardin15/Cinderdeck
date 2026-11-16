@@ -11,7 +11,7 @@ import { snapshotCookieDatabase } from "./CookieDatabase.ts";
 
 const runNode = <A, E>(
   effect: Effect.Effect<A, E, FileSystem.FileSystem | Path.Path | Scope.Scope>,
-) => effect.pipe(Effect.provide(NodeServices.layer), Effect.scoped);
+) => effect.pipe(Effect.provide(NodeServices.layer));
 
 describe("snapshotCookieDatabase", () => {
   it.effect("includes committed WAL data in one consistent database", () =>
@@ -20,7 +20,7 @@ describe("snapshotCookieDatabase", () => {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const sourceDirectory = yield* fileSystem.makeTempDirectoryScoped({
-          prefix: "t3code-cookie-source-",
+          prefix: "cinderdeck-cookie-source-",
         });
         const source = path.join(sourceDirectory, "Cookies");
         const snapshot = yield* Effect.gen(function* () {
@@ -47,11 +47,11 @@ describe("snapshotCookieDatabase", () => {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const sourceDirectory = yield* fileSystem.makeTempDirectoryScoped({
-          prefix: "t3code-cookie-invalid-source-",
+          prefix: "cinderdeck-cookie-invalid-source-",
         });
         const source = path.join(sourceDirectory, "Cookies");
         yield* fileSystem.writeFileString(source, "not a sqlite database");
-        const prefix = `t3code-cookie-failed-${process.pid}-`;
+        const prefix = `cinderdeck-cookie-failed-${process.pid}-`;
         const error = yield* snapshotCookieDatabase(source, prefix).pipe(
           Effect.scoped,
           Effect.flip,

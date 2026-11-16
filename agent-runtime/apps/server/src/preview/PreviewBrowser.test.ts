@@ -85,7 +85,7 @@ const makeHarness = Effect.fn("test.makePreviewBrowser")(function* (
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-preview-browser-test-" });
+  const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-preview-browser-test-" });
   const archive = options.archive ?? browserArchive;
   const digest = yield* Digest.Digest;
   const sha256 =
@@ -172,7 +172,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("PreviewBrowser",
       const error = yield* browser.executable.pipe(Effect.flip);
 
       expect(error._tag).toBe("PreviewBrowserInstallError");
-      expect(error.message).toMatch(/^T3 could not install its headless browser: .+ Try again\.$/);
+      expect(error.message).toMatch(/^Cinderdeck could not install its headless browser: .+ Try again\.$/);
       expect(yield* fs.readDirectory(installRoot)).toEqual([]);
       yield* browser.executable.pipe(Effect.flip);
       expect(requests).toHaveLength(2);
