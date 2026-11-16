@@ -34,6 +34,12 @@ terminated app requires reopening the menu. Changing conversations discards an
 in-flight capture. Native capture remains separate from permission to control an
 app: an attachment does not grant an agent computer-use access.
 
+## Runtime exposure and cookie refresh
+
+Native tools are restored in the maintained runtime and bundled with whole-app builds. Deferred providers list `computer_list_apps` and `computer_script` immediately; individual actions are searchable. See the [research and validation audit](COMPUTER_USE_AUDIT.md) for the exposure contract, performance measurements and remaining interactive checks.
+
+A browser profile imported through Integrations retains its cookie source. Its first hosted browser opening in a thread refreshes once before navigation; page reloads do not repeat the import. **Preview menu → Refresh cookies** refreshes manually. Clearing cookies disconnects the source. Incognito remains separate.
+
 ## The short path
 
 1. Call `computer_list_apps` for bundle IDs, running process targets and permission status.

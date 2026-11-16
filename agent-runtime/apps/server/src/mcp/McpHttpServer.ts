@@ -1,3 +1,4 @@
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -80,6 +81,17 @@ import * as ToolSearchHandlers from "./toolkits/toolSearch/handlers.ts";
 import { ToolSearchToolkit } from "./toolkits/toolSearch/tools.ts";
 import { PullRequestsToolkit } from "./toolkits/pullRequests/tools.ts";
 import * as DeviceHandlers from "./toolkits/device/handlers.ts";
+import * as ComputerUse from "../deckhand/ComputerUse.ts";
+import * as ComputerHandlers from "./toolkits/computerUse/handlers.ts";
+import {
+  ComputerUseToolkit,
+  ComputerUseStandardToolkit,
+  ComputerUseStateToolkit,
+  ComputerUseScriptToolkit,
+  computerStateMcpResult,
+  computerScriptMcpResult,
+} from "./toolkits/computerUse/tools.ts";
+
 import {
   DeviceScreenshotTool,
   DeviceScreenshotToolkit,
@@ -1303,6 +1315,109 @@ const layerDeviceScreenshotRegistration = imageToolRegistration(
   DeviceHandlers.layerScreenshot,
 );
 
+const registerComputerState = Effect.fn("McpHttpServer.registerComputerState")(function* () {
+  const computer = yield* ComputerUse.ComputerUse;
+  const threads = yield* ThreadManagementService.ThreadManagementService;
+  const server = yield* McpServer.McpServer;
+  const tool = ComputerUseToolkit.tools.computer_get_app_state;
+  const built = yield* decodeAsAdvertised(ComputerUseStateToolkit);
+  yield* server.addTool({
+    tool: new McpSchema.Tool({
+      name: tool.name,
+      description: Tool.getDescription(tool),
+      inputSchema: advertisedJsonSchema(tool),
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    }),
+    annotations: tool.annotations,
+    handle: (payload) =>
+      Effect.withFiber((fiber) => {
+        const invocation = Context.getUnsafe(
+          fiber.context,
+          McpInvocationContext.McpInvocationContext,
+        );
+        return built.handle("computer_get_app_state", payload).pipe(
+          Stream.unwrap,
+          Stream.run(Sink.last()),
+          Effect.flatMap(Effect.fromOption),
+          Effect.provideService(ComputerUse.ComputerUse, computer),
+          Effect.provideService(ThreadManagementService.ThreadManagementService, threads),
+          Effect.map((result) => computerStateMcpResult(result.encodedResult)),
+          Effect.catch((cause) =>
+            Effect.succeed(
+              computerStateMcpResult({
+                message:
+                  parameterValidationMessage(cause) ??
+                  "Computer use could not complete. Read fresh app state before retrying.",
+              }),
+            ),
+          ),
+          Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+        );
+      }),
+  });
+});
+
+const registerComputerScript = Effect.fn("McpHttpServer.registerComputerScript")(function* () {
+  const computer = yield* ComputerUse.ComputerUse;
+  const threads = yield* ThreadManagementService.ThreadManagementService;
+  const server = yield* McpServer.McpServer;
+  const tool = ComputerUseToolkit.tools.computer_script;
+  const built = yield* decodeAsAdvertised(ComputerUseScriptToolkit);
+  yield* server.addTool({
+    tool: new McpSchema.Tool({
+      name: tool.name,
+      description: Tool.getDescription(tool),
+      inputSchema: advertisedJsonSchema(tool),
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+    }),
+    annotations: tool.annotations,
+    handle: (payload) =>
+      Effect.withFiber((fiber) => {
+        const invocation = Context.getUnsafe(
+          fiber.context,
+          McpInvocationContext.McpInvocationContext,
+        );
+        return built.handle("computer_script", payload).pipe(
+          Stream.unwrap,
+          Stream.run(Sink.last()),
+          Effect.flatMap(Effect.fromOption),
+          Effect.provideService(ComputerUse.ComputerUse, computer),
+          Effect.provideService(ThreadManagementService.ThreadManagementService, threads),
+          Effect.map((result) => computerScriptMcpResult(result.encodedResult)),
+          Effect.catch((cause) =>
+            Effect.succeed(
+              computerScriptMcpResult({
+                message:
+                  parameterValidationMessage(cause) ??
+                  "Computer use could not complete. Read fresh app state before retrying.",
+              }),
+            ),
+          ),
+          Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+        );
+      }),
+  });
+});
+
+const layerComputerVisibility = McpServer.visibility(
+  Effect.map(
+    HostProcess.Platform,
+    (platform) =>
+      ({ method, target }: McpServer.MiddlewareOptions) =>
+        Effect.succeed(
+          method !== "tools/list" || !target.startsWith("computer_") || platform === "darwin",
+        ),
+  ),
+  { global: true },
+);
+
+export const layerComputerToolkit = Layer.mergeAll(
+  layerComputerVisibility,
+  toolkitRegistration(ComputerUseStandardToolkit, ComputerHandlers.layerStandard),
+  imageToolRegistration(registerComputerState(), ComputerHandlers.layerState),
+  imageToolRegistration(registerComputerScript(), ComputerHandlers.layerScript),
+);
+
 export const layerDeviceToolkit = Layer.mergeAll(
   layerDeviceStandardToolkitRegistration,
   layerDeviceScreenshotRegistration,
@@ -1351,6 +1466,7 @@ export const layerTools = Layer.mergeAll(
   layerWorktreeToolkitRegistration,
   layerPullRequestsToolkit,
   layerDeviceToolkit,
+  layerComputerToolkit.pipe(Layer.provide(ComputerUse.layerLive)),
   layerHtmlToolkit,
   layerMessageToolkit,
 );

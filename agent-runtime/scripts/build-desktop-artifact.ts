@@ -2805,7 +2805,12 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     // Disable smart unpack so native packages' JS/metadata stay archived and avoid slowing NSIS with loose files.
     ...(platform === "win"
       ? { asar: { smartUnpack: false }, asarUnpack: [WINDOWS_NATIVE_ASAR_UNPACK_GLOB] }
-      : { asarUnpack: ["**/node_modules/@transcribe-cpp/**/*.{dylib,so,so.*}"] }),
+      : {
+          asarUnpack: [
+            "**/node_modules/@transcribe-cpp/**/*.{dylib,so,so.*}",
+            ...(platform === "mac" ? ["apps/server/dist/native/**"] : []),
+          ],
+        }),
     extraResources: [
       ...DESKTOP_EXTRA_RESOURCES,
       ...(platform === "linux" ? LINUX_CAPTURE_EXTRA_RESOURCES : []),
@@ -3779,6 +3784,17 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   }
   if (options.platform !== "win") {
     yield* fs.copy(distDirs.serverDist, path.join(stageAppDir, "apps/server/dist"));
+  }
+  if (options.platform === "mac") {
+    const helperPath = path.join(stageAppDir, "apps/server/dist/native/deckhand-mac-computer-use");
+    yield* runCommand(
+      ChildProcess.make(
+        process.execPath,
+        [path.join(repoRoot, "scripts/deckhand/build-mac-computer-use.mjs"), helperPath],
+        { cwd: repoRoot },
+      ),
+      { label: "build bundled native computer-use helper", verbose: options.verbose },
+    );
   }
   yield* stageResourceMonitor({
     repoRoot,

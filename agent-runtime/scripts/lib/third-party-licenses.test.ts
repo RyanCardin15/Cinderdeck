@@ -191,7 +191,7 @@ describe("third-party license generation", () => {
     });
 
     expect(manifest.entries.find((entry) => entry.name === "generated-asset")?.noticeText).toBe(
-      "Adapted for T3 Code.\n\nMIT License\n\nCopyright (c) 2026 Example Author\n\nPermission text",
+      "Adapted for Cinderdeck.\n\nMIT License\n\nCopyright (c) 2026 Example Author\n\nPermission text",
     );
   });
 

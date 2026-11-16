@@ -43,6 +43,7 @@ type AgentStartHook = (
 export async function loadMcpBridge(
   options: {
     readonly modern?: boolean;
+    readonly extraTools?: ReadonlyArray<{ readonly name: string; readonly description: string }>;
     readonly result?: unknown;
     readonly toolSearchAvailable?: boolean;
     readonly toolSearchDisabled?: boolean;
@@ -75,6 +76,7 @@ export async function loadMcpBridge(
       annotations: { readOnlyHint: false },
     },
     { name: "preview_snapshot", description: "Inspect the collaborative browser." },
+    ...(options.extraTools ?? []),
   ].map((tool) => ({
     ...tool,
     inputSchema: options.inputSchema ?? { type: "object", properties: {} },
@@ -86,7 +88,7 @@ export async function loadMcpBridge(
       "async function",
     ),
   );
-  await NodeVM.runInNewContext(`${source}\nt3McpExtension(pi)`, {
+  await NodeVM.runInNewContext(`${source}\ncinderdeckMcpExtension(pi)`, {
     process: {
       env: {
         T3_MCP_URL: "http://fixture.invalid/mcp",

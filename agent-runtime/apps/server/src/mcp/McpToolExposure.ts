@@ -3,11 +3,13 @@ import * as Effect from "effect/Effect";
 
 export const TOOL_SEARCH = "tool_search";
 
-/** What a deferring client lists before it searches. Pi's extension declares the same three. */
+/** Deferring clients get discovery and batching first. Pi mirrors the native tool names. */
 const DIRECT_TOOLS: ReadonlySet<string> = new Set([
   "orchestrator_capabilities",
   "delegate_task",
   "task_status",
+  "computer_list_apps",
+  "computer_script",
   TOOL_SEARCH,
 ]);
 

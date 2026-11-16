@@ -37,7 +37,12 @@ import { type ComposerImageAttachment, useComposerDraftStore } from "~/composerD
 import { capturePreviewAnnotationScreenshot } from "~/lib/previewAnnotation";
 import { readComposerImageBytes } from "../chat/composerAttachmentFiles";
 import { ensureLocalApi } from "~/localApi";
-import { getClientSettings } from "~/hooks/useSettings";
+import { getClientSettings, useClientSettings } from "~/hooks/useSettings";
+import {
+  refreshBrowserCookiesWithFeedback,
+  withBrowserCookieRefreshPaused,
+  disconnectBrowserCookieSource,
+} from "~/browser/browserCookieRefresh";
 import {
   rememberPreviewUrl,
   updatePreviewServerSnapshot,
@@ -498,6 +503,38 @@ export function PreviewView({
     useRightPanelStore.getState().close(threadRef);
   };
 
+  const cookieSource = useClientSettings((settings) =>
+    settings.browserCookieSources.find(
+      (source) =>
+        source.environmentId === threadRef.environmentId &&
+        source.targetProfileId === activeProfileId,
+    ),
+  );
+  const [cookieRefreshPending, setCookieRefreshPending] = useState(false);
+  const refreshCookies = () => {
+    if (cookieRefreshPending) return;
+    setCookieRefreshPending(true);
+    void refreshBrowserCookiesWithFeedback(threadRef.environmentId, activeProfileId, true)
+      .then(async (result) => {
+        if (!result) return;
+        if (serverOwnsRendering) await adjustServerTab({ hardReload: true });
+        else if (runtimeTabId) await previewBridge?.hardReload(runtimeTabId);
+      })
+      .catch(() =>
+        toastManager.add({
+          type: "error",
+          title: "Cookies refreshed, but the page could not reload",
+        }),
+      )
+      .finally(() => setCookieRefreshPending(false));
+  };
+  const clearCookies = () => {
+    void withBrowserCookieRefreshPaused([threadRef.environmentId], activeProfileId, async () => {
+      await disconnectBrowserCookieSource(activeProfileId, threadRef.environmentId);
+      if (serverOwnsRendering) await adjustServerTab({ clear: "cookies" });
+      else await previewBridge?.clearCookies(threadRef.environmentId, activeProfileId);
+    }).catch(() => toastManager.add({ type: "error", title: "Could not clear browser cookies" }));
+  };
   const desktopCall = (op: ((tabId: string) => Promise<void>) | undefined) => () => {
     if (op && runtimeTabId) void op(runtimeTabId).catch(() => undefined);
   };
@@ -508,7 +545,10 @@ export function PreviewView({
         zoomIn: handleZoomIn,
         zoomOut: handleZoomOut,
         resetZoom: handleResetZoom,
-        clearCookies: () => void adjustServerTab({ clear: "cookies" }),
+        clearCookies,
+        ...(nativeServerTab
+          ? { refreshCookies, cookieRefreshPending, cookieRefreshAvailable: Boolean(cookieSource) }
+          : {}),
         clearCache: () => void adjustServerTab({ clear: "cache" }),
         ...(nativeServerTab && previewBridge
           ? {
@@ -528,10 +568,10 @@ export function PreviewView({
           zoomIn: handleZoomIn,
           zoomOut: handleZoomOut,
           resetZoom: handleResetZoom,
-          clearCookies: () =>
-            void previewBridge
-              ?.clearCookies(threadRef.environmentId, activeProfileId)
-              .catch(() => undefined),
+          clearCookies,
+          refreshCookies,
+          cookieRefreshPending,
+          cookieRefreshAvailable: Boolean(cookieSource),
           clearCache: () =>
             void previewBridge
               ?.clearCache(threadRef.environmentId, activeProfileId)

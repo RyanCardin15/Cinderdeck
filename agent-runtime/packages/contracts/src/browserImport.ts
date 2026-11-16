@@ -36,6 +36,7 @@ export const BrowserImportFailureReason = Schema.Literals([
   "sessionUnavailable",
   "profileNotSaved",
   "profileLimitReached",
+  "sourceNotSaved",
   "readFailed",
 ]);
 export type BrowserImportFailureReason = typeof BrowserImportFailureReason.Type;
@@ -54,6 +55,16 @@ export const BrowserImportSource = Schema.Struct({
   unavailable: Schema.optional(BrowserImportUnavailableReason),
 });
 export type BrowserImportSource = typeof BrowserImportSource.Type;
+
+export const BrowserCookieSource = Schema.Struct({
+  environmentId: TrimmedNonEmptyString,
+  targetProfileId: BrowserProfileId,
+  sourceId: BrowserImportSourceId,
+  sourceName: TrimmedNonEmptyString,
+  sourceProfileDirectory: TrimmedNonEmptyString,
+  sourceProfileName: TrimmedNonEmptyString,
+});
+export type BrowserCookieSource = typeof BrowserCookieSource.Type;
 
 export const BrowserImportInput = Schema.Struct({
   sourceId: BrowserImportSourceId,
@@ -97,5 +108,7 @@ export const BROWSER_IMPORT_FAILURE_COPY: Readonly<Record<BrowserImportFailureRe
   profileNotSaved: "The cookies were imported, but the new profile couldn't be saved. Try again.",
   profileLimitReached:
     "You've reached the profile limit. Delete a profile or import into an existing one.",
+  sourceNotSaved:
+    "The cookies were imported, but automatic refresh could not be saved. Import again to reconnect the source.",
   readFailed: "The browser's cookie database could not be read.",
 };

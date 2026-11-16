@@ -38,7 +38,7 @@ async function loadHooks(
       "async function",
     ),
   );
-  await NodeVM.runInNewContext(`${source}\nt3McpExtension(pi)`, {
+  await NodeVM.runInNewContext(`${source}\ncinderdeckMcpExtension(pi)`, {
     process: { env: {}, argv },
     NodeFSP,
     NodePath,
@@ -205,6 +205,28 @@ describe("Pi MCP tool exposure", () => {
     assert.equal(bridge.requests.at(-1)?.method, "tools/call");
   });
 
+  it("exposes native app discovery and batching directly without loading every native action", async () => {
+    const bridge = await loadMcpBridge({
+      modern: true,
+      toolSearchAvailable: true,
+      extraTools: ["computer_list_apps", "computer_script", "computer_click"].map((name) => ({
+        name,
+        description: name,
+      })),
+    });
+    await bridge.handlers.get("session_start")!({ systemPrompt: "" }, discoveryContext);
+    for (const name of ["computer_list_apps", "computer_script"]) {
+      assert.equal(
+        bridge.tools.find((tool) => tool.name === `mcp__t3-code__${name}`)?.exposure,
+        "direct",
+      );
+    }
+    assert.equal(
+      bridge.tools.find((tool) => tool.name === "mcp__t3-code__computer_click")?.exposure,
+      "deferred",
+    );
+  });
+
   it("restores gateway declarations after model switches and older tree loadouts without excluded tools", async () => {
     const bridge = await loadMcpBridge({
       modern: true,
@@ -364,7 +386,7 @@ describe("Pi tool discovery permissions", () => {
         "async function",
       ),
     );
-    await NodeVM.runInNewContext(`${source}\nt3McpExtension(pi)`, {
+    await NodeVM.runInNewContext(`${source}\ncinderdeckMcpExtension(pi)`, {
       process: { env: { T3_PI_RUNTIME_MODE: "approval-required" } },
       pi: {
         on: (name: string, handler: ToolCallHook) => {
@@ -440,7 +462,7 @@ async function loadRequestHook() {
       "async function",
     ),
   );
-  await NodeVM.runInNewContext(`${source}\nt3McpExtension(pi)`, {
+  await NodeVM.runInNewContext(`${source}\ncinderdeckMcpExtension(pi)`, {
     process: { env: {} },
     pi: {
       on: (name: string, handler: RequestHook) => handlers.set(name, handler),

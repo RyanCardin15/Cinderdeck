@@ -26,6 +26,7 @@ import {
 import { BrowserDeviceToolbar } from "./BrowserDeviceToolbar";
 import { BrowserViewportResizeHandles } from "./BrowserViewportResizeHandles";
 import { acquireDesktopTab, type AcquiredDesktopTab, withDesktopTab } from "./desktopTabLifetime";
+import { refreshBrowserCookiesOnFirstOpen } from "./browserCookieRefresh";
 import { resolveHostedBrowserWebviewWrapperStyle } from "./hostedBrowserWebviewStyle";
 import { usePreviewWebviewConfig } from "./previewWebviewConfigState";
 import { useBrowserLayoutZoomFactor } from "./useBrowserLayoutZoomFactor";
@@ -81,6 +82,27 @@ export function HostedBrowserWebview(props: {
   } = props;
   const clientSettingsHydrated = useClientSettingsHydrated();
   const config = usePreviewWebviewConfig(threadRef.environmentId, profileId);
+  const cookieEnvironmentId = threadRef.environmentId;
+  const cookieThreadId = threadRef.threadId;
+  const cookieSessionKey = JSON.stringify([cookieEnvironmentId, cookieThreadId, profileId]);
+  const [cookieReadyKey, setCookieReadyKey] = useState<string | null>(null);
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- awaits the one-time saved-source import before the guest's first navigation
+  useEffect(() => {
+    if (!clientSettingsHydrated) return;
+    let disposed = false;
+    void refreshBrowserCookiesOnFirstOpen(
+      { environmentId: cookieEnvironmentId, threadId: cookieThreadId },
+      profileId,
+    )
+      .finally(() => {
+        if (!disposed) setCookieReadyKey(cookieSessionKey);
+      })
+      .catch(() => undefined);
+    return () => {
+      disposed = true;
+    };
+  }, [clientSettingsHydrated, cookieSessionKey, cookieEnvironmentId, cookieThreadId, profileId]);
+
   const [initialSrc] = useState(() => initialUrl ?? "about:blank");
   const tabLeaseRef = useRef<AcquiredDesktopTab | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -156,7 +178,14 @@ export function HostedBrowserWebview(props: {
   useEffect(() => {
     const webview = webviewRef.current;
     const bridge = previewBridge;
-    if (!clientSettingsHydrated || !webview || !config || !bridge) return;
+    if (
+      !clientSettingsHydrated ||
+      cookieReadyKey !== cookieSessionKey ||
+      !webview ||
+      !config ||
+      !bridge
+    )
+      return;
     let disposed = false;
     let recoveryTimeout: ReturnType<typeof setTimeout> | null = null;
     const register = () => {
@@ -215,6 +244,8 @@ export function HostedBrowserWebview(props: {
     };
   }, [
     clientSettingsHydrated,
+    cookieReadyKey,
+    cookieSessionKey,
     config,
     runtimeTabId,
     // oxlint-disable-next-line react/exhaustive-effect-dependencies -- A crash recovery remounts the webview under a new key, so the listeners attach to the new element.
@@ -331,7 +362,7 @@ export function HostedBrowserWebview(props: {
     };
   }, [clientSettingsHydrated, fullDetail, runtimeTabId, serverDriven]);
 
-  if (!clientSettingsHydrated || !config) return null;
+  if (!clientSettingsHydrated || cookieReadyKey !== cookieSessionKey || !config) return null;
 
   // This fixed wrapper sits outside the right panel shell, so it takes thumb presses itself.
   const navigateThumb = (direction: "back" | "forward") => {

@@ -1,3 +1,4 @@
+import { MCP_TOOL_EXPOSURE_HEADER } from "@cinderdeck/provider-core/server/mcpSession";
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
@@ -97,7 +98,9 @@ const layerTest = McpHttpServer.layerPreviewToolkit.pipe(
   Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
   Layer.provideMerge(McpToolAccessTestkit.liveThreadsLayer),
   Layer.provideMerge(PreviewAutomationBroker.layer),
-  Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "cinderdeck-mcp-http-server-test-" })),
+  Layer.provideMerge(
+    ServerConfig.layerTest(process.cwd(), { prefix: "cinderdeck-mcp-http-server-test-" }),
+  ),
   Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
 );
 const layerPullRequestsTest = McpHttpServer.layerPullRequestsToolkit.pipe(
@@ -270,7 +273,9 @@ it.effect.each([
             }),
           ),
           Layer.provide(Layer.mock(ProjectService.ProjectService)({})),
-          Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "cinderdeck-device-mcp-test-" })),
+          Layer.provide(
+            ServerConfig.layerTest(process.cwd(), { prefix: "cinderdeck-device-mcp-test-" }),
+          ),
           Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
         ),
       ),
@@ -1385,7 +1390,9 @@ it.effect("accepts case-insensitive MCP bearer schemes and diagnoses rejected cr
     Layer.provide(ServerSecretStore.layer),
     Layer.provide(ManagedPolicy.layerTest()),
     Layer.provideMerge(ServerEnvironment.layerIdentity),
-    Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "cinderdeck-mcp-auth-header-test-" })),
+    Layer.provide(
+      ServerConfig.layerTest(process.cwd(), { prefix: "cinderdeck-mcp-auth-header-test-" }),
+    ),
     Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
   );
   return Effect.scoped(
@@ -1506,7 +1513,9 @@ it.effect("gives outside clients an upload URL on the origin their request reach
         Layer.provide(
           AssetSigner.layer.pipe(
             Layer.provideMerge(ServerSecretStore.layer),
-            Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "cinderdeck-mcp-upload-" })),
+            Layer.provideMerge(
+              ServerConfig.layerTest(process.cwd(), { prefix: "cinderdeck-mcp-upload-" }),
+            ),
             Layer.provideMerge(DocumentText.layer),
             Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
           ),
@@ -1875,7 +1884,7 @@ it.effect(
             const headers = {
               accept: "application/json, text/event-stream",
               authorization: `Bearer ${clientToken}`,
-              ...(limit === undefined ? {} : { "cinderdeck-mode-limit": limit }),
+              ...(limit === undefined ? {} : { [McpInvocationContext.MODE_LIMIT_HEADER]: limit }),
             };
             const initialize = yield* httpClient.post("/mcp", {
               headers,
@@ -1993,7 +2002,7 @@ it.effect("lists optional tools to a deferring client only after tool_search loa
           const headers = {
             accept: "application/json, text/event-stream",
             authorization: `Bearer ${token}`,
-            ...(deferred ? { "cinderdeck-tool-exposure": "deferred" } : {}),
+            ...(deferred ? { [MCP_TOOL_EXPOSURE_HEADER]: "deferred" } : {}),
           };
           const initialize = yield* httpClient.post("/mcp", {
             headers,

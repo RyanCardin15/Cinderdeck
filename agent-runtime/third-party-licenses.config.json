@@ -8,6 +8,13 @@
       "noticeFile": "apps/web/src/components/files/office/LICENSE.opencode"
     },
     {
+      "bundles": ["desktop", "server", "web"],
+      "license": "MIT",
+      "name": "Native computer-use interoperability - Cua Driver and yabai",
+      "sourceUrl": "https://github.com/trycua/cua/tree/main/libs/cua-driver",
+      "noticeFile": "native/mac-computer-use/THIRD_PARTY_NOTICES.md"
+    },
+    {
       "bundles": ["desktop", "web"],
       "license": "MIT",
       "name": "Ionic keyboard assist",
@@ -321,7 +328,9 @@
       "version": "0.4.0",
       "license": "Apache-2.0 AND OFL-1.1",
       "generatedNotices": [
-        { "licenseId": "Apache-2.0" },
+        {
+          "licenseId": "Apache-2.0"
+        },
         {
           "licenseId": "OFL-1.1",
           "copyrights": [
@@ -335,7 +344,9 @@
       "version": "0.4.0",
       "license": "Apache-2.0 AND OFL-1.1",
       "generatedNotices": [
-        { "licenseId": "Apache-2.0" },
+        {
+          "licenseId": "Apache-2.0"
+        },
         {
           "licenseId": "OFL-1.1",
           "copyrights": [

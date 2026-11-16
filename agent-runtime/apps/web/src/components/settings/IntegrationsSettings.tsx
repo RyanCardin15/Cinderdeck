@@ -5,7 +5,6 @@ import { ScopedSwitch } from "./ScopedSwitch";
 import { DeviceSourcesSettings } from "./DeviceSourcesSettings";
 import {
   AuthSettingsWriteScope,
-  BrowserImportFailureReason,
   BROWSER_PROFILE_MAX_COUNT,
   type BrowserLinkTarget,
   type BrowserProfile,
@@ -40,7 +39,6 @@ import { usePrimaryManagedPolicy } from "~/state/managedPolicy";
 import { isValidSearchUrlTemplate } from "@cinderdeck/shared/preview";
 import { PREVIEW_VIEWPORT_PRESETS } from "@cinderdeck/shared/previewViewport";
 import { MoreVertical, Plus as PlusIcon } from "lucide-react";
-import * as Schema from "effect/Schema";
 import { useRef, useState } from "react";
 
 import { ScreenRotationIcon } from "~/browser/ScreenRotationIcon";
@@ -100,7 +98,6 @@ import { Switch } from "../ui/switch";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   getClientSettings,
-  persistClientSettingsUpdate,
   useClientSettings,
   useClientSettingsHydrated,
   useUpdatePrimarySettings,
@@ -117,6 +114,12 @@ import { searchableSetting } from "./settingsSearch";
 import { AdvancedSettings } from "./AdvancedSettings";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { BrowserImportWizard, type WizardTarget } from "./BrowserImportWizard";
+import { importBrowserProfileCookies } from "~/browser/browserProfileImport";
+import {
+  disconnectBrowserCookieSource,
+  withBrowserCookieRefreshPaused,
+} from "~/browser/browserCookieRefresh";
+
 import type { ImportOutcome } from "./browserImportWizard.logic";
 
 const FILL_VALUE = "fill";
@@ -143,13 +146,16 @@ export async function clearBrowserProfileData(
   if (desktopEnvironmentIds.length === 0 && serverEnvironmentIds.length === 0) {
     throw new Error("Browser profile data is not available to clear.");
   }
-  await Promise.all([
-    ...desktopEnvironmentIds.flatMap((environmentId) => [
-      bridge!.clearCookies(environmentId, profileId),
-      bridge!.clearCache(environmentId, profileId),
-    ]),
-    ...serverEnvironmentIds.map((environmentId) => server!.clear(environmentId, profileId)),
-  ]);
+  await withBrowserCookieRefreshPaused(environmentIds, profileId, async () => {
+    await disconnectBrowserCookieSource(profileId);
+    await Promise.all([
+      ...desktopEnvironmentIds.flatMap((environmentId) => [
+        bridge!.clearCookies(environmentId, profileId),
+        bridge!.clearCache(environmentId, profileId),
+      ]),
+      ...serverEnvironmentIds.map((environmentId) => server!.clear(environmentId, profileId)),
+    ]);
+  });
 }
 
 function browserProfileRemovalAvailable(
@@ -175,36 +181,7 @@ const zoomLabel = (zoomFactor: number) => `${Math.round(zoomFactor * 100)}%`;
 
 /** IPC carries reason tokens inside messages; treat unknown tokens as read failures without exposing raw
  * text. */
-class ProfileLimitReachedError extends Schema.TaggedError<ProfileLimitReachedError>()(
-  "ProfileLimitReachedError",
-  {},
-) {
-  override get message(): string {
-    return "Browser profile limit reached.";
-  }
-}
-
-const isProfileLimitReachedError = Schema.is(ProfileLimitReachedError);
-
-export const importFailureReason = (cause: unknown): BrowserImportFailureReason => {
-  const message = String((cause as { message?: unknown } | undefined)?.message ?? "");
-  return (
-    BrowserImportFailureReason.literals.find((reason) => message.includes(`failed: ${reason}.`)) ??
-    "readFailed"
-  );
-};
-
-/**
- * The desktop's refusal when the machine's managed policy forbids cookie import. IPC wraps the
- * message in its own prefixes, so the sentence is matched on the contract's wording.
- */
-export const importPolicyRefusal = (cause: unknown): string | undefined => {
-  const message = String((cause as { message?: unknown } | undefined)?.message ?? "");
-  return (
-    /The managed policy at .* importing browser cookies is not allowed\./u.exec(message)?.[0] ??
-    /(?:^|: )([^:]*'s policy does not allow importing browser cookies\.)/u.exec(message)?.[1]
-  );
-};
+export { importFailureReason, importPolicyRefusal } from "~/browser/browserCookieRefresh";
 
 async function importBrowserCookiesIntoTarget(
   bridge: NonNullable<typeof previewBridge>,
@@ -212,80 +189,8 @@ async function importBrowserCookiesIntoTarget(
   environmentId: EnvironmentId,
   input: { readonly sourceProfileDirectory: string; readonly target: WizardTarget },
 ): Promise<ImportOutcome> {
-  try {
-    const result = await bridge.importBrowserCookies({
-      environmentId,
-      sourceId: source.id,
-      sourceProfileDirectory: input.sourceProfileDirectory,
-      targetProfileId: input.target.profileId,
-    });
-    if (
-      input.target.kind === "existing" &&
-      !resolveBrowserProfiles(getClientSettings().browserProfiles).some(
-        (profile) => profile.id === input.target.profileId,
-      )
-    ) {
-      return { kind: "blocked", reason: "readFailed" };
-    }
-    let targetName: string;
-    if (input.target.kind === "new") {
-      if (result.imported > 0) {
-        try {
-          const persisted = await persistClientSettingsUpdate((current) => {
-            const existing = current.browserProfiles.find(
-              (profile) => profile.id === input.target.profileId,
-            );
-            if (existing) return current;
-            // The profile cap may be reached during import; enforce it against the updater's latest settings.
-            if (current.browserProfiles.length >= BROWSER_PROFILE_MAX_COUNT) {
-              throw new ProfileLimitReachedError();
-            }
-            const taken = new Set(
-              resolveBrowserProfiles(current.browserProfiles).map((profile) => profile.name),
-            );
-            let name = source.name;
-            for (let index = 2; taken.has(name); index += 1) name = `${source.name} ${index}`;
-            return {
-              ...current,
-              browserProfiles: [
-                ...current.browserProfiles,
-                { id: input.target.profileId, name, kind: "persistent" as const },
-              ],
-            };
-          });
-          targetName =
-            persisted.browserProfiles.find((profile) => profile.id === input.target.profileId)
-              ?.name ?? source.name;
-        } catch (cause) {
-          // Clear the new target's partition on registration failure so imported cookies cannot outlive its
-          // profile.
-          await clearBrowserProfileData(bridge, [environmentId], input.target.profileId).catch(
-            () => undefined,
-          );
-          const reason = isProfileLimitReachedError(cause)
-            ? "profileLimitReached"
-            : "profileNotSaved";
-          throw new Error(`Importing cookies from ${source.id} failed: ${reason}.`, { cause });
-        }
-      } else {
-        targetName = source.name;
-      }
-    } else {
-      targetName = input.target.name;
-    }
-    return {
-      kind: "imported",
-      imported: result.imported,
-      skipped: result.skipped,
-      skippedDomains: result.skippedDomains,
-      targetName,
-    };
-  } catch (cause) {
-    const policyRefusal = importPolicyRefusal(cause);
-    return policyRefusal !== undefined
-      ? { kind: "blocked", reason: "readFailed", message: policyRefusal }
-      : { kind: "blocked", reason: importFailureReason(cause) };
-  }
+  const result = await importBrowserProfileCookies(bridge, source, environmentId, input);
+  return result;
 }
 
 const viewportSelectValue = (viewport: PreviewViewportSetting): string => {

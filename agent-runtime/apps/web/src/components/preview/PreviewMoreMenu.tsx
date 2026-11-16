@@ -35,6 +35,9 @@ export interface PreviewMoreMenuActions {
   readonly zoomOut: () => void;
   readonly resetZoom: () => void;
   readonly clearCookies: () => void;
+  readonly refreshCookies?: () => void;
+  readonly cookieRefreshPending?: boolean;
+  readonly cookieRefreshAvailable?: boolean;
   readonly clearCache: () => void;
   readonly openDevTools?: () => void;
   readonly toggleNativePictureInPicture?: () => void;
@@ -177,6 +180,19 @@ export function PreviewMoreMenu({
             <MenuGroupLabel className="max-w-64">
               <span className="block truncate">Profile: {profileName}</span>
             </MenuGroupLabel>
+          ) : null}
+          {actions.refreshCookies ? (
+            <MenuItem
+              onClick={actions.refreshCookies}
+              disabled={actions.cookieRefreshPending || actions.cookieRefreshAvailable === false}
+              title={
+                actions.cookieRefreshAvailable === false
+                  ? "Import cookies in Settings → Integrations to connect a source."
+                  : undefined
+              }
+            >
+              {actions.cookieRefreshPending ? "Refreshing cookies…" : "Refresh cookies"}
+            </MenuItem>
           ) : null}
           <MenuItem onClick={actions.clearCookies}>Clear cookies</MenuItem>
           <MenuItem onClick={actions.clearCache}>Clear cache</MenuItem>
