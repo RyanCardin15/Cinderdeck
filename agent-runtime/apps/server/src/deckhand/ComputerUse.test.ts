@@ -14,6 +14,7 @@ function fixture(
   options: {
     decision?: string;
     saved?: string[];
+    initiallyStopped?: boolean;
     resolved?: object;
     waitForAction?: () => Promise<void>;
   } = {},
@@ -25,19 +26,20 @@ function fixture(
   ];
   let clock = 1_000;
   let windowID = 5;
-  let processID = 42;
+  let processID = options.initiallyStopped ? undefined : excel.pid;
   let screenshotFails = false;
   const saved: string[][] = [];
   const call: ComputerUseCall = async (method, params = {}) => {
     calls.push({ method, params });
     switch (method) {
       case "resolveApp":
-        return { ...excel, ...options.resolved };
+        return { ...excel, pid: processID, ...options.resolved };
       case "requestAccess":
         return { decision: options.decision ?? "session" };
       case "getState":
+        processID ??= excel.pid;
         return {
-          app: { ...excel, pid: processID },
+          app: { ...excel, pid: processID, ...options.resolved },
           windows: [{ index: 0, title: "Book1", target: true }],
           window: { id: windowID, title: "Book1", width: 1600, height: 1000 },
           nodes,
@@ -75,7 +77,7 @@ function fixture(
       windowID++;
     },
     restartApp: () => {
-      processID++;
+      processID = (processID ?? excel.pid) + 1;
     },
     failScreenshot: () => {
       screenshotFails = true;
@@ -226,6 +228,18 @@ describe("computer use state and actions", () => {
 });
 
 describe("computer use screenshot coordinates", () => {
+  it("can click the first screenshot when the state read launched the app", async () => {
+    const test = fixture({ initiallyStopped: true, saved: [excel.bundleId] });
+    const state = await test.core.getAppState(alice, { app: excel.bundleId });
+    expect(test.calls.at(-1)?.params.app).toBe(excel.bundleId);
+    expect(state.text).toContain("Exact process target: pid:42");
+    await test.core.act(alice, { kind: "click", input: { app: "pid:42", x: 100, y: 40 } });
+    expect(test.calls.at(-1)).toMatchObject({
+      method: "click",
+      params: { app: "pid:42", x: 200, y: 80, screenshotID: "fixture-screenshot" },
+    });
+  });
+
   it("uses foreground drag only when explicitly requested and keeps screenshot validation", async () => {
     const test = fixture({ saved: ["com.microsoft.Excel"] });
     const input = { app: "Excel", from_x: 10, from_y: 20, to_x: 30, to_y: 40 };

@@ -12,6 +12,8 @@ Deferring providers see `computer_list_apps` and `computer_script` immediately. 
 
 The whole-app builder compiles and unpacks the native helper beside the backend, so installed builds do not depend on a developer checkout. Original Cua Driver and yabai notices are preserved and included in the bundled license configuration.
 
+When a state read opens a previously stopped app, the returned process ID now identifies both the screenshot and the target shown to the agent. The next coordinate click can use that first screenshot. State reads reuse the window list for selection, batch each window's metadata into one accessibility request and reuse its title. Input and post-capture validation still read the current windows. The server formats each accessibility node once and uses the resulting snapshot for both display and comparison.
+
 Cookie refresh source links were also removed by the rebase. Successful imports again save the source browser, source profile and destination together. The first hosted browser opening attempts a refresh once per environment, thread and profile during a renderer session, before the webview's first navigation. Concurrent tabs share their attempt. Reloads, crash recovery and panel remounts do not repeat it, including after an unsuccessful automatic attempt. **Preview menu → Refresh cookies** retries manually and reloads the page after import; it explains that Integrations must connect a source when none is saved. Clearing cookies disconnects the source and waits for in-flight imports so a queued refresh cannot restore the cleared login. Incognito does not import cookies.
 
 ## Research applied
@@ -26,8 +28,12 @@ Cookie refresh source links were also removed by the rebase. Successful imports 
 
 ## Measurements and validation limits
 
-The native fixture uses fictional text in an owned AppKit app. Three runs each performed 100 text-only reads and 20 direct value edits, plus 16 functional checks, including screenshot size bounds and avoiding upscaling small windows. Read medians were 0.723–0.747 ms; p95 reads were 1.198–3.381 ms. Median edits were 7.783–9.271 ms. These are fixture timings, not third-party application or model round-trip measurements.
+The native fixture uses fictional text in an owned AppKit app. Three pre-merge runs each performed 100 text-only reads, 20 direct value edits and 16 functional checks, including screenshot size bounds and avoiding upscaling small windows. In-process read medians were 0.66–0.73 ms, p95 reads were 2.76–2.87 ms and median edits were 8.12–10.76 ms.
+
+A separate AppKit fixture tested the production helper across process boundaries using its exact PID and two windows. Direct edits, Unicode selection and typing, keyboard shortcuts, background clicks, modifier clearing, screenshots and per-conversation window isolation passed. Across 20 text-only reads, median latency was 2.69 ms and the slowest read took 6.32 ms. The first state with a screenshot took 272 ms and a subsequent one took 107 ms.
+
+A synthetic 1,200-node benchmark compared server-side formatting and diffing against `fc2d292` on Node 26.13.1. After warm-up, 41 alternating batches of 12 reads produced identical output. Median time for a full read fell from 0.515 to 0.315 ms (39%), and for an unchanged read from 0.571 to 0.331 ms (42%). These measurements exclude native IPC, model and network latency.
 
 The complete nondeferred MCP catalog grows from 49,736 to 62,839 JSON bytes. Deferred clients receive only two native tool declarations initially; remaining computer actions are discovered on demand. The measured context budget records this feature cost rather than hiding it.
 
-Automated checks cover native fixture operations, helper lifecycle/timeouts, state diffs, thread isolation, script batching, MCP registration/image delivery, provider exposure, cookie refresh deduplication, explicit imports and clearing races. Browser/device UI, real source-browser credentials, arbitrary third-party apps, and the external permission-responsibility chain require separate interactive validation; this audit does not claim universal performance or compatibility.
+Automated checks cover native fixture operations, helper lifecycle/timeouts, first-screenshot targeting after launch, state diffs, thread isolation, script batching, MCP registration/image delivery, provider exposure, cookie refresh deduplication, explicit imports and clearing races. Validation with third-party apps, installed-app permission prompts and real browser logins remains open.

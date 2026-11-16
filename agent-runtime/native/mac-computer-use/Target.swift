@@ -40,10 +40,9 @@ struct Target {
   }
 
   /// Actions never silently retarget when the previously selected window closes.
-  private func currentWindow(allowFallback: Bool = false) -> AXUIElement? {
+  private func currentWindow() -> AXUIElement? {
     let list = windows()
-    if let window = store.window, list.contains(where: { CFEqual($0, window) }) { return window }
-    if store.window != nil && !allowFallback { return nil }
+    if let selected = store.window { return list.first { CFEqual($0, selected) } }
     let window = defaultWindow(list)
     store.window = window
     store.windowID = window.flatMap(windowID)
@@ -74,12 +73,15 @@ struct Target {
   func state(window index: Int?, includeScreenshot: Bool, maxNodes: Int) async throws -> [String: Any] {
     let list = windows()
     let previousWindow = store.window
-    var window = currentWindow(allowFallback: true)
+    let window: AXUIElement?
     if let index {
       guard list.indices.contains(index) else {
         throw Failed(.window_missing, "No window \(index); the app has \(list.count).")
       }
       window = list[index]
+    } else {
+      window = previousWindow.flatMap { selected in list.first { CFEqual($0, selected) } }
+        ?? defaultWindow(list)
     }
     store.window = window
     store.windowID = window.flatMap(windowID)
@@ -130,13 +132,19 @@ struct Target {
       focusedID = store.elements.first { CFEqual($0.value.element, focusedElement) }?.key
       selectedText = AX.string(AX.copy(focusedElement, kAXSelectedTextAttribute))
     }
+    var windowTitle = ""
     let rows: [[String: Any]] = list.enumerated().map { offset, item in
+      let attributes = AX.many(item, [kAXTitleAttribute, kAXMinimizedAttribute, kAXMainAttribute])
+      let title = AX.string(attributes[0]) ?? ""
       var row: [String: Any] = [
-        "index": offset, "title": AX.string(AX.copy(item, kAXTitleAttribute)) ?? "",
+        "index": offset, "title": title,
       ]
-      if let window, CFEqual(item, window) { row["target"] = true }
-      if AX.bool(AX.copy(item, kAXMinimizedAttribute)) == true { row["minimized"] = true }
-      if AX.bool(AX.copy(item, kAXMainAttribute)) == true { row["main"] = true }
+      if let window, CFEqual(item, window) {
+        row["target"] = true
+        windowTitle = title
+      }
+      if AX.bool(attributes[1]) == true { row["minimized"] = true }
+      if AX.bool(attributes[2]) == true { row["main"] = true }
       return row
     }
     var result: [String: Any] = [
@@ -144,7 +152,7 @@ struct Target {
     ]
     if let windowFrame {
       result["window"] = [
-        "title": window.flatMap { AX.string(AX.copy($0, kAXTitleAttribute)) } ?? "",
+        "title": windowTitle,
         "width": windowFrame.width, "height": windowFrame.height,
         "id": store.windowID.map(Int.init) ?? -1,
       ]

@@ -29,7 +29,8 @@ const save: ComputerNode = {
 
 describe("formatTree", () => {
   it("prints indexed, indented lines with readable roles and useful details only", () => {
-    expect(formatTree([window, name, save])).toBe(
+    const nodes = [window, name, save];
+    expect(formatTree(nodes, snapshotTree(nodes))).toBe(
       [
         '1 window "Book1"',
         '  2 text field "Name", Value: "", focused',
@@ -57,14 +58,14 @@ describe("formatTree", () => {
 
 describe("diffTree", () => {
   it("needs a previous read before it can diff", () => {
-    expect(diffTree(undefined, [window])).toBeNull();
+    expect(diffTree(undefined, snapshotTree([window]))).toBeNull();
   });
 
   it("lists changed, added and removed elements by their stable index", () => {
     const previous = snapshotTree([window, name, save]);
     const typed = { ...name, value: "Quarterly" };
     const dialog: ComputerNode = { id: 4, parent: 1, depth: 1, role: "AXSheet", title: "Saved" };
-    const diff = diffTree(previous, [window, typed, dialog]);
+    const diff = diffTree(previous, snapshotTree([window, typed, dialog]));
     expect(diff?.changes).toBe(3);
     expect(diff?.text.split("\n")).toEqual([
       "Changes since the previous state (unchanged elements keep their indexes):",
@@ -77,7 +78,7 @@ describe("diffTree", () => {
 
   it("reports an unchanged window plainly", () => {
     const nodes = [window, name, save];
-    expect(diffTree(snapshotTree(nodes), nodes)).toEqual({
+    expect(diffTree(snapshotTree(nodes), snapshotTree(nodes))).toEqual({
       text: "No changes since the previous state.",
       changes: 0,
     });
@@ -92,6 +93,6 @@ describe("diffTree", () => {
       value: `old ${index}`,
     }));
     const after = before.map((node) => ({ ...node, value: node.value.replace("old", "new") }));
-    expect(diffTree(snapshotTree(before), after)).toBeNull();
+    expect(diffTree(snapshotTree(before), snapshotTree(after))).toBeNull();
   });
 });

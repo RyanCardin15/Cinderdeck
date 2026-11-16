@@ -34,7 +34,7 @@ try:
  def call(method,**params):
   global sequence
   sequence+=1;start=time.perf_counter()
-  params.setdefault('app','com.example.computer-use-fixture');params.setdefault('agent',{'id':'fixture-agent','label':'Fixture test'})
+  params.setdefault('app',f'pid:{fixture.pid}');params.setdefault('agent',{'id':'fixture-agent','label':'Fixture test'})
   native.stdin.write(json.dumps({'id':sequence,'method':method,'params':params})+'\n');native.stdin.flush()
   result=read(native)
   assert result.get('id')==sequence,result

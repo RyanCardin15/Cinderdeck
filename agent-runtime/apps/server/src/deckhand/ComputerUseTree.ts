@@ -72,9 +72,9 @@ export function formatNode(node: ComputerNode): string {
   return details.length > 0 ? `${line}, ${details.join(", ")}` : line;
 }
 
-export function formatTree(nodes: ReadonlyArray<ComputerNode>): string {
+export function formatTree(nodes: ReadonlyArray<ComputerNode>, snapshot: TreeSnapshot): string {
   return nodes
-    .map((node) => `${"  ".repeat(Math.min(node.depth, 30))}${formatNode(node)}`)
+    .map((node) => `${"  ".repeat(Math.min(node.depth, 30))}${snapshot.get(node.id)}`)
     .join("\n");
 }
 
@@ -82,7 +82,9 @@ export function formatTree(nodes: ReadonlyArray<ComputerNode>): string {
 export type TreeSnapshot = ReadonlyMap<number, string>;
 
 export function snapshotTree(nodes: ReadonlyArray<ComputerNode>): TreeSnapshot {
-  return new Map(nodes.map((node) => [node.id, formatNode(node)]));
+  const snapshot = new Map<number, string>();
+  for (const node of nodes) snapshot.set(node.id, formatNode(node));
+  return snapshot;
 }
 
 export interface TreeDiff {
@@ -96,27 +98,24 @@ export interface TreeDiff {
  */
 export function diffTree(
   previous: TreeSnapshot | undefined,
-  nodes: ReadonlyArray<ComputerNode>,
+  current: TreeSnapshot,
 ): TreeDiff | null {
-  if (!previous || previous.size === 0 || nodes.length === 0) return null;
+  if (!previous || previous.size === 0 || current.size === 0) return null;
   const added: string[] = [];
   const changed: string[] = [];
-  const seen = new Set<number>();
-  for (const node of nodes) {
-    seen.add(node.id);
-    const line = formatNode(node);
-    const before = previous.get(node.id);
+  for (const [id, line] of current) {
+    const before = previous.get(id);
     if (before === undefined) added.push(`+ ${line}`);
     else if (before !== line) changed.push(`~ ${line}`);
   }
   const removed: string[] = [];
-  for (const [id, line] of previous) if (!seen.has(id)) removed.push(`- ${line}`);
+  for (const [id, line] of previous) if (!current.has(id)) removed.push(`- ${line}`);
   const changes = added.length + changed.length + removed.length;
-  if (changes > Math.max(40, nodes.length * 0.5)) return null;
+  if (changes > Math.max(40, current.size * 0.5)) return null;
   if (changes === 0) {
     return { text: "No changes since the previous state.", changes };
   }
-  const unchanged = nodes.length - added.length - changed.length;
+  const unchanged = current.size - added.length - changed.length;
   return {
     text: [
       "Changes since the previous state (unchanged elements keep their indexes):",

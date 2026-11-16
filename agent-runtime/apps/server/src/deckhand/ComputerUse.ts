@@ -262,8 +262,11 @@ export function makeComputerUseCore(options: {
     const screenshot = record(raw.screenshot);
     const hasImage = typeof screenshot.data === "string" && screenshot.data.length > 0;
     const target = windows.find((row) => row.target === true);
-    const windowKey = `${finite(record(raw.app).pid, -1)}:${finite(window.id, -1)}:${finite(target?.index, -1)}:${text(target?.title)}:${finite(window.width, 0)}x${finite(window.height, 0)}`;
-    const key = grantKey(actor, nativeApp);
+    // getState may have launched an app that had no process at resolve time.
+    const pid = finite(record(raw.app).pid, -1);
+    const processTarget = pid > 0 ? `pid:${pid}` : nativeApp;
+    const windowKey = `${pid}:${finite(window.id, -1)}:${finite(target?.index, -1)}:${text(target?.title)}:${finite(window.width, 0)}x${finite(window.height, 0)}`;
+    const key = grantKey(actor, processTarget);
     const previous = views.get(key);
     const scale = hasImage
       ? finite(screenshot.scale, 1) || 1
@@ -280,13 +283,14 @@ export function makeComputerUseCore(options: {
       : scale !== undefined
         ? previous?.screenshotID
         : undefined;
+    const snapshot = snapshotTree(nodes);
     const diff =
       input.disableDiff !== true && previous?.windowKey === windowKey
-        ? diffTree(previous.snapshot, nodes)
+        ? diffTree(previous.snapshot, snapshot)
         : null;
     remember(key, {
       windowKey,
-      snapshot: snapshotTree(nodes),
+      snapshot,
       scale,
       scaleY,
       screenshotID,
@@ -294,7 +298,7 @@ export function makeComputerUseCore(options: {
       imageHeight: hasImage ? finite(screenshot.height, 0) : (previous?.imageHeight ?? 0),
     });
 
-    const header = [`App: ${name} (${bundleId})`, `Exact process target: ${nativeApp}`];
+    const header = [`App: ${name} (${bundleId})`, `Exact process target: ${processTarget}`];
     if (windows.length > 0) {
       header.push(
         `Windows: ${windows
@@ -322,7 +326,7 @@ export function makeComputerUseCore(options: {
     return {
       app: bundleId,
       name,
-      text: `${header.join("\n")}\n\n${diff?.text ?? formatTree(nodes)}`,
+      text: `${header.join("\n")}\n\n${diff?.text ?? formatTree(nodes, snapshot)}`,
       diff: diff !== null,
       screenshot: hasImage
         ? {
