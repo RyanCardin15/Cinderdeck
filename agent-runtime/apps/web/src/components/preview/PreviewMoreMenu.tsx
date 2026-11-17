@@ -1,6 +1,10 @@
 import type { DesktopPreviewColorScheme } from "@cinderdeck/contracts";
 import { Minus, MoreVertical, Plus as PlusIcon, RotateCcw } from "lucide-react";
 
+import {
+  usePreviewCookieRefresh,
+  type PreviewCookieRefreshTarget,
+} from "./usePreviewCookieRefresh";
 import { Button } from "~/components/ui/button";
 import {
   Menu,
@@ -35,9 +39,7 @@ export interface PreviewMoreMenuActions {
   readonly zoomOut: () => void;
   readonly resetZoom: () => void;
   readonly clearCookies: () => void;
-  readonly refreshCookies?: () => void;
-  readonly cookieRefreshPending?: boolean;
-  readonly cookieRefreshAvailable?: boolean;
+  readonly cookieRefresh?: PreviewCookieRefreshTarget;
   readonly clearCache: () => void;
   readonly openDevTools?: () => void;
   readonly toggleNativePictureInPicture?: () => void;
@@ -86,7 +88,8 @@ export function PreviewMoreMenu({
 }: Props) {
   const zoomLabel = `${Math.round(zoomFactor * 100)}%`;
   const disabled = !enabled;
-  return (
+  const cookies = usePreviewCookieRefresh(actions.cookieRefresh);
+  const menu = (
     <Menu>
       <MenuTriggerButton />
       <MenuPopup align="end" sideOffset={6}>
@@ -181,17 +184,9 @@ export function PreviewMoreMenu({
               <span className="block truncate">Profile: {profileName}</span>
             </MenuGroupLabel>
           ) : null}
-          {actions.refreshCookies ? (
-            <MenuItem
-              onClick={actions.refreshCookies}
-              disabled={actions.cookieRefreshPending || actions.cookieRefreshAvailable === false}
-              title={
-                actions.cookieRefreshAvailable === false
-                  ? "Import cookies in Settings → Integrations to connect a source."
-                  : undefined
-              }
-            >
-              {actions.cookieRefreshPending ? "Refreshing cookies…" : "Refresh cookies"}
+          {actions.cookieRefresh ? (
+            <MenuItem onClick={() => void cookies.refresh()} disabled={cookies.pending}>
+              {cookies.pending ? "Refreshing cookies…" : "Refresh cookies"}
             </MenuItem>
           ) : null}
           <MenuItem onClick={actions.clearCookies}>Clear cookies</MenuItem>
@@ -199,5 +194,11 @@ export function PreviewMoreMenu({
         </MenuGroup>
       </MenuPopup>
     </Menu>
+  );
+  return (
+    <>
+      {menu}
+      {cookies.dialog}
+    </>
   );
 }

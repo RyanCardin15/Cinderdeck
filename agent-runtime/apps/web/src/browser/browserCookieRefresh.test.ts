@@ -213,6 +213,18 @@ describe("first browser opening", () => {
     await refreshBrowserCookiesWithFeedback(environmentId, "work", true);
     expect(mocks.importBrowserCookies).toHaveBeenCalledOnce();
   });
+  it("does not import again on remount after manually connecting an open profile", async () => {
+    const refresh = vi.fn().mockResolvedValue(result);
+    const firstOpen = makeFirstBrowserCookieRefresh(refresh);
+    __setClientSettingsForTests({ ...settings, browserCookieSources: [] });
+    await firstOpen(thread, "work");
+    __setClientSettingsForTests(settings);
+    await firstOpen(thread, "work");
+    expect(refresh).not.toHaveBeenCalled();
+    await firstOpen({ ...thread, threadId: ThreadId.make("next-session") }, "work");
+    expect(refresh).toHaveBeenCalledExactlyOnceWith(environmentId, "work");
+  });
+
   it("does not read cookies for incognito, other environments or unconnected profiles", async () => {
     const refresh = vi.fn();
     const firstOpen = makeFirstBrowserCookieRefresh(refresh);

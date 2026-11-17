@@ -37,9 +37,8 @@ import { type ComposerImageAttachment, useComposerDraftStore } from "~/composerD
 import { capturePreviewAnnotationScreenshot } from "~/lib/previewAnnotation";
 import { readComposerImageBytes } from "../chat/composerAttachmentFiles";
 import { ensureLocalApi } from "~/localApi";
-import { getClientSettings, useClientSettings } from "~/hooks/useSettings";
+import { getClientSettings } from "~/hooks/useSettings";
 import {
-  refreshBrowserCookiesWithFeedback,
   withBrowserCookieRefreshPaused,
   disconnectBrowserCookieSource,
 } from "~/browser/browserCookieRefresh";
@@ -258,7 +257,9 @@ export function PreviewView({
   const viewport = snapshot?.viewport ?? FILL_PREVIEW_VIEWPORT;
   const browserDefaults = useBrowserDefaults();
   // IPC interprets undefined profile ids as all profiles.
-  const activeProfileId = snapshot?.profileId ?? DEFAULT_BROWSER_PROFILE_ID;
+  const activeProfileId = snapshot
+    ? (snapshot.profileId ?? DEFAULT_BROWSER_PROFILE_ID)
+    : browserDefaults.profileId;
   const activeProfileName = previewProfileName(browserDefaults.profiles, activeProfileId);
   const panelRect = useBrowserSurfaceStore((state) =>
     runtimeTabId ? (state.byTabId[runtimeTabId]?.rect ?? null) : null,
@@ -503,31 +504,19 @@ export function PreviewView({
     useRightPanelStore.getState().close(threadRef);
   };
 
-  const cookieSource = useClientSettings((settings) =>
-    settings.browserCookieSources.find(
-      (source) =>
-        source.environmentId === threadRef.environmentId &&
-        source.targetProfileId === activeProfileId,
-    ),
-  );
-  const [cookieRefreshPending, setCookieRefreshPending] = useState(false);
-  const refreshCookies = () => {
-    if (cookieRefreshPending) return;
-    setCookieRefreshPending(true);
-    void refreshBrowserCookiesWithFeedback(threadRef.environmentId, activeProfileId, true)
-      .then(async (result) => {
-        if (!result) return;
-        if (serverOwnsRendering) await adjustServerTab({ hardReload: true });
-        else if (runtimeTabId) await previewBridge?.hardReload(runtimeTabId);
-      })
-      .catch(() =>
-        toastManager.add({
-          type: "error",
-          title: "Cookies refreshed, but the page could not reload",
-        }),
-      )
-      .finally(() => setCookieRefreshPending(false));
-  };
+  const cookieRefresh =
+    previewBridge && !isServerTab && activeProfileId !== INCOGNITO_BROWSER_PROFILE_ID
+      ? {
+          bridge: previewBridge,
+          environmentId: threadRef.environmentId,
+          environmentName: environmentLabel,
+          profile: { id: activeProfileId, name: activeProfileName },
+          reload: async () => {
+            if (serverOwnsRendering) await adjustServerTab({ hardReload: true });
+            else if (runtimeTabId) await previewBridge?.hardReload(runtimeTabId);
+          },
+        }
+      : undefined;
   const clearCookies = () => {
     void withBrowserCookieRefreshPaused([threadRef.environmentId], activeProfileId, async () => {
       await disconnectBrowserCookieSource(activeProfileId, threadRef.environmentId);
@@ -546,9 +535,7 @@ export function PreviewView({
         zoomOut: handleZoomOut,
         resetZoom: handleResetZoom,
         clearCookies,
-        ...(nativeServerTab
-          ? { refreshCookies, cookieRefreshPending, cookieRefreshAvailable: Boolean(cookieSource) }
-          : {}),
+        ...(cookieRefresh ? { cookieRefresh } : {}),
         clearCache: () => void adjustServerTab({ clear: "cache" }),
         ...(nativeServerTab && previewBridge
           ? {
@@ -569,9 +556,7 @@ export function PreviewView({
           zoomOut: handleZoomOut,
           resetZoom: handleResetZoom,
           clearCookies,
-          refreshCookies,
-          cookieRefreshPending,
-          cookieRefreshAvailable: Boolean(cookieSource),
+          ...(cookieRefresh ? { cookieRefresh } : {}),
           clearCache: () =>
             void previewBridge
               ?.clearCache(threadRef.environmentId, activeProfileId)
@@ -1067,6 +1052,14 @@ export function PreviewView({
         trailingActions={
           moreMenuActions ? (
             <PreviewMoreMenu
+              key={JSON.stringify([
+                scopedThreadKey(threadRef),
+                runtimeTabId,
+                activeProfileId,
+                snapshot?.runtime,
+                isServerTab,
+                visible,
+              ])}
               enabled={
                 runtimeTabId !== null &&
                 (serverOwnsRendering || (desktopOverlay?.hasWebContents ?? false))

@@ -201,12 +201,12 @@ export function makeFirstBrowserCookieRefresh(
   const opened = new Map<string, Promise<BrowserImportResult | null>>();
   return (threadRef: ScopedThreadRef, profileId = DEFAULT_BROWSER_PROFILE_ID) => {
     if (profileId === INCOGNITO_BROWSER_PROFILE_ID) return Promise.resolve(null);
-    const source = findBrowserCookieSource(threadRef.environmentId, profileId);
-    if (!source) return Promise.resolve(null);
     const key = JSON.stringify([threadRef.environmentId, threadRef.threadId, profileId]);
     const existing = opened.get(key);
     if (existing) return existing;
-    const attempt = Promise.resolve().then(() => refresh(threadRef.environmentId, profileId));
+    const attempt = findBrowserCookieSource(threadRef.environmentId, profileId)
+      ? Promise.resolve().then(() => refresh(threadRef.environmentId, profileId))
+      : Promise.resolve(null);
     opened.set(key, attempt);
     return attempt;
   };

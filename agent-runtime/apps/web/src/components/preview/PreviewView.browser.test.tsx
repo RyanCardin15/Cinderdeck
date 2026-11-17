@@ -1,6 +1,7 @@
 import {
   BUILT_IN_BROWSER_PROFILES,
   DEFAULT_BROWSER_PROFILE_ID,
+  DEFAULT_CLIENT_SETTINGS,
   DEFAULT_PREVIEW_APPEARANCE,
   DEFAULT_PREVIEW_ZOOM_FACTOR,
   EnvironmentId,
@@ -17,6 +18,12 @@ import { act, render } from "../../../test/render";
 import type { PreviewableServer } from "./useDiscoveredLocalServers";
 
 const mocks = vi.hoisted(() => ({
+  listBrowserImportSources: vi.fn(async () => [
+    { id: "chrome", name: "Chrome", profiles: [{ directory: "Profile 2", name: "Work" }] },
+    { id: "firefox", name: "Firefox", profiles: [{ directory: "Personal", name: "Personal" }] },
+  ]),
+  importBrowserCookies: vi.fn(async () => ({ imported: 2, skipped: 0, skippedDomains: [] })),
+  hardReload: vi.fn(async () => undefined),
   navigate: vi.fn(async (_tabId: string, _url: string): Promise<void> => undefined),
   rememberPreviewUrl: vi.fn(),
   readPreparedConnection: vi.fn(() => ({ httpBaseUrl: "http://172.25.85.75:3773" })),
@@ -64,7 +71,9 @@ vi.mock(import("./previewBridge"), async (original) => ({
     refresh: vi.fn(async () => undefined),
     goBack: vi.fn(async () => undefined),
     goForward: vi.fn(async () => undefined),
-    hardReload: vi.fn(async () => undefined),
+    hardReload: mocks.hardReload,
+    listBrowserImportSources: mocks.listBrowserImportSources,
+    importBrowserCookies: mocks.importBrowserCookies,
     openDevTools: vi.fn(async () => undefined),
     setColorScheme: vi.fn(async () => undefined),
     zoomIn: vi.fn(async () => undefined),
@@ -189,6 +198,8 @@ import { previewRuntimeTabId } from "~/browser/previewRuntimeTabId";
 import { usePreviewMiniPlayerStore } from "~/previewMiniPlayerStore";
 import { dispatchPreviewAction } from "./previewActionBus";
 import { PreviewView } from "./PreviewView";
+import { __setClientSettingsForTests, getClientSettings } from "~/hooks/useSettings";
+import { ensureLocalApi } from "~/localApi";
 import { ToastProvider } from "~/components/ui/toast";
 
 const TEST_THREAD_REF = {
@@ -251,6 +262,41 @@ function setup() {
 }
 
 describe("PreviewView", () => {
+  it("connects an unlinked profile from Refresh cookies and reuses the chosen source", async () => {
+    setup();
+    const previousSettings = getClientSettings();
+    __setClientSettingsForTests(DEFAULT_CLIENT_SETTINGS);
+    using _save = vi
+      .spyOn(ensureLocalApi().persistence, "setClientSettings")
+      .mockResolvedValue(undefined);
+    try {
+      await using _screen = await render(view());
+      const menu = page.getByRole("button", { name: "Preview menu" });
+      const refresh = page.getByRole("menuitem", { name: "Refresh cookies", exact: true });
+      await userEvent.click(menu);
+      await expect.element(refresh).toBeEnabled();
+      await userEvent.click(refresh);
+      await userEvent.click(page.getByRole("button", { name: "Chrome" }));
+      expect(mocks.importBrowserCookies).not.toHaveBeenCalled();
+      await userEvent.click(page.getByRole("button", { name: "Import", exact: true }));
+      await userEvent.click(page.getByRole("button", { name: "Done" }));
+      expect(mocks.importBrowserCookies).toHaveBeenCalledExactlyOnceWith({
+        environmentId: TEST_THREAD_REF.environmentId,
+        targetProfileId: DEFAULT_BROWSER_PROFILE_ID,
+        sourceId: "chrome",
+        sourceProfileDirectory: "Profile 2",
+      });
+      expect(getClientSettings().browserCookieSources).toHaveLength(1);
+      await userEvent.click(menu);
+      await userEvent.click(refresh);
+      await expect.poll(() => mocks.hardReload.mock.calls.length).toBe(2);
+      expect(mocks.listBrowserImportSources).toHaveBeenCalledOnce();
+      expect(mocks.importBrowserCookies).toHaveBeenCalledTimes(2);
+    } finally {
+      __setClientSettingsForTests(previousSettings);
+    }
+  });
+
   it.each(["mailto:alice@example.com", "http://"])(
     "reports rejected address %s without navigating or recording it",
     async (address) => {
