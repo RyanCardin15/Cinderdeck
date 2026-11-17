@@ -51,4 +51,6 @@ The completed bundle and its runtime receive strict recursive signature checks. 
 
 The runtime incorporates the complete source delta through `12b9845d1c5aec2bfede36b313adfc5098a2fb93`. The merge preserves Cinderdeck’s native host lifecycle, app identity, capture History, local renderer authentication and whole-app updates. Provider recordings, native registrations, auth discriminators and persisted keys remain compatible. Vendor reference repositories, hosted workflows, marketing, deployment infrastructure and standalone installers are outside the bundled product. Source provenance is recorded in `agent-runtime/upstream-integration.json`; it is not a patch policy or a claim of live provider/device validation.
 
+Selected fixes beyond that baseline cover Bitbucket Cloud SSH remotes, Git-compatible UTF-8 ignore wildcards, and bounded local reflog probes for checkpoint authorship. The integration ledger records the exact ported commits and the remaining pending upstream commits; the full-source baseline has not advanced.
+
 Build with the pinned Node 26.13.1 and pnpm 12.14.0 toolchain using the whole-app builder above. Run package typechecks and focused runtime checks locally.

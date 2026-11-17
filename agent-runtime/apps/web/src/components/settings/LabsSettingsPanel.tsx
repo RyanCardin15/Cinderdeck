@@ -115,8 +115,7 @@ function GuestLinksRow() {
       managed={settings.guestSharingEnabled ? undefined : connectDenial}
       description={
         <>
-          Share a thread with a guest who watches it live in a browser and sends messages you
-          approve. Needs Cinderdeck Connect: sign in and link this machine in{" "}
+          Share a thread with a guest and approve their messages. Requires Cinderdeck Connect in{" "}
           <Link to="/settings/access" className="underline underline-offset-2">
             Sharing & access
           </Link>

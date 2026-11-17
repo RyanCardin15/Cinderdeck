@@ -1,1 +1,7 @@
-vp staged
+#!/bin/sh
+set -eu
+
+repository_root=$(git rev-parse --show-toplevel)
+python3 "$repository_root/scripts/check-repository.py"
+cd "$repository_root/agent-runtime"
+./node_modules/.bin/vp lint --report-unused-disable-directives
