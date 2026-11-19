@@ -14,6 +14,7 @@ struct VideoEditorMainView: View {
   var primaryActionTitle: String = "Convert"
   var onSave: (() -> Void)?
   var onCancel: (() -> Void)?
+  var onAskAgent: (() -> Void)?
 
 
   // Computed property for current frame preview
@@ -44,7 +45,8 @@ struct VideoEditorMainView: View {
         state: state,
         primaryActionTitle: primaryActionTitle,
         onCancel: { onCancel?() },
-        onConvert: { onSave?() }
+        onConvert: { onSave?() },
+        onAskAgent: onAskAgent
       )
     }
     // Keyboard shortcuts
@@ -79,6 +81,7 @@ struct VideoEditorMainView: View {
         .disabled(state.selectedZoomId == nil)
       }
     }
+    .disabled(state.isExporting)
     .overlay {
       // Export progress overlay
       if state.isExporting {

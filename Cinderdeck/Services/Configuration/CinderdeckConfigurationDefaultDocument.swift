@@ -53,7 +53,6 @@ enum CinderdeckConfigurationDefaultDocument {
     writer.value("hide_desktop_widgets", false)
 
     writer.section("capture.agent_prompt")
-    writer.value("compact_preview", true)
     writer.value("prompt_presets", CapturePromptPreferences.builtInPresets)
 
     writer.section("capture.naming")

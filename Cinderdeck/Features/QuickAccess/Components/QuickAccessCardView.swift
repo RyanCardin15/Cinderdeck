@@ -215,7 +215,13 @@ struct QuickAccessCardView: View {
   }
 
   private var hasVisibleOverlayActions: Bool {
-    !primaryOverlayActions.isEmpty || !cornerOverlayActions.isEmpty
+    showsAskAgent || !primaryOverlayActions.isEmpty || !cornerOverlayActions.isEmpty
+  }
+
+  private var showsAskAgent: Bool { CinderdeckRuntimeController.shared.configured }
+
+  private func askAgent() {
+    manager.promptAboutCapture(id: item.id)
   }
 
   private func overlayAction(in slot: QuickAccessActionSlot) -> QuickAccessActionKind? {
@@ -537,14 +543,27 @@ struct QuickAccessCardView: View {
       RoundedRectangle(cornerRadius: cornerRadius)
         .fill(Color.black.opacity(0.4))
 
-      // Action buttons with stagger effect
-      VStack(spacing: 8) {
-        ForEach(Array(QuickAccessActionSlot.centerSlots.enumerated()), id: \.element) { index, slot in
-          if let action = overlayAction(in: slot) {
-            staggeredButton(action: action, delay: index)
-          } else {
-            Color.clear.frame(height: 28)
+      HStack(spacing: 0) {
+        VStack(spacing: 8) {
+          ForEach(Array(QuickAccessActionSlot.centerSlots.enumerated()), id: \.element) { index, slot in
+            if let action = overlayAction(in: slot) {
+              staggeredButton(action: action, delay: index)
+            } else {
+              Color.clear.frame(height: 28)
+            }
           }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.leading, showsAskAgent ? 26 : 0)
+
+        if showsAskAgent {
+          QuickAccessIconButton(
+            icon: CinderdeckRuntimeController.capturePromptIcon,
+            action: askAgent,
+            helpText: CinderdeckRuntimeController.capturePromptTitle
+          )
+          .transition(cornerButtonTransition(delay: 2))
+          .padding(.trailing, 6)
         }
       }
     }
@@ -622,10 +641,13 @@ struct QuickAccessCardView: View {
     }
     let orderedContextActions = contextActions
     var entries: [QuickAccessContextMenuEntry] = []
-    if CinderdeckRuntimeController.shared.configured {
-      entries.append(.action(title: "Ask agent…", systemImage: "bubble.left", isEnabled: true) {
-        manager.promptAboutCapture(id: item.id)
-      })
+    if showsAskAgent {
+      entries.append(.action(
+        title: CinderdeckRuntimeController.capturePromptTitle,
+        systemImage: CinderdeckRuntimeController.capturePromptIcon,
+        isEnabled: true,
+        action: askAgent
+      ))
     }
     var insertedDestructiveSeparator = false
 

@@ -1,8 +1,7 @@
 import type { CapturePromptSettings as Settings } from "@cinderdeck/contracts";
 import { useEffect, useState } from "react";
 import { Button } from "../ui/button";
-import { Switch } from "../ui/switch";
-import { SettingsPageContainer, SettingsRow, SettingsSection } from "../settings/settingsLayout";
+import { SettingsPageContainer, SettingsSection } from "../settings/settingsLayout";
 import { CapturePromptPresetSettings } from "./CapturePromptPresetSettings";
 
 export function CapturePromptSettings() {
@@ -12,10 +11,7 @@ export function CapturePromptSettings() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const dirty =
-    saved !== null &&
-    draft !== null &&
-    (saved.compact !== draft.compact || saved.presets !== draft.presets);
+  const dirty = saved !== null && draft !== null && saved.presets !== draft.presets;
 
   const refresh = async () => {
     if (!bridge) return;
@@ -73,46 +69,32 @@ export function CapturePromptSettings() {
     <SettingsPageContainer>
       <SettingsSection id="capture-prompts" title="Capture prompts">
         {draft ? (
-          <>
-            <SettingsRow
-              title="Compact capture preview"
-              description="Show a thumbnail and Ask agent when Quick Access is enabled."
-              control={
-                <Switch
-                  aria-label="Compact capture preview"
-                  checked={draft.compact}
-                  disabled={busy}
-                  onCheckedChange={(compact) => setDraft({ ...draft, compact })}
-                />
-              }
+          <div className="px-3 py-3 sm:px-4">
+            <CapturePromptPresetSettings
+              value={draft.presets}
+              disabled={busy}
+              onChange={(presets) => setDraft({ ...draft, presets })}
             />
-            <div className="px-3 py-3 sm:px-4">
-              <CapturePromptPresetSettings
-                value={draft.presets}
-                disabled={busy}
-                onChange={(presets) => setDraft({ ...draft, presets })}
-              />
-              <div className="mt-4 flex justify-end gap-2">
-                {dirty ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() => {
-                      setDraft(saved);
-                      setError("");
-                      setNotice("");
-                    }}
-                  >
-                    Discard
-                  </Button>
-                ) : null}
-                <Button size="sm" disabled={busy || !dirty} onClick={() => void save()}>
-                  Save changes
+            <div className="mt-4 flex justify-end gap-2">
+              {dirty ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => {
+                    setDraft(saved);
+                    setError("");
+                    setNotice("");
+                  }}
+                >
+                  Discard
                 </Button>
-              </div>
+              ) : null}
+              <Button size="sm" disabled={busy || !dirty} onClick={() => void save()}>
+                Save changes
+              </Button>
             </div>
-          </>
+          </div>
         ) : (
           <div className="px-3 py-3 sm:px-4">
             <p className="text-sm text-muted-foreground">

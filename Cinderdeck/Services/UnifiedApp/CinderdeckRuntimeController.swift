@@ -7,6 +7,8 @@ import Foundation
 @MainActor
 final class CinderdeckRuntimeController: ObservableObject {
   static let shared = CinderdeckRuntimeController()
+  static let capturePromptIcon = "sparkles"
+  static let capturePromptTitle = String(localized: "Ask agent…")
   enum Phase: String { case absent, idle, starting, running, closing, exited, failed }
 
   @Published private(set) var phase = Phase.idle
@@ -164,6 +166,30 @@ final class CinderdeckRuntimeController: ObservableObject {
       alert.runModal()
       return false
     }
+  }
+
+  /// Give the runtime a distinct copy of the editor's output. Keep it available
+  /// for the attachment reader and let the capture cache clean it up later.
+  func promptAboutEditedCapture(
+    sourceURL: URL?,
+    fileExtension: String,
+    export: (URL) async throws -> Void
+  ) async throws {
+    let directory = TempCaptureManager.shared.tempCaptureDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
+      attributes: [.posixPermissions: 0o700])
+    let name = sourceURL?.deletingPathExtension().lastPathComponent ?? String(localized: "Screenshot")
+    let output = directory.appendingPathComponent(String(name.prefix(55)) + "-edited")
+      .appendingPathExtension(fileExtension)
+    var handedOff = false
+    defer {
+      if !handedOff { try? FileManager.default.removeItem(at: directory) }
+    }
+
+    try await export(output)
+    try Task.checkCancellation()
+    handedOff = promptAboutCapture(at: output)
   }
 
   /// Hide both processes as one macOS application. Dock/app-switcher activation

@@ -13,6 +13,7 @@ struct VideoEditorBottomBar: View {
   var primaryActionTitle: String = L10n.VideoEditor.convert
   var onCancel: () -> Void
   var onConvert: () -> Void
+  var onAskAgent: (() -> Void)? = nil
 
   @ObservedObject private var cloudManager = CloudManager.shared
 
@@ -40,6 +41,16 @@ struct VideoEditorBottomBar: View {
           .buttonStyle(.bordered)
 
         Spacer()
+
+        if let onAskAgent {
+          VideoEditorBottomBarButton(
+            icon: CinderdeckRuntimeController.capturePromptIcon,
+            tooltip: CinderdeckRuntimeController.capturePromptTitle,
+            action: onAskAgent
+          )
+          .accessibilityLabel(CinderdeckRuntimeController.capturePromptTitle)
+          .disabled(state.naturalSize.width <= 0 || state.isExporting)
+        }
 
         if shouldShowCloudButton {
           let tooltip = alreadyUploadedToCloud 

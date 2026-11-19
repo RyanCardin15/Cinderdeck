@@ -939,7 +939,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "capture-prompts",
     title: "Capture prompts",
     to: "/settings/capture",
-    searchTerms: ["screenshot recording quick access compact preview prompt presets agent"],
+    searchTerms: ["screenshot recording quick access prompt presets agent"],
   },
   {
     id: "snap-shot-enabled",

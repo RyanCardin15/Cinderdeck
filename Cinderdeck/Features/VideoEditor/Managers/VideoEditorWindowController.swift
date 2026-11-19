@@ -121,7 +121,8 @@ final class VideoEditorWindowController: NSWindowController, NSWindowDelegate {
       state: state,
       primaryActionTitle: primaryActionTitle,
       onSave: { [weak self] in self?.showSaveConfirmation() },
-      onCancel: { [weak self] in self?.handleCancel() }
+      onCancel: { [weak self] in self?.handleCancel() },
+      onAskAgent: CinderdeckRuntimeController.shared.configured ? { [weak self] in self?.askAgent() } : nil
     )
     bindDocumentEditedState(to: state)
     window?.contentView = NSHostingView(rootView: mainView)
@@ -348,6 +349,42 @@ final class VideoEditorWindowController: NSWindowController, NSWindowDelegate {
       return "\(baseName)_copy.gif"
     }
     return VideoEditorExporter.generateCopyFilename(from: destinationURL)
+  }
+
+  private func askAgent() {
+    guard let state = state, state.naturalSize.width > 0, !state.isExporting else { return }
+
+    // An untouched recording can be attached immediately and keep its original quality.
+    if !state.hasUnsavedChanges, ["gif", "mov", "mp4", "webm"].contains(state.fileExtension) {
+      CinderdeckRuntimeController.shared.promptAboutCapture(at: state.sourceURL)
+      return
+    }
+
+    state.pause()
+    state.isExporting = true
+    state.exportProgress = 0
+    state.exportStatusMessage = L10n.VideoEditor.preparingExport
+    let fileExtension = state.isGIF ? "gif" : state.fileExtension == "mov" ? "mov" : "mp4"
+
+    Task {
+      defer { state.isExporting = false }
+      do {
+        try await CinderdeckRuntimeController.shared.promptAboutEditedCapture(
+          sourceURL: state.sourceURL, fileExtension: fileExtension
+        ) { output in
+          if state.isGIF {
+            try await saveTempGIF(state: state, to: output)
+          } else {
+            try await VideoEditorExporter.exportTrimmed(state: state, to: output) { progress in
+              state.exportProgress = progress
+              state.exportStatusMessage = self.progressMessage(for: progress)
+            }
+          }
+        }
+      } catch {
+        showExportError(error)
+      }
+    }
   }
 
   private func exportTempCapture(to destinationURL: URL, overwriteIfNeeded: Bool = false) {

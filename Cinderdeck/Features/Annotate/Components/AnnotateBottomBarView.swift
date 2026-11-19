@@ -49,6 +49,8 @@ struct AnnotateBottomBarView: View {
   @ObservedObject private var preferencesManager = PreferencesManager.shared
   @ObservedObject private var annotateShortcutManager = AnnotateShortcutManager.shared
 
+  @State private var isPreparingCapturePrompt = false
+  @State private var capturePromptError: String?
   @State private var isCloudUploading = false
   @State private var cloudUploadProgress: Double = 0
   @State private var cloudUploadError: String?
@@ -83,6 +85,17 @@ struct AnnotateBottomBarView: View {
         .progressViewStyle(.linear)
         .frame(height: 3)
         .opacity(isCloudUploading ? 1 : 0)
+    }
+    .alert(
+      String(localized: "Could not prepare the screenshot"),
+      isPresented: Binding(
+        get: { capturePromptError != nil },
+        set: { if !$0 { capturePromptError = nil } }
+      )
+    ) {
+      Button(L10n.Common.ok, role: .cancel) {}
+    } message: {
+      Text(capturePromptError ?? "")
     }
     .alert(L10n.AnnotateUI.cloudNotConfiguredTitle, isPresented: $showCloudNotConfiguredAlert) {
       Button(L10n.Common.ok, role: .cancel) {}
@@ -365,6 +378,23 @@ struct AnnotateBottomBarView: View {
         AnnotateManager.shared.openEmptyAnnotation()
       }
 
+      if CinderdeckRuntimeController.shared.configured {
+        if isPreparingCapturePrompt {
+          ProgressView()
+            .controlSize(.small)
+            .frame(width: 28, height: 28)
+            .accessibilityLabel(String(localized: "Preparing screenshot"))
+        } else {
+          BottomBarButton(
+            icon: CinderdeckRuntimeController.capturePromptIcon,
+            tooltip: CinderdeckRuntimeController.capturePromptTitle,
+            action: askAgent
+          )
+          .accessibilityLabel(CinderdeckRuntimeController.capturePromptTitle)
+          .disabled(!state.hasImage)
+        }
+      }
+
       BottomBarButton(icon: "square.and.arrow.up", tooltip: L10n.Common.share) {
         share()
       }
@@ -424,6 +454,28 @@ struct AnnotateBottomBarView: View {
   }
 
   // MARK: - Actions
+
+  private func askAgent() {
+    guard !isPreparingCapturePrompt, let snapshot = state.makeRenderSnapshot() else { return }
+    let sourceURL = state.sourceURL
+    isPreparingCapturePrompt = true
+    Task {
+      defer { isPreparingCapturePrompt = false }
+      do {
+        try await CinderdeckRuntimeController.shared.promptAboutEditedCapture(
+          sourceURL: sourceURL, fileExtension: "png"
+        ) { output in
+          guard let image = await AnnotateExporter.renderFinalImage(snapshot: snapshot),
+                let data = AnnotateExporter.imageData(from: image, for: "png") else {
+            throw CocoaError(.fileWriteUnknown)
+          }
+          try data.write(to: output, options: .atomic)
+        }
+      } catch {
+        capturePromptError = error.localizedDescription
+      }
+    }
+  }
 
   private func share() {
     guard let window = NSApp.keyWindow, let contentView = window.contentView else { return }

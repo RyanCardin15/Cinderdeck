@@ -16,9 +16,6 @@ enum QuickAccessLayout {
   /// Base height of each card slot in the panel
   static let cardHeight: CGFloat = 112
 
-  static let compactWidth: CGFloat = 166
-  static let compactHeight: CGFloat = 42
-
   /// Scaled card width based on user overlay scale setting
   static func scaledCardWidth(_ scale: CGFloat) -> CGFloat { cardWidth * scale }
 

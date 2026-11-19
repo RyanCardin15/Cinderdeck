@@ -44,9 +44,6 @@ final class QuickAccessManager: ObservableObject {
     }
   }
 
-  @Published private(set) var showingCompactPreview = false
-  private var expandedCaptureCards = false
-
   @Published var position: QuickAccessPosition = .bottomRight {
     didSet {
       UserDefaults.standard.set(position.rawValue, forKey: Keys.position)
@@ -1313,7 +1310,6 @@ final class QuickAccessManager: ObservableObject {
   // MARK: - Private Methods
 
   private func showPanel() {
-    showingCompactPreview = prefersCompactPreview
     let stackView = QuickAccessStackView(manager: self)
     let size = calculateMaxPanelSize()
     panelController.show(
@@ -1335,8 +1331,7 @@ final class QuickAccessManager: ObservableObject {
   /// capture happened on. A panel already sliding out is not reusable — it would
   /// finish closing and swallow the new card — so that case gets a fresh show.
   private func showPanelIfNeeded() {
-    guard panelController.isVisible, !panelController.isDismissing,
-      showingCompactPreview == prefersCompactPreview else {
+    guard panelController.isVisible, !panelController.isDismissing else {
       showPanel()
       return
     }
@@ -1344,20 +1339,9 @@ final class QuickAccessManager: ObservableObject {
   }
 
   private func hidePanel() {
-    expandedCaptureCards = false
     clearHoveredItem()
     removeEditHotKey()
     panelController.hide()
-  }
-
-  private var prefersCompactPreview: Bool {
-    !expandedCaptureCards && CinderdeckRuntimeController.shared.configured
-      && (CapturePromptPreferences.store.object(forKey: CapturePromptPreferences.compactKey) as? Bool ?? true)
-  }
-
-  func expandCaptureCards() {
-    expandedCaptureCards = true
-    showPanel()
   }
 
   func promptAboutCapture(id: UUID) {
@@ -1521,10 +1505,6 @@ final class QuickAccessManager: ObservableObject {
 
   /// Fixed max-size panel — never resizes, prevents SwiftUI re-layout jitter
   private func calculateMaxPanelSize() -> CGSize {
-    if showingCompactPreview {
-      let padding = QuickAccessLayout.containerPadding * 2
-      return CGSize(width: QuickAccessLayout.compactWidth + padding, height: QuickAccessLayout.compactHeight + padding)
-    }
     let itemCount = maxVisibleItems
     let scale = CGFloat(overlayScale)
     let cardW = QuickAccessLayout.scaledCardWidth(scale)
