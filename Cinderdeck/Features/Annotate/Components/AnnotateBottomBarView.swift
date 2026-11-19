@@ -45,6 +45,7 @@ private extension View {
 struct AnnotateBottomBarView: View {
   @ObservedObject var state: AnnotateState
   let eventRouter: AnnotateWindowEventRouter
+  let onCapturePromptHandedOff: () -> Void
   @ObservedObject private var cloudManager = CloudManager.shared
   @ObservedObject private var preferencesManager = PreferencesManager.shared
   @ObservedObject private var annotateShortcutManager = AnnotateShortcutManager.shared
@@ -462,7 +463,7 @@ struct AnnotateBottomBarView: View {
     Task {
       defer { isPreparingCapturePrompt = false }
       do {
-        try await CinderdeckRuntimeController.shared.promptAboutEditedCapture(
+        let handedOff = try await CinderdeckRuntimeController.shared.promptAboutEditedCapture(
           sourceURL: sourceURL, fileExtension: "png"
         ) { output in
           guard let image = await AnnotateExporter.renderFinalImage(snapshot: snapshot),
@@ -471,6 +472,7 @@ struct AnnotateBottomBarView: View {
           }
           try data.write(to: output, options: .atomic)
         }
+        if handedOff { onCapturePromptHandedOff() }
       } catch {
         capturePromptError = error.localizedDescription
       }

@@ -11,6 +11,7 @@ import SwiftUI
 struct AnnotateMainView: View {
   @StateObject var state: AnnotateState
   let eventRouter: AnnotateWindowEventRouter
+  let onCapturePromptHandedOff: () -> Void
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @ObservedObject private var themeManager = ThemeManager.shared
   private let quickPropertiesBarHeight: CGFloat = 48
@@ -53,7 +54,11 @@ struct AnnotateMainView: View {
       Divider()
         .background(Color(nsColor: .separatorColor))
 
-      AnnotateBottomBarView(state: state, eventRouter: eventRouter)
+      AnnotateBottomBarView(
+        state: state,
+        eventRouter: eventRouter,
+        onCapturePromptHandedOff: onCapturePromptHandedOff
+      )
     }
     .preferredColorScheme(themeManager.systemAppearance)
     .tint(DeckStyle.accent)

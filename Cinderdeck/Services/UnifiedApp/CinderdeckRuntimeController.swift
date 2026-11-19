@@ -170,11 +170,12 @@ final class CinderdeckRuntimeController: ObservableObject {
 
   /// Give the runtime a distinct copy of the editor's output. Keep it available
   /// for the attachment reader and let the capture cache clean it up later.
+  @discardableResult
   func promptAboutEditedCapture(
     sourceURL: URL?,
     fileExtension: String,
     export: (URL) async throws -> Void
-  ) async throws {
+  ) async throws -> Bool {
     let directory = TempCaptureManager.shared.tempCaptureDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
@@ -190,6 +191,7 @@ final class CinderdeckRuntimeController: ObservableObject {
     try await export(output)
     try Task.checkCancellation()
     handedOff = promptAboutCapture(at: output)
+    return handedOff
   }
 
   /// Hide both processes as one macOS application. Dock/app-switcher activation

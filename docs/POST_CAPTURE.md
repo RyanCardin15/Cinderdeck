@@ -131,7 +131,7 @@ Batch variant `handleScreenshotCaptures(urls:)`: filters missing files, delegate
 
 ## Capture prompts
 
-Quick Access shows the screenshot or recording thumbnail after capture. Drag it directly into another app, or hover to see **Edit**, **Delete**, and the **Ask agent** sparkle. The screenshot and recording editors also offer **Ask agent** in their bottom bars. The editor attaches the current edited version and leaves the editor open.
+Quick Access shows the screenshot or recording thumbnail after capture. Drag it directly into another app, or hover to see **Edit**, **Delete**, and the **Ask agent** sparkle. The screenshot and recording editors also offer **Ask agent** in their bottom bars. The editor attaches the current edited version. The screenshot editor closes after handing off the attachment.
 
 **Ask agent** opens a capture prompt with an attachment, a local project, a provider, and that provider’s available models. It remembers the last project and provider you selected and your model choice for each provider. Pick a saved preset or write your own prompt, then choose **Send to agent** to create and open the thread. **Settings → Capture → Capture prompts** lets you edit presets and choose one to prefill. Quick Access and capture history also offer **Ask agent** from their capture menus. Recording uploads use the normal chat attachment limit of up to 50 MB.
 
