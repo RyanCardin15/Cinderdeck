@@ -85,4 +85,30 @@ final class CinderdeckNativeSettingsTests: XCTestCase {
     XCTAssertEqual(defaults.object(forKey: PreferencesKeys.recordingHoverBarVisible) as? Bool, false)
     XCTAssertEqual(defaults.object(forKey: PreferencesKeys.recordingShowTimeOnMenuBar) as? Bool, false)
   }
+
+  func testCapturePromptPreferencesPersistOnlyValidatedCurrentEdits() throws {
+    let defaults = UserDefaultsFactory.make()
+    let initial = CapturePromptPreferences.snapshot(defaults: defaults)
+    XCTAssertTrue(initial.compact)
+    XCTAssertTrue(CapturePromptPreferences.isValid(initial.presets))
+
+    let revised = CapturePromptPreferences.Snapshot(compact: false, presets: """
+      {"presets":[{"id":"01111111-2222-3333-4444-555555555555","title":"Bug","prompt":"Find the layout bug."}],
+       "defaultID":"01111111-2222-3333-4444-555555555555"}
+      """)
+    func request(_ expected: CapturePromptPreferences.Snapshot, _ value: CapturePromptPreferences.Snapshot) throws -> CapturePromptPreferences.Request {
+      let data = try JSONEncoder().encode(["expected": expected, "value": value])
+      let update = try JSONSerialization.jsonObject(with: data)
+      let request = try JSONSerialization.data(withJSONObject: ["requestID": UUID().uuidString, "update": update])
+      return try JSONDecoder().decode(CapturePromptPreferences.Request.self, from: request)
+    }
+
+    XCTAssertEqual(try CapturePromptPreferences.handle(request(initial, revised), defaults: defaults), revised)
+    XCTAssertThrowsError(try CapturePromptPreferences.handle(request(initial, revised), defaults: defaults))
+    let missingDefault = CapturePromptPreferences.Snapshot(compact: true, presets: """
+      {"presets":[],"defaultID":"01111111-2222-3333-4444-555555555555"}
+      """)
+    XCTAssertThrowsError(try CapturePromptPreferences.handle(request(revised, missingDefault), defaults: defaults))
+    XCTAssertEqual(CapturePromptPreferences.snapshot(defaults: defaults), revised)
+  }
 }

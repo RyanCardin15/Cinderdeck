@@ -1,4 +1,5 @@
 import { cinderdeckHost } from "./CinderdeckHost.ts";
+import { installCapturePromptIpc } from "./capturePromptIpc.ts";
 import * as Cause from "effect/Cause";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
@@ -187,6 +188,7 @@ const startLocalBackend = Effect.gen(function* () {
     clerkFrontendApiHostname: DesktopClerk.desktopClerkFrontendApiHostname,
   });
   yield* installDesktopIpcHandlers();
+  yield* installCapturePromptIpc;
   yield* logBootstrapInfo("bootstrap ipc handlers registered");
   if (!settings.localEnvironmentEnabled) {
     yield* logBootstrapInfo("bootstrap skipping local environment (disabled in settings)");
@@ -406,7 +408,11 @@ const startup = Effect.gen(function* () {
   const runWindowAction = Effect.runPromiseWith(yield* Effect.context<never>());
   cinderdeckHost?.ready((command) => {
     const action =
-      command === "settings-open" ? window.dispatchMenuAction("open-settings") : window.activate;
+      command === "capture-prompt"
+        ? window.dispatchMenuAction("cinderdeck-capture-prompt")
+        : command === "settings-open"
+          ? window.dispatchMenuAction("open-settings")
+          : window.activate;
     void runWindowAction(
       action.pipe(Effect.catchCause((cause) => logStartupError("window action failed", { cause }))),
     );

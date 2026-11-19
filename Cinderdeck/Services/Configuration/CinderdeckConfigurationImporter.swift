@@ -210,6 +210,16 @@ enum CinderdeckConfigurationImporter {
     collectBool(&reader, "capture", "hide_desktop_widgets", mutations: &mutations) {
       defaults.set($0, forKey: PreferencesKeys.hideDesktopWidgets)
     }
+    collectBool(&reader, "capture", "agent_prompt", "compact_preview", mutations: &mutations) {
+      defaults.set($0, forKey: CapturePromptPreferences.compactKey)
+    }
+    if let presets = reader.string("capture", "agent_prompt", "prompt_presets") {
+      if CapturePromptPreferences.isValid(presets) {
+        mutations.append { defaults.set(presets, forKey: CapturePromptPreferences.presetsKey) }
+      } else {
+        reader.error("Use up to six named capture prompts, with up to 600 characters each and 5,000 bytes total.")
+      }
+    }
     collectString(&reader, "capture", "naming", "screenshot_template", mutations: &mutations) {
       defaults.set(CinderdeckIdentity.captureTemplate($0), forKey: PreferencesKeys.screenshotFileNameTemplate)
     }

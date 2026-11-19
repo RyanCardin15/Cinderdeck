@@ -20,6 +20,7 @@ final class CinderdeckRuntimeController: ObservableObject {
   private var stopping = false
   private var quitRequested = false
   private var pendingRoute: CinderdeckRuntimeMessage?
+  private var pendingCapture: CinderdeckRuntimeMessage?
 
   var running: Bool { process?.isRunning == true }
   var available: Bool { (try? executableURL()) != nil }
@@ -142,6 +143,29 @@ final class CinderdeckRuntimeController: ObservableObject {
     }
   }
 
+  /// Called by an explicit native UI action for a specific saved capture.
+  @discardableResult
+  func promptAboutCapture(at url: URL) -> Bool {
+    do {
+      guard url.isFileURL, !stopping, startIfAvailable() else {
+        throw StackControlError(code: "host_unavailable", message: "Open the Cinderdeck window and try again.")
+      }
+      pendingCapture = CinderdeckRuntimeMessage(
+        type: "capture-prompt",
+        requestID: UUID().uuidString,
+        capturePath: url.standardizedFileURL.path
+      )
+      if ready { try flushRoute() }
+      return true
+    } catch {
+      pendingCapture = nil
+      let alert = NSAlert(error: error)
+      alert.messageText = "Could not open the capture prompt"
+      alert.runModal()
+      return false
+    }
+  }
+
   /// Hide both processes as one macOS application. Dock/app-switcher activation
   /// later reveals the same owned window through the ordinary activation path.
   func hideOwnedWindow() {
@@ -171,6 +195,9 @@ final class CinderdeckRuntimeController: ObservableObject {
     if let pendingRoute {
       try send(pendingRoute); self.pendingRoute = nil
     }
+    if let pendingCapture {
+      try send(pendingCapture); self.pendingCapture = nil
+    }
     try send(CinderdeckRuntimeMessage(type: "activate"))
   }
 
@@ -182,6 +209,22 @@ final class CinderdeckRuntimeController: ObservableObject {
       catch {
         lastError = "The agent window could not receive its route."
         let alert = NSAlert(); alert.messageText = "The workspace could not open"; alert.informativeText = error.localizedDescription; alert.runModal()
+      }
+      return
+    }
+    let captureSettingsPrefix = Data("CINDERDECK_CAPTURE_PROMPT_SETTINGS ".utf8)
+    if !stopping, ready, line.starts(with: captureSettingsPrefix) {
+      let data = Data(line.dropFirst(captureSettingsPrefix.count))
+      guard data.count <= 16_384,
+        let request = try? JSONDecoder().decode(CapturePromptPreferences.Request.self, from: data)
+      else { return }
+      do {
+        let settings = try CapturePromptPreferences.handle(request)
+        try send(CinderdeckRuntimeMessage(type: "capture-prompt-settings", requestID: request.requestID.uuidString,
+          settings: settings.json))
+      } catch {
+        try? send(CinderdeckRuntimeMessage(type: "capture-prompt-settings", requestID: request.requestID.uuidString,
+          error: error.localizedDescription))
       }
       return
     }

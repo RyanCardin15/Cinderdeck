@@ -1056,7 +1056,31 @@ export type DesktopMediaRead = typeof DesktopMediaReadSchema.Type;
 export const SystemSettingsPaneSchema = Schema.Literals(["full-disk-access"]);
 export type SystemSettingsPane = typeof SystemSettingsPaneSchema.Type;
 
+export interface CapturePromptSource {
+  readonly id: string;
+  readonly name: string;
+  readonly mimeType: string;
+}
+
+export interface CapturePromptSettings {
+  readonly compact: boolean;
+  readonly presets: string;
+}
+
+export interface CapturePromptSettingsUpdate {
+  readonly expected: CapturePromptSettings;
+  readonly value: CapturePromptSettings;
+}
+
+export type CapturedPromptFile = {
+  readonly source: CapturePromptSource;
+} & ({ readonly bytes: Uint8Array } | { readonly error: string });
+
 export interface DesktopBridge {
+  readonly capturePrompt?: {
+    readonly take: () => Promise<CapturedPromptFile | null>;
+    readonly settings: (update?: CapturePromptSettingsUpdate) => Promise<CapturePromptSettings>;
+  };
   getAppBranding: () => DesktopAppBranding | null;
   getRelayTelemetryEnabled: () => boolean;
   getPathForFile: (file: File) => string;

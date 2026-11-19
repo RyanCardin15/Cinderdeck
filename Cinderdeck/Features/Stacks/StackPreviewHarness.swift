@@ -12,6 +12,7 @@ enum StackPreviewHarness {
   }
   static func startIfRequested() -> Bool {
     guard let root else { return false }
+    CapturePromptPreferences.usePreviewStore(root: root)
     var overrides = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
     let captures = root.appendingPathComponent("Captures", isDirectory: true)
     try? FileManager.default.createDirectory(at: captures, withIntermediateDirectories: true)
@@ -94,6 +95,12 @@ enum StackPreviewHarness {
         VideoEditorManager.shared.openEditor(for: URL(fileURLWithPath: path))
       }
     }
+    return true
+  }
+
+  static func handleDeepLink(_ url: URL) -> Bool {
+    guard root != nil, let recordingViewModel else { return false }
+    CinderdeckDeepLinkHandler(screenCaptureViewModel: recordingViewModel).handle(url)
     return true
   }
 

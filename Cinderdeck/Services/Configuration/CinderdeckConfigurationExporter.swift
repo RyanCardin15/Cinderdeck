@@ -69,6 +69,10 @@ enum CinderdeckConfigurationExporter {
     writer.value("hide_desktop_icons", defaults.boolValue(PreferencesKeys.hideDesktopIcons, default: false))
     writer.value("hide_desktop_widgets", defaults.boolValue(PreferencesKeys.hideDesktopWidgets, default: false))
 
+    writer.section("capture.agent_prompt")
+    writer.value("compact_preview", defaults.boolValue(CapturePromptPreferences.compactKey, default: true))
+    writer.value("prompt_presets", defaults.string(forKey: CapturePromptPreferences.presetsKey) ?? CapturePromptPreferences.builtInPresets)
+
     writer.section("capture.naming")
     writer.value("screenshot_template", CaptureOutputNaming.resolvedTemplate(for: .screenshot, defaults: defaults))
     writer.value("recording_template", CaptureOutputNaming.resolvedTemplate(for: .recording, defaults: defaults))

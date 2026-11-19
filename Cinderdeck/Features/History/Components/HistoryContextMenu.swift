@@ -25,6 +25,15 @@ struct HistoryContextMenu: View {
       HistoryWindowController.shared.openItem(record)
     }
 
+    if CinderdeckRuntimeController.shared.configured {
+      Button("Ask agent…") {
+        if CinderdeckRuntimeController.shared.promptAboutCapture(at: record.fileURL) {
+          manager.hide()
+        }
+      }
+      .disabled(!record.fileExists)
+    }
+
     Divider()
 
     HistorySaveMenuItems(items: [.capture(record.id)])

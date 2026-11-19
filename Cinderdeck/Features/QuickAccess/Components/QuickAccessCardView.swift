@@ -622,6 +622,11 @@ struct QuickAccessCardView: View {
     }
     let orderedContextActions = contextActions
     var entries: [QuickAccessContextMenuEntry] = []
+    if CinderdeckRuntimeController.shared.configured {
+      entries.append(.action(title: "Ask agent…", systemImage: "bubble.left", isEnabled: true) {
+        manager.promptAboutCapture(id: item.id)
+      })
+    }
     var insertedDestructiveSeparator = false
 
     for action in orderedContextActions {

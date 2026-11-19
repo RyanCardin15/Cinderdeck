@@ -104,6 +104,15 @@ function unwrapEnsureSshEnvironmentResult(result: unknown) {
 }
 
 contextBridge.exposeInMainWorld("desktopBridge", {
+  ...(ipcRenderer.sendSync("cinderdeck:capture-prompt-supported") === true
+    ? {
+        capturePrompt: {
+          take: () => ipcRenderer.invoke("cinderdeck:capture-prompt-take"),
+          settings: (update?: import("@cinderdeck/contracts").CapturePromptSettingsUpdate) =>
+            ipcRenderer.invoke("cinderdeck:capture-prompt-settings", update),
+        },
+      }
+    : {}),
   getAppBranding: () => {
     const result = ipcRenderer.sendSync(IpcChannels.GET_APP_BRANDING_CHANNEL);
     if (typeof result !== "object" || result === null) {

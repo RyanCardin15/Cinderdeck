@@ -205,6 +205,11 @@ private struct ReproControlsView: View {
       }
       .controlSize(.small).help("Copy the whole log, stamped with video times, to paste into an issue or an agent")
       if agent {
+        if let video = session.videoURL, CinderdeckRuntimeController.shared.configured {
+          iconButton("bubble.left", help: "Ask agent about recording") {
+            if CinderdeckRuntimeController.shared.promptAboutCapture(at: video) { close() }
+          }
+        }
         iconButton("play.rectangle", help: "Open the video with its logs") { ReproLibraryActions.open(session); close() }
       }
       iconButton("xmark", help: "Dismiss") { close() }

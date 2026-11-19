@@ -457,6 +457,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
       return
     }
 
+    #if DEBUG
+    if StackPreviewHarness.handleDeepLink(url) { return }
+    #endif
+
     guard let coordinator else {
       pendingDeepLinkURLs.append(url)
       return
