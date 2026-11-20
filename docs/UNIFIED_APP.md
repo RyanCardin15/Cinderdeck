@@ -53,4 +53,12 @@ The runtime incorporates the complete source delta through `12b9845d1c5aec2bfede
 
 Selected fixes beyond that baseline cover Bitbucket Cloud SSH remotes, Git-compatible UTF-8 ignore wildcards, and bounded local reflog probes for checkpoint authorship. The integration ledger records the exact ported commits and the remaining pending upstream commits; the full-source baseline has not advanced.
 
+Additional selected fixes restrict forge credentials to their intended hosts, validate canonical preview targets and dependencies, reject path-bearing secret names, hash replay markers, enforce authorization on retried agent launches, and preserve indexed files when checkpoint capture cannot read them. New temporary worktree branches use `cinderdeck/`; existing branch names remain recognized. Checkpoint object stores include the destination pack directory required by Git batch-fsync publication.
+
 Build with the pinned Node 26.13.1 and pnpm 12.14.0 toolchain using the whole-app builder above. Run package typechecks and focused runtime checks locally.
+
+## Icon verification
+
+The runtime's three Icon Composer documents use the native Cinderdeck artwork in `assets/cinderdeck-icon.png`. Repository validation rejects different source artwork, additional hidden graphic files, and document layers that do not reference that artwork. The icon exporter checks all 42 generated assets, including macOS renditions and the canonical production copies.
+
+Use an installed Icon Composer that supports design generation 26. If it is outside the standard application folders, set `ICON_COMPOSER_TOOL` to its `Contents/Executables/ictool` path before running `pnpm icons:check`. This does not change the selected Xcode installation or launch an app.

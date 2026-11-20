@@ -15,6 +15,7 @@ import {
   type VcsProcessExitFailureKind,
 } from "@cinderdeck/contracts";
 
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
 import * as SourceControlHost from "@cinderdeck/source-control-core/server/SourceControlHost";
 import {
   decodeGitLabMergeRequestJson,
@@ -280,6 +281,8 @@ export class GitLabCli extends Context.Service<
     readonly execute: (input: {
       readonly cwd: string;
       readonly host?: string | undefined;
+      /** A host taken from caller input, rather than a project remote. */
+      readonly callerNamedHost?: string | undefined;
       readonly args: ReadonlyArray<string>;
       readonly timeoutMs?: number;
       /** Keeps sensitive payloads out of argv. */
@@ -456,9 +459,23 @@ const classifyGlabFailure = (stderr: string): VcsProcessExitFailureKind | null =
   return null;
 };
 
+/** Environment tokens authenticate glab's default host, not arbitrary caller-named hosts. */
+const ENVIRONMENT_TOKEN_VARIABLES = ["GITLAB_TOKEN", "GITLAB_ACCESS_TOKEN", "OAUTH_TOKEN"] as const;
+const WITHOUT_ENVIRONMENT_TOKEN = Object.fromEntries(
+  ENVIRONMENT_TOKEN_VARIABLES.map((name) => [name, ""]),
+);
+const hostOf = (value: string) =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//, "")
+    .replace(/\/.*$/, "");
+
 /** @public */
 export const make = Effect.gen(function* () {
   const { process } = yield* SourceControlHost.SourceControlHost;
+  const environment = yield* HostProcess.Environment;
+  const defaultHost = hostOf(environment.GITLAB_HOST?.trim() || "gitlab.com");
 
   const run = (
     input: Parameters<GitLabCli["Service"]["execute"]>[0],
@@ -470,8 +487,13 @@ export const make = Effect.gen(function* () {
         command: "glab",
         args: input.args,
         cwd: input.cwd,
-        // glab may otherwise prefer a different checkout remote.
-        ...(input.host === undefined ? {} : { env: { GITLAB_HOST: input.host } }),
+        env: {
+          // glab may otherwise prefer a different checkout remote.
+          ...(input.host === undefined ? {} : { GITLAB_HOST: input.host }),
+          ...(input.callerNamedHost !== undefined && hostOf(input.callerNamedHost) !== defaultHost
+            ? WITHOUT_ENVIRONMENT_TOKEN
+            : {}),
+        },
         classifyFailure: classifyGlabFailure,
         notFoundDetail: "Merge request not found.",
         timeoutMs: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,
@@ -591,6 +613,7 @@ export const make = Effect.gen(function* () {
       const { host, projectPath } = parseRepositoryLookup(input.repository);
       return execute({
         cwd: input.cwd,
+        ...(host === null ? {} : { callerNamedHost: host }),
         args: [
           "api",
           ...(host === null ? [] : ["--hostname", host]),

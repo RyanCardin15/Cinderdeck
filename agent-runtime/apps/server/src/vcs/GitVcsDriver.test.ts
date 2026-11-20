@@ -200,6 +200,9 @@ it.effect.each(["interrupt", "timeout", "success"] as const)(
       const originalCheckpoint = (yield* git(["rev-parse", checkpointRef])).stdout;
       const originalIndex = yield* fs.readFile(path.join(cwd, ".git/index"));
       const originalHead = (yield* git(["rev-parse", "HEAD"])).stdout;
+      // Automatic CRLF conversion routes even binary files through loose-object staging.
+      // Force this synthetic fixture through Git's bulk pack path regardless of user config.
+      yield* git(["config", "core.autocrlf", "false"]);
       yield* git(["config", "core.bigFileThreshold", "1m"]);
       const crypto = yield* SecureRandom.SecureRandom;
       const payload = yield* crypto.randomBytes(2 * 1024 * 1024);
@@ -270,14 +273,26 @@ it.effect.each(["interrupt", "timeout", "success"] as const)(
           ),
         ),
       );
-      const packs = (yield* fs.readDirectory(path.join(objectDirectory, "pack"))).filter(
-        (name) => name.startsWith("tmp_pack_") && name !== "tmp_pack_other_operation",
-      );
+      // Batch fsync keeps an active pack in a nested operation-owned object directory.
+      const packDirectories = [
+        path.join(objectDirectory, "pack"),
+        ...(yield* fs.readDirectory(objectDirectory))
+          .filter((name) => name.startsWith("tmp_objdir-"))
+          .map((name) => path.join(objectDirectory, name, "pack")),
+      ];
+      const packs = (yield* Effect.forEach(packDirectories, (directory) =>
+        fs
+          .readDirectory(directory)
+          .pipe(
+            Effect.map((names) =>
+              names
+                .filter((name) => name.startsWith("tmp_pack_"))
+                .map((name) => path.join(directory, name)),
+            ),
+          ),
+      )).flat();
       assert.strictEqual(packs.length, 1);
-      assert.isAbove(
-        Number((yield* fs.stat(path.join(objectDirectory, "pack", packs[0]!))).size),
-        1024 * 1024,
-      );
+      assert.isAbove(Number((yield* fs.stat(packs[0]!)).size), 1024 * 1024);
       // An overlapping capture publishes the same large blob while the first
       // still owns an unfinished pack. Its objects/ref must survive either exit.
       const concurrentRef = CheckpointRef.make("refs/t3/checkpoints/concurrent");
@@ -319,7 +334,7 @@ it.effect.each(["interrupt", "timeout", "success"] as const)(
         sharedPackBytes,
       );
       assert.strictEqual((yield* git(["rev-parse", concurrentRef])).stdout, concurrentOid);
-      assert.isFalse(yield* fs.exists(path.join(objectDirectory, "pack", packs[0]!)));
+      assert.isFalse(yield* fs.exists(packs[0]!));
       assert.isFalse(yield* fs.exists(objectDirectory));
       assert.strictEqual(yield* fs.readFileString(sharedPack), "owned by another Git operation");
       if (stop !== "success")
@@ -460,6 +475,9 @@ it.effect("checkpoint publication falls back to rename where hardlinks are unava
     const driver = yield* GitVcsDriver.makeVcsDriverShape();
     const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-publish-no-links-" });
     const { git, checkpointRef } = yield* makeCheckpointFixture(driver, cwd);
+    // Automatic CRLF conversion routes even binary files through loose-object staging.
+    // Force this synthetic fixture through Git's bulk pack path regardless of user config.
+    yield* git(["config", "core.autocrlf", "false"]);
     yield* git(["config", "core.bigFileThreshold", "1m"]);
     yield* fs.writeFile(path.join(cwd, "media.bin"), yield* crypto.randomBytes(2 * 1024 * 1024));
     const captureDriver = yield* GitVcsDriver.makeVcsDriverShape().pipe(
@@ -742,6 +760,48 @@ it.effect("checkpoint capture skips untracked nested repositories without a comm
       "nested\n",
     );
   }).pipe(Effect.scoped, Effect.provide(layerGitContract)),
+);
+
+// Root reads mode-000 files, so the permission failure only exists for other users.
+it.effect.skipIf(HostProcess.Platform.defaultValue() === "win32" || process.getuid?.() === 0)(
+  "checkpoint capture keeps the indexed version of files it cannot read",
+  () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const driver = yield* GitVcsDriver.makeVcsDriverShape();
+      const cwd = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "cinderdeck-checkpoint-unreadable-",
+      });
+      const { git, checkpointRef } = yield* makeCheckpointFixture(driver, cwd);
+      yield* fileSystem.writeFileString(path.join(cwd, "locked.txt"), "committed\n");
+      yield* git(["add", "locked.txt"]);
+      yield* git(["commit", "-m", "locked"]);
+      yield* fileSystem.writeFileString(path.join(cwd, "locked.txt"), "changed\n");
+      yield* fileSystem.writeFileString(path.join(cwd, "secret.txt"), "untracked\n");
+      yield* fileSystem.writeFileString(path.join(cwd, "untracked.txt"), "new\n");
+      yield* Effect.acquireRelease(
+        Effect.all([
+          fileSystem.chmod(path.join(cwd, "locked.txt"), 0),
+          fileSystem.chmod(path.join(cwd, "secret.txt"), 0),
+        ]),
+        () =>
+          Effect.all([
+            fileSystem.chmod(path.join(cwd, "locked.txt"), 0o644),
+            fileSystem.chmod(path.join(cwd, "secret.txt"), 0o644),
+          ]).pipe(Effect.orDie),
+      );
+
+      yield* driver.checkpoints.captureCheckpoint({ cwd, checkpointRef });
+
+      assert.strictEqual((yield* git(["show", `${checkpointRef}:file.txt`])).stdout, "unstaged\n");
+      assert.strictEqual((yield* git(["show", `${checkpointRef}:untracked.txt`])).stdout, "new\n");
+      assert.strictEqual(
+        (yield* git(["show", `${checkpointRef}:locked.txt`])).stdout,
+        "committed\n",
+      );
+      assert.strictEqual((yield* git(["ls-tree", checkpointRef, "--", "secret.txt"])).stdout, "");
+    }).pipe(Effect.scoped, Effect.provide(layerGitContract)),
 );
 
 it.effect.skipIf(!symlinksSupported)(

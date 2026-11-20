@@ -13,7 +13,7 @@ class BrandingTests(unittest.TestCase):
     def test_wrong_logo_and_display_name_are_detected(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
-            for path in ["apps/desktop/package.json", "apps/web/public", "assets/cinderdeck/prod", "assets/prod"]:
+            for path in ["apps/desktop/package.json", "apps/web/public", "assets/cinderdeck/prod", "assets/prod", "assets/dev/app-icon.icon", "assets/nightly/app-icon.icon"]:
                 destination = root / path
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 source = branding.ROOT / "agent-runtime" / path
@@ -25,6 +25,27 @@ class BrandingTests(unittest.TestCase):
             (root / "apps/desktop/package.json").write_text('{"productName":"T3 Code"}')
             (root / "apps/web/public/favicon.ico").write_bytes(b"wrong icon")
             self.assertEqual(len(branding.branding_errors(root)), 2)
+
+    def test_composer_graphics_cannot_hide_vendor_artwork(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            for path in ["apps/desktop/package.json", "apps/web/public", "assets/cinderdeck/prod", "assets/prod", "assets/dev/app-icon.icon", "assets/nightly/app-icon.icon"]:
+                source = branding.ROOT / "agent-runtime" / path
+                destination = root / path
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                if source.is_dir():
+                    shutil.copytree(source, destination)
+                else:
+                    shutil.copy(source, destination)
+            self.assertEqual(branding.branding_errors(root), [])
+            source = root / "assets/prod/app-icon.icon/Assets/cinderdeck.png"
+            source.write_bytes(b"unapproved graphic")
+            (source.parent / "text.svg").write_text('<svg><path d="M1 1"/></svg>')
+            document = source.parent.parent / "icon.json"
+            data = branding.json.loads(document.read_text())
+            data["groups"][0]["layers"][0]["image-name"] = "text.svg"
+            document.write_text(branding.json.dumps(data))
+            self.assertEqual(len(branding.branding_errors(root)), 3)
 
     def test_unknown_wire_like_and_native_like_symbols_are_not_exempt(self):
         self.assertEqual(branding.violations("agent-runtime/packages/contracts/src/mcp.ts", '"t3_thread_launch"'), [])
@@ -64,6 +85,13 @@ class BrandingTests(unittest.TestCase):
     def test_rejects_product_labels_urls_and_package_identity(self):
         for value in ('<h1>T3 Code</h1>', '<strong>T3</strong>', '"T3Code"', '"@t3tools/web"', '"https://app.t3.codes"'):
             self.assertTrue(branding.violations("agent-runtime/apps/web/src/NewPanel.tsx", value), value)
+
+    def test_new_worktree_branches_must_use_owned_branding(self):
+        path = "agent-runtime/packages/shared/src/git.ts"
+        self.assertTrue(branding.violations(path, 'export const WORKTREE_BRANCH_PREFIX = "t3";'))
+        self.assertEqual(branding.violations(path, 'export const WORKTREE_BRANCH_PREFIX = "cinderdeck";'), [])
+        self.assertEqual(branding.violations(path, 'export const LEGACY_SHORT_WORKTREE_BRANCH_PREFIX = "t3";'), [])
+        self.assertTrue(branding.violations(path, 'export const LEGACY_SHORT_WORKTREE_BRANCH_PREFIX = "t3"; const label = "T3 Code";'))
 
     def test_rejects_ordinary_symbols_and_paths(self):
         self.assertTrue(branding.violations("agent-runtime/apps/mobile/scripts/new.mts", 'name: "T3DeviceStream"'))

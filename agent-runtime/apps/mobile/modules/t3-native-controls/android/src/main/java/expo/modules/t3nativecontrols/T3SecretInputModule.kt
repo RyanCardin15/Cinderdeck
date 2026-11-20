@@ -34,16 +34,25 @@ class T3SecretInputModule : Module() {
       Prop("inputLabel") { view: CinderdeckSecretInputView, value: String ->
         view.input.contentDescription = value
       }
-      Prop("textColor") { view: CinderdeckSecretInputView, value: Int -> view.input.setTextColor(value) }
+      Prop("textColor") { view: CinderdeckSecretInputView, value: Int ->
+        view.input.setTextColor(value)
+      }
       Prop("placeholderColor") { view: CinderdeckSecretInputView, value: Int ->
         view.input.setHintTextColor(value)
       }
-      Prop("cursorColor") { view: CinderdeckSecretInputView, value: Int -> view.setCursorColor(value) }
+      Prop("cursorColor") { view: CinderdeckSecretInputView, value: Int ->
+        view.setCursorColor(value)
+      }
       Prop("fontSize") { view: CinderdeckSecretInputView, value: Float ->
         view.input.setTextSize(TypedValue.COMPLEX_UNIT_DIP, value)
       }
-      Prop("editable") { view: CinderdeckSecretInputView, value: Boolean -> view.input.isEnabled = value }
-      Prop("revealed") { view: CinderdeckSecretInputView, value: Boolean -> view.setRevealed(value) }
+      Prop("editable") { view: CinderdeckSecretInputView, value: Boolean ->
+        view.input.isEnabled =
+          value
+      }
+      Prop("revealed") { view: CinderdeckSecretInputView, value: Boolean ->
+        view.setRevealed(value)
+      }
       Events("onChangeText", "onSubmit")
     }
   }
@@ -54,7 +63,10 @@ class T3SecretInputModule : Module() {
  * credential autofill, so password managers offer logins above the keyboard; this view owns the
  * EditText so it can.
  */
-class CinderdeckSecretInputView(context: Context, appContext: AppContext) : ExpoView(context, appContext) {
+class CinderdeckSecretInputView(
+  context: Context,
+  appContext: AppContext
+) : ExpoView(context, appContext) {
   // Yoga sizes this view; the EditText inside is laid out by Android.
   override val shouldUseAndroidLayout = true
 

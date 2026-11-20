@@ -41,7 +41,7 @@ const decodeIconComposerVersion = Schema.decodeUnknownEffect(
   Schema.fromJsonString(IconComposerVersion),
 );
 
-type IconPlatform = "iOS";
+type IconPlatform = "iOS" | "macOS";
 
 interface VariantOutputs {
   readonly ios: string;
@@ -598,6 +598,7 @@ const renderVariant = Effect.fn("iconExport.renderVariant")(function* (
 
   return new Map<string, Buffer>([
     [variant.outputs.ios, ios],
+    [variant.outputs.macos, yield* render("macOS", 1024)],
     [variant.outputs.universal, ios],
     [variant.outputs.appleTouch, yield* render("iOS", 180)],
     [variant.outputs.webIcon192, yield* render("iOS", 192)],
@@ -733,6 +734,21 @@ export const exportBrandIcons = Effect.fn("exportBrandIcons")(function* (checkOn
     for (const [relativePath, contents] of variantAssets) {
       generated.set(relativePath, contents);
     }
+  }
+
+  const canonicalProductionAssets = [
+    [BRAND_ASSET_PATHS.productionIosIconPng, "ios-1024.png"],
+    [BRAND_ASSET_PATHS.productionMacIconPng, "macos-1024.png"],
+    [BRAND_ASSET_PATHS.productionWebAppleTouchIconPng, "web-apple-touch-180.png"],
+    [BRAND_ASSET_PATHS.productionWebFavicon16Png, "web-favicon-16x16.png"],
+    [BRAND_ASSET_PATHS.productionWebFavicon32Png, "web-favicon-32x32.png"],
+    [BRAND_ASSET_PATHS.productionWebFaviconIco, "web-favicon.ico"],
+  ] as const;
+  for (const [source, name] of canonicalProductionAssets) {
+    const contents = generated.get(source);
+    if (contents === undefined)
+      return yield* Effect.die(new Error(`Missing generated icon: ${source}`));
+    generated.set(`assets/cinderdeck/prod/${name}`, contents);
   }
 
   for (const override of DEVELOPMENT_PUBLIC_ICON_OVERRIDES) {

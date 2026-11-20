@@ -1140,6 +1140,16 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
             ),
           ),
       );
+      // Batch fsync stages packs in a nested object directory and migrates them here.
+      // Git requires the destination pack directory to exist before that migration.
+      yield* fileSystem
+        .makeDirectory(path.join(privateObjects, "pack"))
+        .pipe(
+          Effect.mapError(
+            (cause) =>
+              new VcsCheckpointStorageError({ operation, cwd: input.cwd, stage: "isolate", cause }),
+          ),
+        );
       const commitEnv: NodeJS.ProcessEnv = {
         GIT_INDEX_FILE: tempIndexPath,
         GIT_OBJECT_DIRECTORY: privateObjects,
@@ -1408,7 +1418,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
             ? CheckpointUntrackedBlobs.NOTHING
             : yield* untrackedBlobs.reuse({ ...untracked, indexConfig });
 
-        const stageFiles = (exclusions: ReadonlyArray<string>) =>
+        const stageFiles = (exclusions: ReadonlyArray<string>, ignoreErrors = false) =>
           execute({
             operation,
             cwd: input.cwd,
@@ -1420,6 +1430,8 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
               "-c",
               "core.safecrlf=false",
               "add",
+              // Unreadable files keep their indexed version and unreadable new files are left out.
+              ...(ignoreErrors ? ["--ignore-errors"] : []),
               ...(sparseCheckout ? ["--sparse"] : []),
               // add -A rejects ignored directories even when they contain tracked files.
               workspaceIgnored ? "-u" : "-A",
@@ -1428,7 +1440,14 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
               ...exclusions,
             ],
             env: commitEnv,
-          });
+          }).pipe(
+            // With --ignore-errors, exit 1 only reports the files it skipped.
+            Effect.catchIf(
+              (error) =>
+                ignoreErrors && error._tag === "VcsProcessExitError" && error.exitCode === 1,
+              () => Effect.void,
+            ),
+          );
         const stagingAt = yield* Clock.currentTimeMillis;
         yield* stageFiles([]).pipe(
           Effect.catchTags({
@@ -1477,8 +1496,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
                     exclusions.push(`:(exclude,literal)${entry}`);
                   }
                 }
-                if (exclusions.length === 0) return yield* error;
-                return yield* stageFiles(exclusions);
+                return yield* stageFiles(exclusions, true);
               }).pipe(
                 Effect.timeoutOrElse({
                   duration: CHECKPOINT_RECOVERY_TIMEOUT,
