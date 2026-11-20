@@ -65,6 +65,13 @@ class BrandingTests(unittest.TestCase):
         for value in ('<h1>T3 Code</h1>', '<strong>T3</strong>', '"T3Code"', '"@t3tools/web"', '"https://app.t3.codes"'):
             self.assertTrue(branding.violations("agent-runtime/apps/web/src/NewPanel.tsx", value), value)
 
+    def test_new_worktree_branches_must_use_owned_branding(self):
+        path = "agent-runtime/packages/shared/src/git.ts"
+        self.assertTrue(branding.violations(path, 'export const WORKTREE_BRANCH_PREFIX = "t3";'))
+        self.assertEqual(branding.violations(path, 'export const WORKTREE_BRANCH_PREFIX = "cinderdeck";'), [])
+        self.assertEqual(branding.violations(path, 'export const LEGACY_SHORT_WORKTREE_BRANCH_PREFIX = "t3";'), [])
+        self.assertTrue(branding.violations(path, 'export const LEGACY_SHORT_WORKTREE_BRANCH_PREFIX = "t3"; const label = "T3 Code";'))
+
     def test_rejects_ordinary_symbols_and_paths(self):
         self.assertTrue(branding.violations("agent-runtime/apps/mobile/scripts/new.mts", 'name: "T3DeviceStream"'))
         self.assertTrue(branding.path_violations("agent-runtime/apps/web/src/T3PreviewPanel.tsx"))

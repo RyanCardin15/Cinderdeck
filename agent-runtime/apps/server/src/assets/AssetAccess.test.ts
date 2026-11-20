@@ -682,6 +682,48 @@ describe("AssetAccess", () => {
       }).pipe(Effect.provide(layerTest)),
   );
 
+  it.effect.skipIf(!symlinksSupported)(
+    "serves a linked workspace file only while its target is previewable",
+    () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const root = yield* fs.realPath(
+          yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-link-" }),
+        );
+        yield* fs.writeFileString(path.join(root, "payload.xhtml"), "<html/>");
+        yield* fs.writeFileString(path.join(root, "real.pdf"), "%PDF-1.4");
+        const link = path.join(root, "report.pdf");
+        const issue = issueAssetUrl({
+          resource: {
+            _tag: "workspace-file",
+            threadId: ThreadId.make("thread-1"),
+            path: "report.pdf",
+          },
+          workspaceRoot: root,
+        });
+        const resolveIssued = (relativeUrl: string) => {
+          const suffix = relativeUrl.slice(`${ASSET_ROUTE_PREFIX}/`.length);
+          const separator = suffix.indexOf("/");
+          return resolveAsset(suffix.slice(0, separator), suffix.slice(separator + 1));
+        };
+
+        yield* fs.symlink(path.join(root, "payload.xhtml"), link);
+        expect((yield* issue.pipe(Effect.flip))._tag).toBe("AssetPreviewTypeValidationError");
+
+        yield* fs.remove(link);
+        yield* fs.symlink(path.join(root, "real.pdf"), link);
+        const issued = yield* issue;
+        expect(yield* resolveIssued(issued.relativeUrl)).toMatchObject({
+          path: path.join(root, "real.pdf"),
+        });
+
+        yield* fs.remove(link);
+        yield* fs.symlink(path.join(root, "payload.xhtml"), link);
+        expect(yield* resolveIssued(issued.relativeUrl)).toBeNull();
+      }).pipe(Effect.provide(layerTest)),
+  );
+
   it.effect.skipIf(!symlinksSupported)("does not issue URLs for server state files", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -974,6 +1016,34 @@ describe("AssetAccess", () => {
           renewedSuffix.slice(renewedSeparator + 1),
         ),
       ).toBeNull();
+    }).pipe(Effect.provide(layerTest)),
+  );
+
+  it.effect.skipIf(!symlinksSupported)("validates canonical preview dependency paths", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped();
+      const page = path.join(root, "report.html");
+      yield* fs.writeFileString(page, "<!doctype html>");
+      for (const name of ["report.css", ".internal.css", "notes.txt"]) {
+        yield* fs.writeFileString(path.join(root, name), "fixture");
+      }
+      yield* fs.symlink(path.join(root, "report.css"), path.join(root, "theme.css"));
+      yield* fs.symlink(path.join(root, ".internal.css"), path.join(root, "internal.css"));
+      yield* fs.symlink(path.join(root, "notes.txt"), path.join(root, "notes.css"));
+
+      const result = yield* issueAssetUrl({
+        resource: { _tag: "workspace-file", threadId: ThreadId.make("thread-1"), path: page },
+        workspaceRoot: root,
+      });
+      const suffix = result.relativeUrl.slice(ASSET_ROUTE_PREFIX.length + 1);
+      const token = suffix.slice(0, suffix.indexOf("/"));
+      expect(yield* resolveAsset(token, "theme.css")).toMatchObject({
+        path: yield* fs.realPath(path.join(root, "report.css")),
+      });
+      expect(yield* resolveAsset(token, "internal.css")).toBeNull();
+      expect(yield* resolveAsset(token, "notes.css")).toBeNull();
     }).pipe(Effect.provide(layerTest)),
   );
 

@@ -40,6 +40,8 @@ import {
 } from "@cinderdeck/shared/relayJwt";
 import { isSecureRelayUrl } from "@cinderdeck/shared/relayUrl";
 import * as Context from "effect/Context";
+import * as Digest from "effect/crypto/Digest";
+import * as Hex from "effect/encoding/Hex";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Signature from "effect/crypto/Signature";
 import * as Jwk from "effect/jose/Jwk";
@@ -525,12 +527,19 @@ const make = Effect.gen(function* () {
   const httpServer = yield* HttpServer.HttpServer;
   const awarenessRelay = yield* AgentAwarenessRelay.AgentAwarenessRelay;
   const random = yield* SecureRandom.SecureRandom;
+  const digest = yield* Digest.Digest;
   const signature = yield* Signature.Signature;
   const signingKey = yield* EnvironmentSigningKey;
   const config = yield* ServerConfig.ServerConfig;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const managedPolicy = yield* ManagedPolicy.ManagedPolicy;
+
+  // Signed text must not name files directly; a digest has a fixed, safe length.
+  const replayMarkerName = Effect.fnUntraced(function* (prefix: string, value: string) {
+    const hash = yield* digest.digest(Digest.sha256, stringToBytes(value)).pipe(Effect.orDie);
+    return `${prefix}${Hex.encode(hash)}`;
+  });
 
   const withSecrets = Effect.provideService(ServerSecretStore.ServerSecretStore, secrets);
   const withRuntimeFiles = <A, E>(
@@ -1477,8 +1486,8 @@ const make = Effect.gen(function* () {
       }
       const proof = proofOption.value;
 
-      const jtiSecretName = `${CLOUD_HEALTH_JTI_PREFIX}${proof.jti}`;
-      const nonceSecretName = `${CLOUD_HEALTH_NONCE_PREFIX}${proof.nonce}`;
+      const jtiSecretName = yield* replayMarkerName(CLOUD_HEALTH_JTI_PREFIX, proof.jti);
+      const nonceSecretName = yield* replayMarkerName(CLOUD_HEALTH_NONCE_PREFIX, proof.nonce);
       const consumedReplayGuards = yield* consumeCloudReplayGuards({
         secrets,
         names: [jtiSecretName, nonceSecretName],
@@ -1580,8 +1589,8 @@ const make = Effect.gen(function* () {
       }
       const proof = proofOption.value;
 
-      const jtiSecretName = `${CLOUD_MINT_JTI_PREFIX}${proof.jti}`;
-      const nonceSecretName = `${CLOUD_MINT_NONCE_PREFIX}${proof.nonce}`;
+      const jtiSecretName = yield* replayMarkerName(CLOUD_MINT_JTI_PREFIX, proof.jti);
+      const nonceSecretName = yield* replayMarkerName(CLOUD_MINT_NONCE_PREFIX, proof.nonce);
       const consumedReplayGuards = yield* consumeCloudReplayGuards({
         secrets,
         names: [jtiSecretName, nonceSecretName],

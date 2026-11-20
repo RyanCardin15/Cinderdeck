@@ -14,6 +14,7 @@ import {
   resolveAutoFeatureBranchName,
   sanitizeFeatureBranchName,
   WORKTREE_BRANCH_PREFIX,
+  LEGACY_SHORT_WORKTREE_BRANCH_PREFIX,
 } from "./git.ts";
 
 describe("normalizeGitRemoteUrl", () => {
@@ -251,7 +252,9 @@ describe("isTemporaryWorktreeBranch", () => {
     );
   });
 
-  it("matches legacy cinderdeck temporary worktree refs", () => {
+  it("matches legacy temporary worktree refs", () => {
+    expect(isTemporaryWorktreeBranch(`${LEGACY_SHORT_WORKTREE_BRANCH_PREFIX}/deadbeef`)).toBe(true);
+    expect(isTemporaryWorktreeBranch(`${LEGACY_SHORT_WORKTREE_BRANCH_PREFIX}-deadbeef`)).toBe(true);
     expect(isTemporaryWorktreeBranch("t3code/deadbeef")).toBe(true);
     expect(isTemporaryWorktreeBranch("t3code-deadbeef")).toBe(true);
     expect(isTemporaryWorktreeBranch("t3code/f4ae4e0e-f971-4d48-b4f2-9cf0aa54ab12")).toBe(true);
