@@ -68,7 +68,10 @@ class T3WorkspaceNavigationModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("CinderdeckWorkspaceNavigation")
     View(CinderdeckWorkspaceNavigationView::class) {
-      Prop("tabs") { view: CinderdeckWorkspaceNavigationView, value: List<String> -> view.tabs = value }
+      Prop("tabs") { view: CinderdeckWorkspaceNavigationView, value: List<String> ->
+        view.tabs =
+          value
+      }
       Prop("selectedTab") { view: CinderdeckWorkspaceNavigationView, value: String ->
         view.selectedTab = value
       }
@@ -79,7 +82,10 @@ class T3WorkspaceNavigationModule : Module() {
       }
       Prop("rail") { view: CinderdeckWorkspaceNavigationView, value: Boolean -> view.rail = value }
       Prop("dark") { view: CinderdeckWorkspaceNavigationView, value: Boolean -> view.dark = value }
-      Prop("textScale") { view: CinderdeckWorkspaceNavigationView, value: Float -> view.textScale = value }
+      Prop("textScale") { view: CinderdeckWorkspaceNavigationView, value: Float ->
+        view.textScale =
+          value
+      }
       Prop("newEnabled") { view: CinderdeckWorkspaceNavigationView, value: Boolean ->
         view.newEnabled = value
       }

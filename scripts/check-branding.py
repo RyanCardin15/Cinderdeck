@@ -499,6 +499,22 @@ def branding_errors(root):
     ]:
         if (root / "assets/cinderdeck/prod" / source).read_bytes() != (root / target).read_bytes():
             errors.append(f"{target} must use Cinderdeck artwork")
+    # Vector paths can spell a vendor logo without containing any searchable brand text.
+    # Composer documents must use the approved native artwork, with no hidden source assets.
+    approved_artwork = (ROOT / "assets/cinderdeck-icon.png").read_bytes()
+    for variant in ("dev", "nightly", "prod"):
+        document = root / "assets" / variant / "app-icon.icon"
+        source = document / "Assets/cinderdeck.png"
+        if not source.is_file() or source.read_bytes() != approved_artwork:
+            errors.append(f"assets/{variant}/app-icon.icon must use approved Cinderdeck source artwork")
+        assets = document / "Assets"
+        if not assets.is_dir() or sorted(path.name for path in assets.iterdir()) != ["cinderdeck.png"]:
+            errors.append(f"assets/{variant}/app-icon.icon contains unexpected source assets")
+        data = json.loads((document / "icon.json").read_text())
+        groups = data.get("groups", [])
+        layers = groups[0].get("layers", []) if len(groups) == 1 else []
+        if len(layers) != 1 or layers[0].get("image-name") != "cinderdeck.png" or layers[0].get("name") != "Cinderdeck":
+            errors.append(f"assets/{variant}/app-icon.icon must reference only the Cinderdeck artwork layer")
     return errors
 
 

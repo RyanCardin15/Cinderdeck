@@ -13,7 +13,7 @@ class BrandingTests(unittest.TestCase):
     def test_wrong_logo_and_display_name_are_detected(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
-            for path in ["apps/desktop/package.json", "apps/web/public", "assets/cinderdeck/prod", "assets/prod"]:
+            for path in ["apps/desktop/package.json", "apps/web/public", "assets/cinderdeck/prod", "assets/prod", "assets/dev/app-icon.icon", "assets/nightly/app-icon.icon"]:
                 destination = root / path
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 source = branding.ROOT / "agent-runtime" / path
@@ -25,6 +25,27 @@ class BrandingTests(unittest.TestCase):
             (root / "apps/desktop/package.json").write_text('{"productName":"T3 Code"}')
             (root / "apps/web/public/favicon.ico").write_bytes(b"wrong icon")
             self.assertEqual(len(branding.branding_errors(root)), 2)
+
+    def test_composer_graphics_cannot_hide_vendor_artwork(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            for path in ["apps/desktop/package.json", "apps/web/public", "assets/cinderdeck/prod", "assets/prod", "assets/dev/app-icon.icon", "assets/nightly/app-icon.icon"]:
+                source = branding.ROOT / "agent-runtime" / path
+                destination = root / path
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                if source.is_dir():
+                    shutil.copytree(source, destination)
+                else:
+                    shutil.copy(source, destination)
+            self.assertEqual(branding.branding_errors(root), [])
+            source = root / "assets/prod/app-icon.icon/Assets/cinderdeck.png"
+            source.write_bytes(b"unapproved graphic")
+            (source.parent / "text.svg").write_text('<svg><path d="M1 1"/></svg>')
+            document = source.parent.parent / "icon.json"
+            data = branding.json.loads(document.read_text())
+            data["groups"][0]["layers"][0]["image-name"] = "text.svg"
+            document.write_text(branding.json.dumps(data))
+            self.assertEqual(len(branding.branding_errors(root)), 3)
 
     def test_unknown_wire_like_and_native_like_symbols_are_not_exempt(self):
         self.assertEqual(branding.violations("agent-runtime/packages/contracts/src/mcp.ts", '"t3_thread_launch"'), [])
