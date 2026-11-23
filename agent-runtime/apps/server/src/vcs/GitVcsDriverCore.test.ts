@@ -5444,7 +5444,11 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
       }),
     );
 
-    it.effect("does not start Git auto-maintenance from background upstream fetches", () =>
+    it.effect.each([
+      "statusDetailsRemote",
+      "fetchRemoteTrackingBranch",
+      "pullCurrentBranch",
+    ] as const)("does not start Git auto-maintenance from %s", (operation) =>
       Effect.gen(function* () {
         const cwd = yield* makeTmpDir();
         const remote = yield* makeTmpDir("git-vcs-driver-remote-");
@@ -5466,7 +5470,16 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
         );
         assert.equal(yield* packCount, "2");
 
-        yield* (yield* GitVcsDriver.GitVcsDriver).statusDetailsRemote(cwd);
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+        if (operation === "fetchRemoteTrackingBranch") {
+          yield* driver.fetchRemoteTrackingBranch({
+            cwd,
+            remoteName: "origin",
+            remoteBranch: initialBranch,
+          });
+        } else {
+          yield* driver[operation](cwd);
+        }
 
         assert.equal(yield* packCount, "2");
       }),
@@ -5858,7 +5871,7 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
       }),
     );
 
-    it.effect.each(["cinderdeck-fix-login/child", "T3-Fix-Login/child", "T3-FIX-LOGIN"])(
+    it.effect.each(["cinderdeck-fix-login/child", "Cinderdeck-Fix-Login/child", "CINDERDECK-FIX-LOGIN"])(
       "skips a flattened name blocked by %s",
       (occupied) =>
         Effect.gen(function* () {
@@ -7071,7 +7084,7 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
           assert.equal(yield* git(created.worktree.path, ["branch", "--show-current"]), branch);
           assert.include(
             yield* git(cwd, ["-c", "core.quotePath=false", "worktree", "list", "--porcelain"]),
-            `worktree ${created.worktree.path}`,
+            `worktree ${yield* (yield* FileSystem.FileSystem).realPath(created.worktree.path)}`,
           );
           folders.add(folder);
         }
@@ -7554,7 +7567,7 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
         const reused = yield* driver.ensureRemote({
           cwd,
           preferredName: "origin",
-          url: "git@github.com:pingdotgg/cinderdeck.git",
+          url: "git@github.com:RyanCardin15/Cinderdeck.git",
         });
         assert.equal(reused, "origin");
         const added = yield* driver.ensureRemote({
@@ -7846,36 +7859,36 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
 
         const reusedForSsh = yield* driver.ensureRemote({
           cwd,
-          preferredName: "pingdotgg",
-          url: "git@github.com:pingdotgg/cinderdeck.git",
+          preferredName: "maintainer",
+          url: "git@github.com:RyanCardin15/Cinderdeck.git",
         });
         assert.equal(reusedForSsh, "origin");
 
         const reusedForSshScheme = yield* driver.ensureRemote({
           cwd,
-          preferredName: "pingdotgg",
-          url: "ssh://git@github.com/pingdotgg/cinderdeck",
+          preferredName: "maintainer",
+          url: "ssh://git@github.com/RyanCardin15/Cinderdeck",
         });
         assert.equal(reusedForSshScheme, "origin");
 
         const reusedForBareSshScheme = yield* driver.ensureRemote({
           cwd,
-          preferredName: "pingdotgg",
-          url: "ssh://github.com/pingdotgg/cinderdeck",
+          preferredName: "maintainer",
+          url: "ssh://github.com/RyanCardin15/Cinderdeck",
         });
         assert.equal(reusedForBareSshScheme, "origin");
 
         const reusedForSshPort = yield* driver.ensureRemote({
           cwd,
-          preferredName: "pingdotgg",
-          url: "ssh://git@github.com:22/pingdotgg/cinderdeck",
+          preferredName: "maintainer",
+          url: "ssh://git@github.com:22/RyanCardin15/Cinderdeck",
         });
         assert.equal(reusedForSshPort, "origin");
 
         const reusedForSshWithPort = yield* driver.ensureRemote({
           cwd,
-          preferredName: "pingdotgg",
-          url: "ssh://git@github.com:22/pingdotgg/cinderdeck.git",
+          preferredName: "maintainer",
+          url: "ssh://git@github.com:22/RyanCardin15/Cinderdeck.git",
         });
         assert.equal(reusedForSshWithPort, "origin");
 
@@ -9258,7 +9271,7 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
     it.effect.each([
       { upstreamRef: "refs/remotes/origin/main", baseKey: "gh-merge-base" },
       { upstreamRef: "refs/heads/main", baseKey: "gh-merge-base" },
-      { upstreamRef: "refs/heads/main", baseKey: "cinderdeck-merge-base" },
+      { upstreamRef: "refs/heads/main", baseKey: "t3-merge-base" },
     ])(
       "keeps a recorded $baseKey when publishing a branch tracking $upstreamRef",
       ({ upstreamRef, baseKey }) =>

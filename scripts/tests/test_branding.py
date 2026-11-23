@@ -82,6 +82,15 @@ class BrandingTests(unittest.TestCase):
             self.assertEqual(branding.violations("resources/Info.plist", xml), [])
         self.assertEqual(branding.violations("resources/Info.plist", "<key>CFBundleURLSchemes</key>\n<string>t3-code</string>"), [])
 
+    def test_android_app_name_cannot_borrow_scheme_exceptions(self):
+        path = "agent-runtime/apps/mobile/android/app/src/main/res/values/strings.xml"
+        for name in ("T3", "T3 Code", "t3-code-dev", "t3code-preview"):
+            for attributes in ('name="app_name"', "translatable='false' name='app_name'"):
+                xml = f"<string {attributes}>\n  {name}\n</string>"
+                self.assertTrue(branding.violations(path, xml), xml)
+        self.assertEqual(branding.violations(path, '<string name="app_name">Cinderdeck</string>'), [])
+        self.assertEqual(branding.violations(path, '<string name="scheme">t3code-dev</string>'), [])
+
     def test_rejects_product_labels_urls_and_package_identity(self):
         for value in ('<h1>T3 Code</h1>', '<strong>T3</strong>', '"T3Code"', '"@t3tools/web"', '"https://app.t3.codes"'):
             self.assertTrue(branding.violations("agent-runtime/apps/web/src/NewPanel.tsx", value), value)
