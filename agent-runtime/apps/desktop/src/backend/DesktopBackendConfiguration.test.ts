@@ -601,7 +601,7 @@ describe("DesktopBackendConfiguration", () => {
   });
 
   it.effect(
-    "resolveWsl preserves inherited PATH with quote-sensitive values as separate args",
+    "resolveWsl preserves quoted PATH values and ignores packaged renderer URLs",
     () =>
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
@@ -662,9 +662,8 @@ describe("DesktopBackendConfiguration", () => {
           linuxEntryPath,
           "--bootstrap-fd",
           "0",
-          "--dev-url",
-          devServerUrl,
         ]);
+        assert.notInclude(config.args, "--dev-url");
         assert.notInclude(config.args, "bash");
         assert.notInclude(config.args, "/bin/sh");
         assert.notInclude(config.args, "-c");
@@ -940,8 +939,8 @@ describe("DesktopBackendConfiguration", () => {
       });
       const resourcesPath = path.join(baseDir, "resources");
       const dirname = `${resourcesPath}/app.asar/apps/desktop/dist-electron`;
-      const embeddedMonitorPath = `${resourcesPath}/app.asar/apps/desktop/prod-resources/resource-monitor/t3-resource-monitor`;
-      const monitorPath = path.join(resourcesPath, "resource-monitor/t3-resource-monitor");
+      const embeddedMonitorPath = `${resourcesPath}/app.asar/apps/desktop/prod-resources/resource-monitor/cinderdeck-resource-monitor`;
+      const monitorPath = path.join(resourcesPath, "resource-monitor/cinderdeck-resource-monitor");
       yield* fileSystem.makeDirectory(
         `${resourcesPath}/app.asar/apps/desktop/prod-resources/resource-monitor`,
         { recursive: true },

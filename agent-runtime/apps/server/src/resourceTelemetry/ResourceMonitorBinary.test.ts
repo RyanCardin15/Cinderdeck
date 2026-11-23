@@ -45,7 +45,7 @@ describe("ResourceMonitorBinary", () => {
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "cinderdeck-resource-monitor-binary-",
       });
-      const binaryPath = `${baseDir}/t3-resource-monitor`;
+      const binaryPath = `${baseDir}/cinderdeck-resource-monitor`;
       yield* fileSystem.writeFileString(binaryPath, "binary");
       yield* fileSystem.chmod(binaryPath, 0o644);
 

@@ -24,6 +24,12 @@ PLIST_DISPLAY_IDENTITY = re.compile(
     r"<string>\s*t3(?:[-_ ]?code)?(?:[-_](?:dev|preview))?\s*</string>",
     re.I,
 )
+# Android resource values can span lines; app_name is product copy, not a native ABI name.
+ANDROID_DISPLAY_IDENTITY = re.compile(
+    r"<string\b(?=[^>]*\bname\s*=\s*[\"']app_name[\"'])[^>]*>\s*"
+    r"t3(?:[-_ ]?code)?(?:[-_](?:dev|preview))?\s*</string>",
+    re.I,
+)
 # Exact native registration names and wrappers outside their ABI source folders.
 NATIVE_REFERENCES = re.compile(r"\b(?:t3_highlights_[a-z_]+|HybridT3Highlights|HybridT3HighlightsSpec|T3Highlights|T3HighlightsNative|T3HighlightsNativeAutolinking|T3HighlightsPackage|T3SourceText|T3SourceTextCls|T3SourceTextComponentDescriptor|T3SourceTextComponentName|T3SourceTextEllipsizeMode|T3SourceTextEventEmitter|T3SourceTextManager|T3SourceTextNativeComponent|T3SourceTextNativeComponent_h|T3SourceTextOutsideTapCoordinator|T3SourceTextOutsideTapCoordinatorForWindow|T3SourceTextOutsideTapCoordinatorKey|T3SourceTextOutsideTapTarget|T3SourceTextProps|T3SourceTextRun|T3SourceTextRunCls|T3SourceTextRunComponentDescriptor|T3SourceTextRunComponentName|T3SourceTextRunEventEmitter|T3SourceTextRunFontStyle|T3SourceTextRunFontWeight|T3SourceTextRunManager|T3SourceTextRunNativeComponent|T3SourceTextRunNativeComponent_h|T3SourceTextRunProps|T3SourceTextRunShadowNode|T3SourceTextRunSpec_registerComponentDescriptorsFromCodegen|T3SourceTextRunState|T3SourceTextRunTextAlign|T3SourceTextRunTextDecorationLine|T3SourceTextRunTextDecorationStyle|T3SourceTextShadowNode|T3SourceTextSpec|T3SourceTextSpec_registerComponentDescriptorsFromCodegen|T3SourceTextStateReal|T3SourceTextView|T3VoiceTranscription|T3VoiceTranscriptionModule|T3WebSocket|T3WebSocketModule|T3ChipIcons|T3AgentNotifications|T3ComposerEditor|T3KeyboardCommands|T3NativeControls|T3NativeFilePresentation|T3NativePresentation|T3NativeVideoPresentation|T3ReviewDiffSurface|T3ReviewDiffView|T3SelectableMarkdownText|T3ShowcaseReadyScene|T3ShowcaseScene|T3TerminalNative|T3TerminalSurface|T3WidgetExpiry)\b")
 # These are data and API identifiers, never product labels. Limit exceptions to tokens,
@@ -292,11 +298,13 @@ def exemption(path: str, line: str) -> str | None:
 
 def violations(path: str, content: str) -> list[tuple[int, str]]:
     findings = []
-    for match in PLIST_DISPLAY_IDENTITY.finditer(content):
+    patterns = (PLIST_DISPLAY_IDENTITY, ANDROID_DISPLAY_IDENTITY)
+    matches = sorted((match for pattern in patterns for match in pattern.finditer(content)), key=lambda match: match.start())
+    for match in matches:
         number = content.count("\n", 0, match.start()) + 1
         line = content.splitlines()[number - 1]
         if not exemption(path, line):
-            findings.append((number, "removable upstream bundle display identity"))
+            findings.append((number, "removable upstream application display identity"))
     lines = content.splitlines()
     for number, line in enumerate(lines, 1):
         if "t3" not in line.lower():
@@ -309,6 +317,9 @@ def violations(path: str, content: str) -> list[tuple[int, str]]:
         if TEMPORARY_BRAND.search(line) and (
             ".test." in path or re.search(r"mkdtemp|makeTempDirectory", context)
         ):
+            findings.append((number, line.strip()))
+            continue
+        if "t3-resource-monitor" in line.lower():
             findings.append((number, line.strip()))
             continue
         if DISPLAY_IDENTITY.search(line):

@@ -57,6 +57,8 @@ Additional selected fixes restrict forge credentials to their intended hosts, va
 
 Build with the pinned Node 26.13.1 and pnpm 12.14.0 toolchain using the whole-app builder above. Run package typechecks and focused runtime checks locally.
 
+The November 23 selected fixes keep terminal palette queries out of replayed history, reject malformed shortcut separators, drop unreadable optional RPC fields before JSON encoding, suppress automatic Git maintenance in runtime subprocesses, preserve Unicode when Claude summaries are truncated, and open composer file links containing punctuation. The ledger retains the unchanged full-source baseline and exact pending inventory.
+
 ## Icon verification
 
 The runtime's three Icon Composer documents use the native Cinderdeck artwork in `assets/cinderdeck-icon.png`. Repository validation rejects different source artwork, additional hidden graphic files, and document layers that do not reference that artwork. The icon exporter checks all 42 generated assets, including macOS renditions and the canonical production copies.
