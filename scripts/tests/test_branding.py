@@ -82,6 +82,12 @@ class BrandingTests(unittest.TestCase):
             self.assertEqual(branding.violations("resources/Info.plist", xml), [])
         self.assertEqual(branding.violations("resources/Info.plist", "<key>CFBundleURLSchemes</key>\n<string>t3-code</string>"), [])
 
+    def test_private_helper_binary_is_not_a_compatibility_token(self):
+        for path in ("agent-runtime/native/resource-monitor/Cargo.toml", "agent-runtime/apps/server/src/resourceTelemetry/ResourceMonitorBinary.ts"):
+            for value in ('name = "t3-resource-monitor"', 'return "t3-resource-monitor.exe";'):
+                self.assertTrue(branding.violations(path, value), value)
+            self.assertEqual(branding.violations(path, 'return "cinderdeck-resource-monitor";'), [])
+
     def test_android_app_name_cannot_borrow_scheme_exceptions(self):
         path = "agent-runtime/apps/mobile/android/app/src/main/res/values/strings.xml"
         for name in ("T3", "T3 Code", "t3-code-dev", "t3code-preview"):

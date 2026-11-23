@@ -319,6 +319,9 @@ def violations(path: str, content: str) -> list[tuple[int, str]]:
         ):
             findings.append((number, line.strip()))
             continue
+        if "t3-resource-monitor" in line.lower():
+            findings.append((number, line.strip()))
+            continue
         if DISPLAY_IDENTITY.search(line):
             findings.append((number, line.strip()))
             continue
