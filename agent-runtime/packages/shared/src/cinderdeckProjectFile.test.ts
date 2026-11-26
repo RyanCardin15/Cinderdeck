@@ -1,7 +1,7 @@
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
-import { parseT3ProjectFile, CinderdeckProjectFileFromJson } from "./cinderdeckProjectFile.ts";
+import { parseCinderdeckProjectFile, CinderdeckProjectFileFromJson } from "./cinderdeckProjectFile.ts";
 
 const decodeJson = Schema.decodeUnknownSync(CinderdeckProjectFileFromJson);
 
@@ -20,10 +20,10 @@ describe("CinderdeckProjectFileFromJson", () => {
   });
 });
 
-describe("parseT3ProjectFile", () => {
+describe("parseCinderdeckProjectFile", () => {
   it("reads project defaults from JSONC with a URL in a block comment", () => {
     expect(
-      parseT3ProjectFile(`{
+      parseCinderdeckProjectFile(`{
         /* See https://t3.codes/schema/t3.json */
         "defaultThreadEnvMode": "worktree"
       }`),

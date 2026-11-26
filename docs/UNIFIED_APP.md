@@ -59,6 +59,8 @@ Build with the pinned Node 26.13.1 and pnpm 12.14.0 toolchain using the whole-ap
 
 The November 23 selected fixes keep terminal palette queries out of replayed history, reject malformed shortcut separators, drop unreadable optional RPC fields before JSON encoding, suppress automatic Git maintenance in runtime subprocesses, preserve Unicode when Claude summaries are truncated, and open composer file links containing punctuation. The ledger retains the unchanged full-source baseline and exact pending inventory.
 
+The November 26 selected fixes preserve whole Unicode characters after terminal escapes, escape literal punctuation when converting SSH clone URLs, ignore inherited object properties in shortcut conditions, report always-active shortcut conflicts, recognize mixed-case shell wrappers in command display, and derive plan titles from headings outside code. Project-file helper symbols and the script hook use Cinderdeck names; the existing configuration filename and schema URL remain compatible. The branding check also rejects application display names split across lines and the retired project-file symbol names. These are selected ports; the full-source baseline remains unchanged.
+
 ## Icon verification
 
 The runtime's three Icon Composer documents use the native Cinderdeck artwork in `assets/cinderdeck-icon.png`. Repository validation rejects different source artwork, additional hidden graphic files, and document layers that do not reference that artwork. The icon exporter checks all 42 generated assets, including macOS renditions and the canonical production copies.

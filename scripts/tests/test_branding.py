@@ -97,6 +97,16 @@ class BrandingTests(unittest.TestCase):
         self.assertEqual(branding.violations(path, '<string name="app_name">Cinderdeck</string>'), [])
         self.assertEqual(branding.violations(path, '<string name="scheme">t3code-dev</string>'), [])
 
+    def test_multiline_display_identity_cannot_borrow_compatibility_tokens(self):
+        path = "agent-runtime/apps/web/src/NewPanel.tsx"
+        for key in ("appName", "productName", "displayName", "CFBundleDisplayName", "CFBundleName"):
+            for name in ("t3-code", "t3code-dev", "t3code-preview"):
+                for separator in (":", "="):
+                    content = f'{key}{separator}\n  "{name}"'
+                    self.assertTrue(branding.violations(path, content), content)
+            self.assertEqual(branding.violations(path, f'{key}:\n  "Cinderdeck"'), [])
+        self.assertEqual(branding.violations(path, 'scheme:\n "t3-code"'), [])
+
     def test_rejects_product_labels_urls_and_package_identity(self):
         for value in ('<h1>T3 Code</h1>', '<strong>T3</strong>', '"T3Code"', '"@t3tools/web"', '"https://app.t3.codes"'):
             self.assertTrue(branding.violations("agent-runtime/apps/web/src/NewPanel.tsx", value), value)
@@ -107,6 +117,14 @@ class BrandingTests(unittest.TestCase):
         self.assertEqual(branding.violations(path, 'export const WORKTREE_BRANCH_PREFIX = "cinderdeck";'), [])
         self.assertEqual(branding.violations(path, 'export const LEGACY_SHORT_WORKTREE_BRANCH_PREFIX = "t3";'), [])
         self.assertTrue(branding.violations(path, 'export const LEGACY_SHORT_WORKTREE_BRANCH_PREFIX = "t3"; const label = "T3 Code";'))
+
+    def test_project_file_symbols_and_embedded_hook_names_use_owned_branding(self):
+        path = "agent-runtime/packages/contracts/src/cinderdeckProjectFile.ts"
+        for symbol in ("T3_PROJECT_FILE_NAME", "T3_PROJECT_FILE_SCHEMA_URL", "parseT3ProjectFile", "useT3ProjectFileScripts"):
+            self.assertTrue(branding.violations(path, f'const {symbol} = "t3.json";'), symbol)
+        self.assertTrue(branding.path_violations("agent-runtime/apps/web/src/hooks/useT3ProjectFileScripts.ts"))
+        self.assertEqual(branding.violations(path, 'const CINDERDECK_PROJECT_FILE_NAME = "t3.json";'), [])
+        self.assertEqual(branding.violations(path, 'const CINDERDECK_PROJECT_FILE_SCHEMA_URL = "https://t3.codes/schema/t3.json";'), [])
 
     def test_rejects_ordinary_symbols_and_paths(self):
         self.assertTrue(branding.violations("agent-runtime/apps/mobile/scripts/new.mts", 'name: "T3DeviceStream"'))

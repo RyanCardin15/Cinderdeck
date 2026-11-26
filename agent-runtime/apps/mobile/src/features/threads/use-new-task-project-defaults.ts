@@ -2,9 +2,9 @@ import { resolveFilesystemReadAccess } from "@cinderdeck/client-runtime/state/fi
 import { isScratchProject } from "@cinderdeck/client-runtime/state/projects";
 import type { EnvironmentProject } from "@cinderdeck/client-runtime/state/shell";
 import type { ProjectReadFileResult } from "@cinderdeck/contracts";
-import { DEFAULT_SERVER_SETTINGS, T3_PROJECT_FILE_NAME } from "@cinderdeck/contracts";
+import { DEFAULT_SERVER_SETTINGS, CINDERDECK_PROJECT_FILE_NAME } from "@cinderdeck/contracts";
 import { resolveNewThreadEnvMode, resolveProjectSettings } from "@cinderdeck/shared/projectSettings";
-import { parseT3ProjectFile } from "@cinderdeck/shared/cinderdeckProjectFile";
+import { parseCinderdeckProjectFile } from "@cinderdeck/shared/cinderdeckProjectFile";
 
 import { useEnvironmentServerConfig } from "../../state/entities";
 import { useEnvironmentPresentation } from "../../state/presentation";
@@ -41,7 +41,7 @@ export function useNewTaskProjectDefaults(project: EnvironmentProject | null) {
           environmentId: project.environmentId,
           input: {
             cwd: project.workspaceRoot,
-            relativePath: T3_PROJECT_FILE_NAME,
+            relativePath: CINDERDECK_PROJECT_FILE_NAME,
             allowMissing: true,
           },
         })
@@ -51,7 +51,7 @@ export function useNewTaskProjectDefaults(project: EnvironmentProject | null) {
   const cinderdeckProjectFile =
     cinderdeckProjectFileData === null || cinderdeckProjectFileData.exists === false || cinderdeckProjectFileData.truncated
       ? null
-      : parseT3ProjectFile(cinderdeckProjectFileData.contents);
+      : parseCinderdeckProjectFile(cinderdeckProjectFileData.contents);
   const projectSettings = resolveProjectSettings(
     serverConfig?.settings ?? DEFAULT_SERVER_SETTINGS,
     project?.id ?? null,

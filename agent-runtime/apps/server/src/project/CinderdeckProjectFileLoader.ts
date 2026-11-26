@@ -6,10 +6,10 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
-import { T3_PROJECT_FILE_NAME, type CinderdeckProjectFile } from "@cinderdeck/contracts";
+import { CINDERDECK_PROJECT_FILE_NAME, type CinderdeckProjectFile } from "@cinderdeck/contracts";
 import { CinderdeckProjectFileFromJson } from "@cinderdeck/shared/cinderdeckProjectFile";
 
-const decodeT3ProjectFileJson = Schema.decodeEffect(CinderdeckProjectFileFromJson);
+const decodeCinderdeckProjectFileJson = Schema.decodeEffect(CinderdeckProjectFileFromJson);
 
 export class CinderdeckProjectFileLoadError extends Schema.TaggedError<CinderdeckProjectFileLoadError>()(
   "CinderdeckProjectFileLoadError",
@@ -21,7 +21,7 @@ export class CinderdeckProjectFileLoadError extends Schema.TaggedError<Cinderdec
   },
 ) {
   override get message(): string {
-    return `Failed to ${this.operation} ${T3_PROJECT_FILE_NAME} at ${this.filePath}.`;
+    return `Failed to ${this.operation} ${CINDERDECK_PROJECT_FILE_NAME} at ${this.filePath}.`;
   }
 }
 
@@ -33,7 +33,7 @@ export class CinderdeckProjectFileLoader extends Context.Service<
   }
 >()("@cinderdeck/server/project/CinderdeckProjectFileLoader") {}
 
-const logT3ProjectFileLoadError = (error: CinderdeckProjectFileLoadError) =>
+const logCinderdeckProjectFileLoadError = (error: CinderdeckProjectFileLoadError) =>
   Effect.logWarning(error).pipe(
     Effect.annotateLogs({
       operation: error.operation,
@@ -50,14 +50,14 @@ export const make = Effect.gen(function* () {
 
   const load: CinderdeckProjectFileLoader["Service"]["load"] = Effect.fn("CinderdeckProjectFileLoader.load")(
     function* (workspaceRoot) {
-      const filePath = path.join(workspaceRoot, T3_PROJECT_FILE_NAME);
+      const filePath = path.join(workspaceRoot, CINDERDECK_PROJECT_FILE_NAME);
       const raw = yield* fileSystem.readFileString(filePath).pipe(
         Effect.asSome,
         Effect.catchTags({
           PlatformError: (error) =>
             error.reason._tag === "NotFound"
               ? Effect.succeed(Option.none<string>())
-              : logT3ProjectFileLoadError(
+              : logCinderdeckProjectFileLoadError(
                   new CinderdeckProjectFileLoadError({
                     operation: "read",
                     workspaceRoot,
@@ -70,11 +70,11 @@ export const make = Effect.gen(function* () {
       if (Option.isNone(raw)) {
         return Option.none<CinderdeckProjectFile>();
       }
-      return yield* decodeT3ProjectFileJson(raw.value).pipe(
+      return yield* decodeCinderdeckProjectFileJson(raw.value).pipe(
         Effect.asSome,
         Effect.catchTags({
           SchemaError: (error) =>
-            logT3ProjectFileLoadError(
+            logCinderdeckProjectFileLoadError(
               new CinderdeckProjectFileLoadError({
                 operation: "decode",
                 workspaceRoot,

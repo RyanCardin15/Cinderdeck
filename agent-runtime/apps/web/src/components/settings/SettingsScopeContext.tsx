@@ -1,5 +1,9 @@
-import { type EnvironmentId, T3_PROJECT_FILE_NAME, type CinderdeckProjectFile } from "@cinderdeck/contracts";
-import { parseT3ProjectFile } from "@cinderdeck/shared/cinderdeckProjectFile";
+import {
+  type EnvironmentId,
+  CINDERDECK_PROJECT_FILE_NAME,
+  type CinderdeckProjectFile,
+} from "@cinderdeck/contracts";
+import { parseCinderdeckProjectFile } from "@cinderdeck/shared/cinderdeckProjectFile";
 import { useAtomValue } from "@effect/atom-react";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { createContext, type ReactNode, useContext } from "react";
@@ -28,17 +32,17 @@ const memberProjectFilesAtom = Atom.family((membersKey: string) => {
     const files = new Map<string, CinderdeckProjectFile | null>();
     for (const [environmentId, workspaceRoot, physicalProjectKey] of members) {
       const result = get(
-        getProjectFileQueryAtom(environmentId, workspaceRoot, T3_PROJECT_FILE_NAME),
+        getProjectFileQueryAtom(environmentId, workspaceRoot, CINDERDECK_PROJECT_FILE_NAME),
       );
       if (result.waiting) continue;
       const data =
-        get(optimisticFileAtom(environmentId, workspaceRoot, T3_PROJECT_FILE_NAME))?.data ??
+        get(optimisticFileAtom(environmentId, workspaceRoot, CINDERDECK_PROJECT_FILE_NAME))?.data ??
         AsyncResult.getOrElse(result, () => null);
       files.set(
         physicalProjectKey,
         data === null || data.exists === false || data.truncated
           ? null
-          : parseT3ProjectFile(data.contents),
+          : parseCinderdeckProjectFile(data.contents),
       );
     }
     return files;

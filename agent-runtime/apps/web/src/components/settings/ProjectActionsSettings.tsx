@@ -8,7 +8,7 @@ import {
 import { DEFAULT_RESOLVED_KEYBINDINGS } from "@cinderdeck/shared/keybindings";
 import { ChevronDownIcon, PlusIcon } from "lucide-react";
 import { useState } from "react";
-import { useT3ProjectFileState } from "../../hooks/useT3ProjectFileScripts";
+import { useCinderdeckProjectFileState } from "../../hooks/useCinderdeckProjectFileScripts";
 import { useEnvironments } from "../../state/environments";
 import {
   EMPTY_PROJECT_SCRIPT_INPUT,
@@ -71,7 +71,7 @@ export function ProjectActionsSettings() {
   );
 
   const representativeMember = target?.projectId ? memberById.get(target.projectId) : undefined;
-  const cinderdeckFile = useT3ProjectFileState(
+  const cinderdeckFile = useCinderdeckProjectFileState(
     representativeMember?.environmentId ?? EnvironmentId.make("none"),
     representativeMember?.workspaceRoot ?? null,
   );

@@ -11,7 +11,7 @@ import sys
 ROOT = Path(__file__).resolve().parent.parent
 BRAND = re.compile(r"\bt3dotgg\b|\bt3chat\b|\bt3code\b|\bT3\s+Code\b|\bT3Code\b|[>\"\x27]T3[<\"\x27]|\bt3\s+(?:serve|connect|pair|service|update|app|project)\b|@t3tools/|\bcom\.t3tools\b|\b(?:[\w-]+\.)*t3\.(?:codes|gg)\b|\bpingdotgg/t3code\b", re.I)
 BARE_BRAND = re.compile(r"\bT3\b", re.I)
-INTERNAL_BRAND = re.compile(r"\bT3_CODE_[A-Z][A-Z0-9_]*\b|\b(?:T3|t3)[A-Z][a-z][A-Za-z0-9_]*\b|\bt3_[a-z0-9_]+\b")
+INTERNAL_BRAND = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*T3ProjectFile[A-Za-z0-9_]*\b|\bT3_PROJECT_FILE_[A-Z0-9_]+\b|\bT3_CODE_[A-Z][A-Z0-9_]*\b|\b(?:T3|t3)[A-Z][a-z][A-Za-z0-9_]*\b|\bt3_[a-z0-9_]+\b")
 TEMPORARY_BRAND = re.compile(r"(?:\bprefix\s*:\s*|\btmpdir\(\)\s*,\s*)[\"'`]\.?t3-", re.I)
 # Display identities cannot borrow exceptions for legacy schemes and storage prefixes.
 DISPLAY_IDENTITY = re.compile(
@@ -298,7 +298,7 @@ def exemption(path: str, line: str) -> str | None:
 
 def violations(path: str, content: str) -> list[tuple[int, str]]:
     findings = []
-    patterns = (PLIST_DISPLAY_IDENTITY, ANDROID_DISPLAY_IDENTITY)
+    patterns = (DISPLAY_IDENTITY, PLIST_DISPLAY_IDENTITY, ANDROID_DISPLAY_IDENTITY)
     matches = sorted((match for pattern in patterns for match in pattern.finditer(content)), key=lambda match: match.start())
     for match in matches:
         number = content.count("\n", 0, match.start()) + 1
@@ -320,9 +320,6 @@ def violations(path: str, content: str) -> list[tuple[int, str]]:
             findings.append((number, line.strip()))
             continue
         if "t3-resource-monitor" in line.lower():
-            findings.append((number, line.strip()))
-            continue
-        if DISPLAY_IDENTITY.search(line):
             findings.append((number, line.strip()))
             continue
         candidate = COMPATIBILITY.sub("", line)

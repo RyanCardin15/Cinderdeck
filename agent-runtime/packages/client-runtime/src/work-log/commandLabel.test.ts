@@ -167,3 +167,11 @@ describe("commandDisplayText control characters", () => {
     expect(commandDisplayText(input)).toBe(expected);
   });
 });
+
+// Shell names in provider command text can retain Windows executable casing.
+it.each([
+  ['Bash.exe -lc "git status"', "git status"],
+  ['"C:\\Program Files\\Git\\bin\\Bash.exe" -lc "rg foo"', "rg foo"],
+])("displays mixed-case shell %j as %j", (command, expected) => {
+  expect(commandDisplayText(command)).toBe(expected);
+});
