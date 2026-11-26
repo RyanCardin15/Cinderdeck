@@ -5,12 +5,12 @@ import { ThreadEnvMode, WorktreeSubmodules } from "./environment.ts";
 import { ProjectScriptIcon } from "./project.ts";
 import type { ProjectScopedServerSettingKey, ServerSettings } from "./settings.ts";
 
-export const T3_PROJECT_FILE_NAME = "t3.json";
+export const CINDERDECK_PROJECT_FILE_NAME = "t3.json";
 
-export const T3_PROJECT_FILE_SCHEMA_URL = "https://t3.codes/schema/t3.json";
+export const CINDERDECK_PROJECT_FILE_SCHEMA_URL = "https://t3.codes/schema/t3.json";
 
-const T3_PROJECT_FILE_PATH_MAX_LENGTH = 512;
-const T3_PROJECT_FILE_MAX_SCRIPTS = 50;
+const CINDERDECK_PROJECT_FILE_PATH_MAX_LENGTH = 512;
+const CINDERDECK_PROJECT_FILE_MAX_SCRIPTS = 50;
 
 // Encoded-side annotations survive into JSON Schema; decoding still trims and rejects empty strings.
 const trimmedNonEmpty = (annotations: { readonly description: string }, maxLength?: number) => {
@@ -78,7 +78,7 @@ export type CinderdeckProjectFileScript = typeof CinderdeckProjectFileScript.Typ
 export const CinderdeckProjectFile = Schema.Struct({
   $schema: Schema.optionalKey(
     Schema.String.annotate({
-      description: `URL of the JSON Schema for this file, typically "${T3_PROJECT_FILE_SCHEMA_URL}".`,
+      description: `URL of the JSON Schema for this file, typically "${CINDERDECK_PROJECT_FILE_SCHEMA_URL}".`,
     }),
   ),
   iconPath: Schema.optionalKey(
@@ -87,7 +87,7 @@ export const CinderdeckProjectFile = Schema.Struct({
         description:
           'Workspace-relative path to the project icon (e.g. "assets/logo.svg"). Checked before Cinderdeck\'s built-in icon locations.',
       },
-      T3_PROJECT_FILE_PATH_MAX_LENGTH,
+      CINDERDECK_PROJECT_FILE_PATH_MAX_LENGTH,
     ),
   ),
   defaultThreadEnvMode: Schema.optionalKey(
@@ -105,9 +105,10 @@ export const CinderdeckProjectFile = Schema.Struct({
   scripts: Schema.optionalKey(
     Schema.Array(CinderdeckProjectFileScript)
       .annotate({
-        description: "Project scripts shared with everyone who opens this repository in Cinderdeck.",
+        description:
+          "Project scripts shared with everyone who opens this repository in Cinderdeck.",
       })
-      .check(Schema.isMaxLength(T3_PROJECT_FILE_MAX_SCRIPTS)),
+      .check(Schema.isMaxLength(CINDERDECK_PROJECT_FILE_MAX_SCRIPTS)),
   ),
 }).annotate({
   title: "Cinderdeck project file",

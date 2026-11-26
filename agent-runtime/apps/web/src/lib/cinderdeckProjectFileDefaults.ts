@@ -1,5 +1,9 @@
-import { T3_PROJECT_FILE_NAME, type EnvironmentId, type CinderdeckProjectFile } from "@cinderdeck/contracts";
-import { parseT3ProjectFile } from "@cinderdeck/shared/cinderdeckProjectFile";
+import {
+  CINDERDECK_PROJECT_FILE_NAME,
+  type EnvironmentId,
+  type CinderdeckProjectFile,
+} from "@cinderdeck/contracts";
+import { parseCinderdeckProjectFile } from "@cinderdeck/shared/cinderdeckProjectFile";
 import { executeAtomQuery } from "@cinderdeck/client-runtime/state/runtime";
 
 import {
@@ -8,21 +12,21 @@ import {
 } from "~/components/files/projectFilesQueryState";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 
-export async function readT3ProjectFile(
+export async function readCinderdeckProjectFile(
   environmentId: EnvironmentId,
   workspaceRoot: string,
 ): Promise<CinderdeckProjectFile | null> {
   const result = await executeAtomQuery(
     appAtomRegistry,
-    getProjectFileQueryAtom(environmentId, workspaceRoot, T3_PROJECT_FILE_NAME),
+    getProjectFileQueryAtom(environmentId, workspaceRoot, CINDERDECK_PROJECT_FILE_NAME),
     { reportDefect: false, reportFailure: false },
   );
   const data = resolveProjectFileQueryData(
     environmentId,
     workspaceRoot,
-    T3_PROJECT_FILE_NAME,
+    CINDERDECK_PROJECT_FILE_NAME,
     result._tag === "Success" ? result.value : null,
   );
   if (data === null || data.exists === false || data.truncated) return null;
-  return parseT3ProjectFile(data.contents);
+  return parseCinderdeckProjectFile(data.contents);
 }

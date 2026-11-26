@@ -205,7 +205,7 @@ vi.mock("../lib/chatThreadActions", async (importOriginal) => ({
 }));
 vi.mock("../providerInstances", () => ({ resolveDefaultProviderModelSelection: () => null }));
 vi.mock("../lib/cinderdeckProjectFileDefaults", () => ({
-  readT3ProjectFile: () => testState.projectFileRead,
+  readCinderdeckProjectFile: () => testState.projectFileRead,
 }));
 vi.mock("../lib/utils", () => ({
   newDraftId: () => "draft-delayed",

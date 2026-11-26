@@ -27,7 +27,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import {
   GitCommandError,
   type GitCommandFailureReason,
-  T3_PROJECT_FILE_NAME,
+  CINDERDECK_PROJECT_FILE_NAME,
   type ReviewBranchCommitsInput,
   type ReviewDiffChangeType,
   type ReviewDiffFileContentsInput,
@@ -41,7 +41,7 @@ import * as HostProcess from "@cinderdeck/shared/HostProcess";
 import { compactTraceAttributes } from "@cinderdeck/shared/observability";
 import { decodeJsonResult } from "@cinderdeck/shared/schemaJson";
 import { resolveSpawnCommand, runsGitWithoutConsole } from "@cinderdeck/shared/shell";
-import { parseT3ProjectFile } from "@cinderdeck/shared/cinderdeckProjectFile";
+import { parseCinderdeckProjectFile } from "@cinderdeck/shared/cinderdeckProjectFile";
 import { resolveProjectFileBackedSetting } from "@cinderdeck/shared/projectSettings";
 import { gitCommandDuration, gitCommandsTotal, withMetrics } from "../observability/Metrics.ts";
 import * as GitVcsDriver from "./GitVcsDriver.ts";
@@ -5285,9 +5285,9 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
           options?.submodules ?? null,
           options?.submodules != null
             ? null
-            : yield* fileSystem.readFileString(path.join(worktreePath, T3_PROJECT_FILE_NAME)).pipe(
+            : yield* fileSystem.readFileString(path.join(worktreePath, CINDERDECK_PROJECT_FILE_NAME)).pipe(
                 Effect.flatMap((contents) => {
-                  const file = parseT3ProjectFile(contents);
+                  const file = parseCinderdeckProjectFile(contents);
                   return file === null
                     ? Effect.logWarning("t3.json is invalid; initializing submodules recursively", {
                         worktreePath,
