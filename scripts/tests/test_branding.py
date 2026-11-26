@@ -97,6 +97,16 @@ class BrandingTests(unittest.TestCase):
         self.assertEqual(branding.violations(path, '<string name="app_name">Cinderdeck</string>'), [])
         self.assertEqual(branding.violations(path, '<string name="scheme">t3code-dev</string>'), [])
 
+    def test_multiline_display_identity_cannot_borrow_compatibility_tokens(self):
+        path = "agent-runtime/apps/web/src/NewPanel.tsx"
+        for key in ("appName", "productName", "displayName", "CFBundleDisplayName", "CFBundleName"):
+            for name in ("t3-code", "t3code-dev", "t3code-preview"):
+                for separator in (":", "="):
+                    content = f'{key}{separator}\n  "{name}"'
+                    self.assertTrue(branding.violations(path, content), content)
+            self.assertEqual(branding.violations(path, f'{key}:\n  "Cinderdeck"'), [])
+        self.assertEqual(branding.violations(path, 'scheme:\n "t3-code"'), [])
+
     def test_rejects_product_labels_urls_and_package_identity(self):
         for value in ('<h1>T3 Code</h1>', '<strong>T3</strong>', '"T3Code"', '"@t3tools/web"', '"https://app.t3.codes"'):
             self.assertTrue(branding.violations("agent-runtime/apps/web/src/NewPanel.tsx", value), value)

@@ -1384,7 +1384,8 @@ function withoutShellWrapper(command: string): string {
   const program = tokens?.[0]
     ?.split(/[\\/]/u)
     .at(-1)
-    ?.replace(/\.exe$/iu, "");
+    ?.toLowerCase()
+    .replace(/\.exe$/u, "");
   if (!tokens || !program || !SHELL_PROGRAMS.has(program)) return trimmed;
   const scriptIndex = shellCommandArgumentIndex(tokens, 1);
   // Positional arguments can affect the script; keep those invocations intact.

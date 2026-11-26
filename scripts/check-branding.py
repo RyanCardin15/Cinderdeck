@@ -298,7 +298,7 @@ def exemption(path: str, line: str) -> str | None:
 
 def violations(path: str, content: str) -> list[tuple[int, str]]:
     findings = []
-    patterns = (PLIST_DISPLAY_IDENTITY, ANDROID_DISPLAY_IDENTITY)
+    patterns = (DISPLAY_IDENTITY, PLIST_DISPLAY_IDENTITY, ANDROID_DISPLAY_IDENTITY)
     matches = sorted((match for pattern in patterns for match in pattern.finditer(content)), key=lambda match: match.start())
     for match in matches:
         number = content.count("\n", 0, match.start()) + 1
@@ -320,9 +320,6 @@ def violations(path: str, content: str) -> list[tuple[int, str]]:
             findings.append((number, line.strip()))
             continue
         if "t3-resource-monitor" in line.lower():
-            findings.append((number, line.strip()))
-            continue
-        if DISPLAY_IDENTITY.search(line):
             findings.append((number, line.strip()))
             continue
         candidate = COMPATIBILITY.sub("", line)
